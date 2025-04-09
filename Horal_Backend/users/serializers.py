@@ -21,6 +21,9 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
     
     def validate_phone_number(self, value):
+        """Validate the phone number format"""
+        if isinstance(value, int):
+            value = str(value)
         if not value.isdigit():
             raise ValidationError(_("Phone number must contain only digits."))
         if len(value) != 11:
