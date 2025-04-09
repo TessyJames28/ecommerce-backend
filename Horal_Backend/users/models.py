@@ -3,9 +3,17 @@ import re
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
+from django.utils.translation import gettext_lazy as _
 
 
 # Create your models here.
+phone_number_validator = RegexValidator(
+    regex=r'^\d{11}$',
+    message=_("Phone number must be exactly 11 digits long."),
+)
+
+
 class CustomUserManager(BaseUserManager):
     """Custom user manager for CustomUser model."""
 
@@ -39,7 +47,15 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False)
     full_name = models.CharField(max_length=500, blank=True)
     email = models.EmailField(unique=True)
-    phone_number = models.IntegerField(null=False, blank=False)
+    phone_number = models.CharField(
+        max_length=11,
+        unique=True,
+        validators=[phone_number_validator],
+        null=False,
+        blank=False
+    )
+    country = models.CharField(max_length=50, default="Nigeria")
+    state = models.CharField(max_length=50, default="Lagos")
     password = models.CharField(max_length=128, null=False, blank=False)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
