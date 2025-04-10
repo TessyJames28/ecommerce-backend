@@ -4,14 +4,15 @@ from .models import CustomUser
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
-from rest_framework.authtoken.models import Token
+from django.utils.timezone import now
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
-        fields = ["id", "full_name", "email", "phone_number", "password", "is_verified", "is_staff", "is_seller", "is_active"]
-        read_only_fields = ["id", "is_verified", "is_seller", "is_active"]
+        fields = ["id", "full_name", "email", "phone_number", "password", "is_verified", "is_staff", "is_seller", "is_active", "last_login"]
+        read_only_fields = ["id", "is_verified", "is_seller", "is_active", "last_login"]
         extra_kwargs = {
             'email': {'required': True},
             'full_name': {'required': True},
@@ -61,16 +62,28 @@ class LoginSerializer(serializers.ModelSerializer):
     """Serializer for user login"""
     email = serializers.EmailField(required=True)
     password = serializers.CharField(required=True, write_only=True)
-    token = serializers.SerializerMethodField(read_only=True)
+    access = serializers.SerializerMethodField(read_only=True)
+    refresh = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = CustomUser
-        fields = ['email', 'password', 'token']
+        fields = ['email', 'password', 'access', 'refresh']
 
-    def get_token(self, obj):
+    def get_token(self, user):
         """Generate a token for the user"""
-        token, created = Token.objects.get_or_create(user=obj)
-        return token.key if created else token.key
+        refresh = RefreshToken.for_user(user)
+        return {
+            'access': str(refresh.access_token),
+            'refresh': str(refresh)
+        }
+    
+    def get_access_token(self, obj):
+        """Get the access token for the user"""
+        return self.get_token(obj)['access']
+    
+    def get_refresh_token(self, obj):
+        """Get the refresh token for the user"""
+        return self.get_token(obj)['refresh']
 
     def validate(self, attrs):
         """Validate the login credentials"""
@@ -79,26 +92,37 @@ class LoginSerializer(serializers.ModelSerializer):
 
         try:
             user = CustomUser.objects.get(email=email)
-            user.is_active = True
-            user.save(update_fields=['is_active'])
             if not user.check_password(password):
                 raise serializers.ValidationError(_("Invalid password."))
+            
+            user.is_active = True
+            user.last_login = now()
+            user.save(update_fields=['is_active', 'last_login'])
+
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError(_("User with this email does not exist."))
 
         attrs['user'] = user
-        attrs['token'] = self.get_token(user)
         return attrs
     
 
 class LogoutSerializer(serializers.Serializer):
     """Serializer for user logout"""
+    refresh = serializers.CharField(required=True)
     id = serializers.UUIDField(required=True)
+
 
     def validate(self, attrs):
         """Validate the logout request"""
         if not attrs:
-            raise serializers.ValidationError(_("ID is required."))
+            raise serializers.ValidationError(_("Refresh token is required."))
+        
+        # Access request.user from the context
+        user = self.context.get('request').user
+        if user.id != attrs['id']:
+            raise serializers.ValidationError(_("User ID does not match."))
+        
+        self.token = attrs['refresh']
         return attrs
     
     def save(self, **kwargs):
@@ -110,8 +134,7 @@ class LogoutSerializer(serializers.Serializer):
             user.save(update_fields=['is_active'])
 
             # Delete the token associated with the user
-            if hasattr(user, 'auth_token'):
-                user.auth_token.delete()
+            RefreshToken(self.token).blacklist()
             return user
-        except CustomUser.DoesNotExist:
-            raise serializers.ValidationError(_("User with this ID does not exist."))
+        except TokenError:
+            raise serializers.ValidationError(_("Token is invalid or expired."))
