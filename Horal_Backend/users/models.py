@@ -52,12 +52,12 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         unique=True,
         validators=[phone_number_validator],
         null=False,
-        blank=False
+        blank=True
     )
     country = models.CharField(max_length=50, default="Nigeria")
     state = models.CharField(max_length=50, default="Lagos")
     password = models.CharField(max_length=128, null=False, blank=False)
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)
     is_seller = models.BooleanField(default=False)
@@ -71,3 +71,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return f"{self.email}: {self.full_name}"
+    
+    class meta:
+        verbose_name = "User"
+        verbose_name_plural = "Users"
+        ordering = ["-created_at"]
