@@ -1,6 +1,5 @@
 from django.shortcuts import render
 from rest_framework.generics import GenericAPIView
-from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from users.models import CustomUser
 from users.serializers import CustomUserSerializer, LoginSerializer, LogoutSerializer
@@ -64,7 +63,8 @@ class UserLoginView(GenericAPIView):
                 "is_staff": user.is_staff,
                 "is_seller": user.is_seller,
                 "is_active": user.is_active,
-                "token": serializer.validated_data['token']
+                "access": serializer.get_access_token(user),
+                "refresh": serializer.get_refresh_token(user)
             }
         }
         return Response(response_data, status=status.HTTP_200_OK)
@@ -75,7 +75,6 @@ class UserLogoutView(GenericAPIView):
     """API endpoint for user logout"""
     permission_classes = [IsAuthenticated]
     serializer_class = LogoutSerializer
-    authentication_classes = [TokenAuthentication]
 
     def post(self, request, *args, **kwargs):
         """Override the post method to handle user logout"""
