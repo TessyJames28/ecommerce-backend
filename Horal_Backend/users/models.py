@@ -23,7 +23,9 @@ class CustomUserManager(BaseUserManager):
             raise ValueError("The Email field must be set")
         email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
-        user.set_password(password) # inherited from AbstractBaseUser and hashes the password the password
+        if password:
+            user.set_password(password) # inherited from AbstractBaseUser and hashes the password the password
+ 
         user.save(using=self._db)
         return user
     
@@ -51,12 +53,12 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         max_length=11,
         unique=True,
         validators=[phone_number_validator],
-        null=False,
+        null=True,
         blank=True
     )
     country = models.CharField(max_length=50, default="Nigeria")
     state = models.CharField(max_length=50, default="Lagos")
-    password = models.CharField(max_length=128, null=False, blank=False)
+    password = models.CharField(max_length=128, null=True, blank=True)
     is_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)
@@ -67,7 +69,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     objects = CustomUserManager()
 
     USERNAME_FIELD = 'email'  # use email instead of username
-    REQUIRED_FIELDS = ["full_name", "phone_number"]  # required fields for createsuperuser
+    # REQUIRED_FIELDS = ["full_name", "phone_number"]  # required fields for createsuperuser
 
     def __str__(self):
         return f"{self.email}: {self.full_name}"
