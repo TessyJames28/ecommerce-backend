@@ -3,7 +3,7 @@ from django.utils.timezone import now
 from django.shortcuts import render
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from .utility import refresh_google_token
+from .utility import refresh_google_token, verify_google_token
 from users.models import CustomUser
 from users.serializers import CustomUserSerializer, LoginSerializer, LogoutSerializer
 from rest_framework.response import Response
@@ -12,7 +12,22 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from django.conf import settings
 from rest_framework_simplejwt.tokens import RefreshToken
+import requests
 
+
+
+def exchange_code_for_token(code):
+    token_url = 'https://oauth2.googleapis.com/token'
+    data = {
+        'code': code,
+        'client_id': settings.GOOGLE_OAUTH['WEB_CLIENT_ID'],
+        'client_secret': settings.GOOGLE_OAUTH['CLIENT_SECRET'],
+        'redirect_uri': settings.GOOGLE_OAUTH['REDIRECT_URI'],
+        'grant_type': 'authorization_code'
+    }
+
+    response = requests.post(token_url, data=data)
+    return response.json()
 
 class RegisterUserView(GenericAPIView):
     """API endpoint to register users"""
@@ -82,10 +97,57 @@ class UserLoginView(GenericAPIView):
 
 class GoogleLoginView(GenericAPIView):
     """Handles google login by accepting token_id from the frontend"""
-    
+    serializer_class = LoginSerializer
+    def get(self, request, *args, **kwargs):
+        """Handle redirect from Google with authorization code"""
+        code = request.GET.get('code')
+
+        if not code:
+            return Response({
+                "error": "No code provided",
+                "status": "failed"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        token_response = exchange_code_for_token(code)
+
+        if 'id_token' in token_response:
+            id_info = id_token.verify_oauth2_token(
+                token_response['id_token'],
+                google_requests.Request(),
+                settings.GOOGLE_OAUTH['WEB_CLIENT_ID']
+            )
+            email = id_info.get('email')
+            full_name = id_info.get('name')
+            refresh_token = token_response.get('refresh_token')
+
+            # Now use your logic to create or update the user
+            # Example:
+            user, created = CustomUser.objects.get_or_create(email=email)
+            if created:
+                user.full_name = full_name
+            user.is_active = True
+            user.save()
+
+            return Response({
+                "status": "success",
+                "message": "Google login successful",
+                "data": {
+                    "email": email,
+                    "full_name": full_name,
+                    "refresh_token": refresh_token,
+                    "id_token": token_response['id_token']
+                }
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "status": "failed",
+            "message": "Failed to exchange code for token",
+            "error": token_response
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request, *args, **kwargs):
         """Override the post method to handle Google login"""
+        
         token_id = request.data.get('token_id')
         refresh_token = request.data.get('refresh_token')
         platform = request.data.get('platform') # "web" or "mobile"
@@ -98,21 +160,11 @@ class GoogleLoginView(GenericAPIView):
         else:
             client_id = settings.GOOGLE_OAUTH['WEB_CLIENT_ID']
 
-        try:
-            if token_id:
-                try: 
-                    print("calling token id")
-                    # Verify the token using Google's API
-                    id_info = id_token.verify_oauth2_token(
-                        token_id,
-                        google_requests.Request(),
-                        client_id
-                    )
-                except ValueError:
-                    print("Done calling token id")
-                    new_access_token = refresh_google_token(refresh_token, client_id)
-                
-            
+        if token_id:
+            try:
+                # Verify the token using Google's API
+                id_info = verify_google_token(token_id, refresh_token, client_id)
+                            
                 email = id_info['email']
                 full_name = id_info['name']
                 # You can also extract other fields like 'picture' if needed
@@ -150,32 +202,21 @@ class GoogleLoginView(GenericAPIView):
                     }
                 }
 
+                # include the refresh token in the response if available
+                if refresh_token:
+                    response_data['data']['google_tokens'] = {
+                        "token_id": id_info.pop('refreshed_token', None)
+                    }
+
                 return Response(response_data, status=status.HTTP_200_OK)
 
-            elif refresh_token:
-                print("calling refresh token")
-                new_access_token = refresh_google_token(refresh_token, client_id)
-                print("Done calling refresh token")
-                if new_access_token:
-                    return Response({
-                        "status": "success",
-                        "status_code": status.HTTP_200_OK,
-                        "message": "Google token refreshed successfully",
-                        "data": {
-                            "access_token": new_access_token
-                        }
-                    }, status=status.HTTP_200_OK)
-                else:
-                    return Response({
-                        "status": "failed",
-                        "message": "Failed to refresh Google token"
-                    }, status=status.HTTP_400_BAD_REQUEST)
-        except ValueError as e:
-            return Response({
-                "error": str(e),
-                "status": "failed",
-                "message": "Invalid Google token"
-            }, status=status.HTTP_400_BAD_REQUEST)
+            except ValueError as e:
+                return Response({
+                    "error": str(e),
+                    "status": "failed",
+                    "message": "Invalid Google token"
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
 
 class UserLogoutView(GenericAPIView):
     """API endpoint for user logout"""
@@ -195,4 +236,4 @@ class UserLogoutView(GenericAPIView):
             }, status=status.HTTP_200_OK)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
