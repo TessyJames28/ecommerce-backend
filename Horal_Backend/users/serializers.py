@@ -6,13 +6,13 @@ from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
 from django.utils.timezone import now
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
-
+from notifications.utility import verify_otp
 
 class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
-        fields = ["id", "full_name", "email", "phone_number", "password", "is_verified", "is_staff", "is_seller", "is_active", "last_login"]
-        read_only_fields = ["id", "is_verified", "is_seller", "is_active", "last_login"]
+        fields = ["id", "full_name", "email", "phone_number", "password", "is_staff", "is_seller", "is_active", "last_login"]
+        read_only_fields = ["id", "is_seller", "is_active", "last_login"]
         extra_kwargs = {
             'email': {'required': True},
             'full_name': {'required': True},
@@ -138,3 +138,71 @@ class LogoutSerializer(serializers.Serializer):
             return user
         except TokenError:
             raise serializers.ValidationError(_("Token is invalid or expired."))
+        
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    """Serializer for password reset request"""
+    email = serializers.EmailField(required=True)
+
+    def validate_email(self, value):
+        """Validate the email format"""
+        if not CustomUser.objects.filter(email=value).exists():
+            raise serializers.ValidationError(_("User with this email does not exist."))
+        return value
+    
+
+class OTPVerificationSerializer(serializers.Serializer):
+    """Serializer for password reset confirmation"""
+    email = serializers.EmailField(required=True)
+    otp = serializers.CharField(required=True, max_length=4, min_length=4)
+
+
+    def validate(self, attrs):
+        """Validate the password reset confirmation"""
+        email = attrs.get('email')
+        otp = attrs.get('otp')
+
+        try:
+            user = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError(_("User with this email does not exist."))
+
+        if not verify_otp(user.id, otp):
+            raise serializers.ValidationError(_("Invalid or expired OTP."))
+        
+        attrs['user_id'] = user.id
+        return attrs
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    """Serializer for password reset confirmation"""
+    user_id = serializers.UUIDField(required=True)
+    new_password = serializers.CharField(required=True, write_only=True)
+    confirm_password = serializers.CharField(required=True, write_only=True)
+
+    def validate(self, attrs):
+        """Validate the password reset confirmation"""
+        user_id = attrs.get('user_id')
+        new_password = attrs.get('new_password')
+        confirm_password = attrs.get('confirm_password')
+
+        if new_password != confirm_password:
+            raise serializers.ValidationError(_("Passwords do not match."))
+        
+        try:
+            user = CustomUser.objects.get(id=user_id)
+            attrs['user'] = user
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError(_("User with this ID does not exist."))
+        
+        return attrs
+    
+
+    def save(self):
+        """ Handle the password reset process"""
+        user = self.validated_data['user']
+        new_password = self.validated_data['new_password']
+
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+        return user
