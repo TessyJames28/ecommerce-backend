@@ -5,13 +5,21 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from .utility import refresh_google_token, verify_google_token
 from users.models import CustomUser
-from users.serializers import CustomUserSerializer, LoginSerializer, LogoutSerializer
+from users.serializers import (
+    CustomUserSerializer,
+    LoginSerializer,
+    LogoutSerializer,
+    PasswordResetConfirmSerializer,
+    OTPVerificationSerializer,
+    PasswordResetRequestSerializer,
+)
 from rest_framework.response import Response
 from rest_framework import status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from django.conf import settings
 from rest_framework_simplejwt.tokens import RefreshToken
+from notifications.utility import send_otp_email, store_otp, generate_otp, get_stored_otp_for_testing
 import requests
 
 
@@ -49,7 +57,6 @@ class RegisterUserView(GenericAPIView):
                 "email": user.email,
                 "full_name": user.full_name,
                 "phone_number": user.phone_number,
-                "is_verified": user.is_verified,
                 "is_staff": user.is_staff,
                 "is_seller": user.is_seller,
                 "is_active": user.is_active
@@ -81,7 +88,6 @@ class UserLoginView(GenericAPIView):
                 "email": user.email,
                 "full_name": user.full_name,
                 "phone_number": user.phone_number,
-                "is_verified": user.is_verified,
                 "is_staff": user.is_staff,
                 "is_seller": user.is_seller,
                 "is_active": user.is_active,
@@ -237,3 +243,98 @@ class UserLogoutView(GenericAPIView):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+
+class PasswordResetRequestView(GenericAPIView):
+    """API endpoint for password reset request"""
+    serializer_class = PasswordResetRequestSerializer
+
+    def post(self, request, *args, **kwargs):
+        """Override the post method to handle password reset request"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Placeholder for sending OTP
+        email = serializer.validated_data['email']
+        user = CustomUser.objects.get(email=email)
+        
+        
+        # Generate OTP and send it to the user's email
+        otp_code = generate_otp() # Generate a random OTP code
+        send_otp_email(email, otp_code) # Send the OTP email
+        store_otp(user.id, otp_code) # Store the OTP in Redis with a 5-minute expiry time
+
+        return Response({
+            "status": "success",
+            "status_code": status.HTTP_200_OK,
+            "message": "Password reset OTP sent successfully"
+        }, status=status.HTTP_200_OK)
+    
+        if settings.DEBUG:
+            stored.otp = get_stored_otp_for_testing(user.id)
+            if stored_otp:
+                response_data['debug'] = {"otp": stored_otp}
+
+        return Response(response_data, status=status.HTTP_200_OK)
+    
+
+class VerifyOTPView(GenericAPIView):
+    """API endpoint for verifying OTP"""
+    serializer_class = OTPVerificationSerializer
+
+    def post(self, request, *args, **kwargs):
+        """Override the post method to handle OTP verification"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user_id = serializer.validated_data['user_id']
+        
+        return Response({
+            "status": "success",
+            "status_code": status.HTTP_200_OK,
+            "message": "OTP verified successfully",
+            "data": {"user_id": user_id}
+        }, status=status.HTTP_200_OK)
+    
+
+class PasswordResetConfirmView(GenericAPIView):
+    """API endpoint for confirming password reset"""
+    serializer_class = PasswordResetConfirmSerializer
+
+    def post(self, request, *args, **kwargs):
+        """Override the post method to handle password reset confirmation"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Save the password rest
+        serializer.save()
+
+        return Response({
+            "status": "success",
+            "status_code": status.HTTP_200_OK,
+            "message": "Password reset successful"
+        }, status=status.HTTP_200_OK)
+    
+
+
+# For testing and development environment
+# Only include this view in development/testing environments
+from django.conf import settings
+if settings.DEBUG:
+    class OTPTestingView(GenericAPIView):
+        """Testing utility - DO NOT USE IN PRODUCTION"""
+        
+        def post(self, request, *args, **kwargs):
+            """Get stored OTP for a user by email (for testing only)"""
+            email = request.data.get('email')
+            if not email:
+                return Response({"error": "Email parameter required"}, status=400)
+                
+            try:
+                user = CustomUser.objects.get(email=email)
+                otp = get_stored_otp_for_testing(user.id)
+                if otp:
+                    return Response({"email": email, "user_id": user.id, "otp": otp})
+                return Response({"email": email, "error": "No OTP found"}, status=404)
+            except CustomUser.DoesNotExist:
+                return Response({"error": "User not found"}, status=404)
