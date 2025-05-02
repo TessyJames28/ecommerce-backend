@@ -4,6 +4,9 @@ from .models import SellerKYC, SellerSocials
 from .serializers import SellerKYCFirstScreenSerializer, SellerKYCProofOfAddressSerializer, SellerSocialsSerializer
 from rest_framework.response import Response
 from rest_framework import status
+from users.models import CustomUser
+from products.models import Shop
+from products.serializers import ShopSerializer
 
 # Create your views here.
 class SellerKYCIDVerificationView(GenericAPIView):
@@ -121,3 +124,43 @@ class SellerSocialsView(GenericAPIView):
             "message": "Social media links updated successfully",
             "data": serializer.data
         }, status=status.HTTP_200_OK)
+    
+
+class VerifiedSeller(GenericAPIView):
+    """API endpoint that handles seller verification once KYC is passed"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = ShopSerializer
+
+    def post(self, request, *args, **kwargs):
+        user = request.user
+
+        # user = CustomUser.objects.get(id=user)
+
+        if user.is_seller:
+            return Response(
+                {"detail": "Already a seller."}
+            )
+        
+        # Get or create SellerKYC record
+        kyc, _ = SellerKYC.objects.get_or_create(user=user)
+        kyc.is_verified = True
+        kyc.save()
+
+        # Update user
+        user.is_seller = True
+        user.save()
+
+        # Create default shop
+        shop = Shop.objects.create(
+            owner = kyc,
+            name = f"{user.full_name}'s Shop",
+            location=kyc.country
+        )
+
+        return Response(
+            {
+                "message": "Seller account activated and shop created successfully",
+                "shop": self.get_serializer(shop).data
+            },
+            status=status.HTTP_201_CREATED
+        )
