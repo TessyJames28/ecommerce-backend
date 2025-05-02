@@ -58,6 +58,7 @@ class RegisterUserView(GenericAPIView):
                 "full_name": user.full_name,
                 "phone_number": user.phone_number,
                 "is_staff": user.is_staff,
+                "is_superuser": user.is_superuser,
                 "is_seller": user.is_seller,
                 "is_active": user.is_active
             }
@@ -89,6 +90,7 @@ class UserLoginView(GenericAPIView):
                 "full_name": user.full_name,
                 "phone_number": user.phone_number,
                 "is_staff": user.is_staff,
+                "is_superuser": user.is_superuser,
                 "is_seller": user.is_seller,
                 "is_active": user.is_active,
                 'tokens': {
@@ -197,8 +199,8 @@ class GoogleLoginView(GenericAPIView):
                         "email": user.email,
                         "full_name": user.full_name,
                         "phone_number": user.phone_number,
-                        "is_verified": user.is_verified,
                         "is_staff": user.is_staff,
+                        "is_superuser": user.is_superuser,
                         "is_seller": user.is_seller,
                         "is_active": user.is_active,
                         'tokens': {
