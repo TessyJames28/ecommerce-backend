@@ -4,6 +4,19 @@ from .models import SellerKYC, SellerSocials
 
 class SellerKYCFirstScreenSerializer(serializers.ModelSerializer):
     """Serializer for the first screen of KYC"""
+
+    def validate_nin(self, value):
+        if not value.startswith("https://"):
+            raise serializers.ValidationError("NIN must be a valid HTTPS URL.")
+        return value
+    
+
+    def validate_cac(self, value):
+        if not value.startswith("https://"):
+            raise serializers.ValidationError("CAC must be a valid HTTPS URL.")
+        return value
+
+
     class Meta:
         model = SellerKYC
         fields = ['country', 'nin', 'cac']
@@ -18,16 +31,20 @@ class SellerKYCFirstScreenSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         """Update an existing KYC instance"""
-        instance.country = validated_data.get('country', instance.country)
-        instance.nin = validated_data.get('nin', instance.nin)
-        instance.cac = validated_data.get('cac', instance.cac)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
         instance.save()
         return instance
     
 
-class SellerKYCProofOfAddressSerializer(serializers.Serializer):
+class SellerKYCProofOfAddressSerializer(serializers.ModelSerializer):
     """Serializer for the proof of address screen of KYC"""
-    utility_bill = serializers.FileField(required=True, allow_empty_file=False)
+
+    def validate_utility_bill(self, value):
+        if not value.startswith("https://"):
+            raise serializers.ValidationError("Utility bill must be a valid HTTPS URL.")
+        return value
+
 
     class Meta:
         model = SellerKYC
@@ -36,7 +53,8 @@ class SellerKYCProofOfAddressSerializer(serializers.Serializer):
     
     def update(self, instance, validated_data):
         """Update an existing KYC instance"""
-        instance.utility_bill = validated_data.get('utility_bill', instance.utility_bill)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
         instance.save()
         return instance
 
