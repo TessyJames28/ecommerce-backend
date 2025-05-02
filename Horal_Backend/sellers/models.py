@@ -5,19 +5,19 @@ from django.utils.translation import gettext_lazy as _
 import os
 
 # Create your models here.
-def upload_to(instance, filename):
-    """Function to define the upload path for KYC documents"""
-    return f'kyc_documents/seller{instance.user.id}/{filename}'
+# def upload_to(instance, filename):
+#     """Function to define the upload path for KYC documents"""
+#     return f'kyc_documents/seller{instance.user.id}/{filename}'
 
 
-def validate_file_extension(value):
-    """Validator to check the file extension of uploaded documents"""
-    ext = os.path.splitext(value.name)[1]  # Get the file extension
-    valid_extensions = ['.pdf', '.jpg', '.jpeg', '.png']
-    if not ext.lower() in valid_extensions:
-        raise ValidationError(
-            _('Unsupported file extension. Allowed extensions: %(valid_extensions)s'),
-        )
+# def validate_file_extension(value):
+#     """Validator to check the file extension of uploaded documents"""
+#     ext = os.path.splitext(value.name)[1]  # Get the file extension
+#     valid_extensions = ['.pdf', '.jpg', '.jpeg', '.png']
+#     if not ext.lower() in valid_extensions:
+#         raise ValidationError(
+#             _('Unsupported file extension. Allowed extensions: %(valid_extensions)s'),
+#         )
 
 
 class SellerKYC(models.Model):
@@ -34,24 +34,9 @@ class SellerKYC(models.Model):
         blank=False,
         default='Nigeria',
     )
-    nin = models.FileField(
-        upload_to=upload_to,
-        null=False,
-        blank=False,
-        help_text="Upload a government-issued ID (pdf, jpg, png)"
-    )
-    cac = models.FileField(
-        upload_to=upload_to,
-        null=True,
-        blank=True,
-        help_text="Upload a CAC Certificate (pdf, jpg, png)"
-    )
-    utility_bill = models.FileField(
-        upload_to=upload_to,
-        null=True,
-        blank=True,
-        help_text="Upload a proof of address (utility bill, bank statement, etc as pdf, jpg, png)"
-    )
+    nin = models.URLField()
+    cac = models.URLField(null=True, blank=True)
+    utility_bill = models.URLField()
     is_verified = models.BooleanField(default=False)
     submitted_at = models.DateTimeField(auto_now_add=True)
     verified_at = models.DateTimeField(null=True, blank=True)
