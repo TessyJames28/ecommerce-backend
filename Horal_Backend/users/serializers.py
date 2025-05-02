@@ -11,8 +11,8 @@ from notifications.utility import verify_otp
 class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
-        fields = ["id", "full_name", "email", "phone_number", "password", "is_staff", "is_seller", "is_active", "last_login"]
-        read_only_fields = ["id", "is_seller", "is_active", "last_login"]
+        fields = ["id", "full_name", "email", "phone_number", "password", "is_staff", "is_superuser", "is_seller", "is_active", "last_login"]
+        read_only_fields = ["id", "is_active", "last_login"] # WIll add is_seller, is_staff, and is_superuser later
         extra_kwargs = {
             'email': {'required': True},
             'full_name': {'required': True},
