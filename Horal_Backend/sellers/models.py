@@ -2,22 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-import os
-
-# Create your models here.
-# def upload_to(instance, filename):
-#     """Function to define the upload path for KYC documents"""
-#     return f'kyc_documents/seller{instance.user.id}/{filename}'
-
-
-# def validate_file_extension(value):
-#     """Validator to check the file extension of uploaded documents"""
-#     ext = os.path.splitext(value.name)[1]  # Get the file extension
-#     valid_extensions = ['.pdf', '.jpg', '.jpeg', '.png']
-#     if not ext.lower() in valid_extensions:
-#         raise ValidationError(
-#             _('Unsupported file extension. Allowed extensions: %(valid_extensions)s'),
-#         )
+import uuid
 
 
 class SellerKYC(models.Model):
@@ -59,3 +44,43 @@ class SellerSocials(models.Model):
 
     def __str__(self):
         return f"Socials for {self.user}"
+    
+
+class Shop(models.Model):
+    """Model for sellers shops."""
+    class OwnerType(models.TextChoices):
+        SELLER = 'seller', 'Seller'
+        PLATFORM = 'platform', 'Platform'
+
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner_type = models.CharField(
+        max_length=20,
+        choices=OwnerType.choices,
+        default=OwnerType.SELLER
+    )
+    owner = models.ForeignKey(
+        SellerKYC,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='seller_shops'
+    )
+    name = models.CharField(max_length=100, unique=True, blank=True, null=True)
+    created_by_admin = models.BooleanField(default=False)
+    location = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+    def save(self, *args, **kwargs):
+        """Override the save method"""
+        if self.owner_type == self.OwnerType.PLATFORM:
+            self.owner = None
+            self.created_by_admin = True
+        elif self.owner_type == self.OwnerType.SELLER and not self.owner:
+            raise ValueError("Seller must be provided for seller owned shops.")
+        super().save(*args, **kwargs)
+
+
+    def __str__(self):
+        return self.name
