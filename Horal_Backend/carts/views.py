@@ -1,23 +1,84 @@
 from django.shortcuts import render, get_object_or_404
 from rest_framework.generics import GenericAPIView
 from rest_framework import status
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from .models import Cart, CartItem
 from .serializers import CartItemSerializer, CartSerializer, CartItemCreateSerializer
 from products.models import ProductVariant
 from products.utility import BaseResponseMixin
+from .authentication import SessionOrAnonymousAuthentication
 
 # Create your views here.
 class CartView(GenericAPIView, BaseResponseMixin):
-    """Handle the cart view endpoint"""
+    """Handle the cart view endpoint for both authenticated and anonymous users"""
     serializer_class = CartSerializer
     permission_classes = [AllowAny]
-    authentication_classes = []
+    authentication_classes = [SessionOrAnonymousAuthentication]
+
+    def get_cart(self, request):
+        """Get or create a cart based on user authentication status"""
+        try:
+            if request.user.is_authenticated:
+                cart, _ = Cart.objects.get_or_create(user=request.user)
+
+                # Check if there is an orphaned session cart and merge if needed
+                session_key = request.session.session_key
+                if session_key:
+                    session_cart = Cart.objects.filter(session_key=session_key).first()
+                    if session_cart and session_cart.id != cart.id: # Don't merge is it's the same cart
+                        self._merge_carts(session_cart, cart)
+                        session_cart.delete() # Remove the session cart after merging
+
+                        # Clear the session key reference to avoid stale references
+                        request.session['cart_merged'] = True
+                    
+                return cart
+            else:
+                # Create cart for anonymous users using session key
+                session_key = request.session.session_key
+                if not session_key:
+                    request.session.save() # Create a session if one doesn't exist
+                    session_key = request.session.session_key
+
+                cart, _ = Cart.objects.get_or_create(session_key=session_key)
+
+                return cart
+        except Exception as e:
+            # Log the error for debugging
+            print(f"Error in get_cart: {str(e)}")
+            # Create a new cart as fallback
+            if request.user.is_authenticated:
+                return Cart.objects.create(user=request.user)
+            else:
+                request.session.save()
+                return Cart.objects.create(session_key=request.session.session_key)
+    
+
+    def _merge_carts(self, source_cart, target_cart):
+        """Helper method to merge items from source cart to target cart"""
+        for item in source_cart.cart_item.all():
+            existing_item = CartItem.objects.filter(
+                cart=target_cart, variant=item.variant
+            ).first()
+
+            if existing_item:
+                # Update quantity if item already exists in target cart
+                existing_item.quantity =+ item.quantity
+                if existing_item.quantity > existing_item.variant.stock_quantity:
+                    existing_item.quantity = existing_item.variant.stock_quantity
+                existing_item.save()
+            else:
+                # Move item to target cart
+                item.cart = target_cart
+                item.save()
+    
 
     def get(self, request, *args, **kwargs):
-        """Get or create a cart for a user"""
-        cart, _ = Cart.objects.get_or_create(user=request.user)
+        """Get or create a cart for a user or anonymous visitor"""
+        cart = self.get_cart(request)
         serializer = self.get_serializer(cart)
         return self.get_response(
             status.HTTP_200_OK,
@@ -30,14 +91,27 @@ class CartView(GenericAPIView, BaseResponseMixin):
 class CartItemCreateView(GenericAPIView, BaseResponseMixin):
     """Handle item creation on cart by resolving variant_id"""
     serializer_class = CartItemCreateSerializer
+    permission_classes = [AllowAny]
+    authentication_classes = [SessionOrAnonymousAuthentication]
 
+    def get_cart(self, request):
+        """Get or create a cart based on user authentication status"""
+        cart_view = CartView()
+        return cart_view.get_cart(request)
+    
 
     def post(self, request, *args, **kwargs):
         """
         Post method to handle product addition inside the cart
-        lookup and resolve variant id, increase or decrease quantity
         """
-        serializer = self.get_serializer(data=request.data, context={'request': request})
+        # Make sure we are using the correct cart
+        cart = self.get_cart(request)
+
+        # Add cart to the context so serializer can use it
+        serializer = self.get_serializer(data=request.data, context={
+            'request': request,
+            'cart': cart
+        })
         serializer.is_valid(raise_exception=True)
         cart_item = serializer.save()
 
@@ -53,11 +127,43 @@ class CartItemCreateView(GenericAPIView, BaseResponseMixin):
 class CartItemUpdateDeleteView(GenericAPIView, BaseResponseMixin):
     """Class to handle cart update and delete feature"""
     serializer_class = CartItemSerializer
+    permission_classes = [AllowAny]
+    authentication_classes = [SessionOrAnonymousAuthentication]
 
+
+    def get_cart(self, request):
+        """Get current cart"""
+        cart_view = CartView()
+        return cart_view.get_cart(request)
+    
+
+    def get_cart_item(self, request, item_id):
+        """Get cart item based on autehntication status"""
+        # if request.user.is_authenticated:
+        #     return get_object_or_404(CartItem, id=item_id, cart__user=request.user)
+        # else:
+        #     session_key = request.session.session_key
+        #     if not session_key:
+        #         return None
+        #     return get_object_or_404(CartItem, id=item_id, cart__session_key=session_key)
+        try:
+            cart = self.get_cart(request)
+            return get_object_or_404(CartItem, id=item_id, cart=cart)
+        except exec as e:
+            print(f"Error getting cart item: {str(e)}")
+            return None
+        
 
     def put(self, request, item_id, *args, **kwargs):
         """Update quantity of an item in the cart"""
-        cart_item = get_object_or_404(CartItem,id=item_id, cart__user=request.user)
+        cart_item = self.get_cart_item(request, item_id)
+
+        if not cart_item:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "Cart item not found",
+            )
+        
         quantity = int(request.data.get("quantity", 0))
 
         if quantity < 1:
@@ -84,9 +190,103 @@ class CartItemUpdateDeleteView(GenericAPIView, BaseResponseMixin):
 
     def delete(self, request, item_id, *args, **kwargs):
         """Remove item from the cart"""
-        cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
+        cart_item = self.get_cart_item(request, item_id)
+        if not cart_item:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Cart item not found",
+            )
         cart_item.delete()
         return Response({
             "status": status.HTTP_204_NO_CONTENT,
             "message": "Cart item removed"
         })
+    
+
+
+class MergeCartView(GenericAPIView, BaseResponseMixin):
+    """Merge anonymous cart with user cart after login"""
+    serializer_class = CartSerializer
+    authentication_classes = [SessionOrAnonymousAuthentication]
+
+
+    def get_cart(self, request):
+        """Get current cart"""
+        cart_view = CartView()
+        return cart_view.get_cart(request)
+    
+
+    def post(self, request, *args, **kwargs):
+        """Merge anonymous cart into authenticated user cart"""
+        if not request.user.is_authenticated:
+            return self.get_response(
+                status.HTTP_401_UNAUTHORIZED,
+                "User must be autheticated to merge carts",
+            )
+        
+        session_key = request.session.session_key
+        if not session_key:
+            return self.get_response(
+                status.HTTP_200_OK,
+                "No anonymous cart to merge",
+                self.get_serializer(self.get_cart(request)).data
+            )
+        
+        try:
+            anonymous_cart = Cart.objects.filter(session_key=session_key).first()
+            user_cart, _ = Cart.objects.get_or_create(user=request.user)
+
+            if not anonymous_cart:
+                return self.get_response(
+                    status.HTTP_200_OK,
+                    "No anonymous cart to merge",
+                    self.get_serializer(user_cart).data
+                )
+            
+            # Don't merge if it's the same cart
+            if anonymous_cart.id == user_cart.id:
+                return self.get_response(
+                    status.HTTP_200_OK,
+                    "Cart already merged",
+                    self.get_serializer(user_cart).data
+                )
+
+            # Move items from anonymous cart to user cart
+            for item in anonymous_cart.cart_item.all():
+                existing_item = CartItem.objects.filter(
+                    cart=user_cart, variant=item.variant
+                ).first()
+
+
+                if existing_item:
+                    # update quantity if item already exists in user cart
+                    existing_item.quantity += item.quantity
+                    if existing_item.quantity > existing_item.variant.stock_quantity:
+                        existing_item.quantity = existing_item.variant.stock_quantity
+                    existing_item.save()
+                else:
+                    # Move item to user cart
+                    item.cart = user_cart
+                    item.save()
+
+            # Delete the anonymous cart
+            anonymous_cart.delete()
+            # anonymous_cart.save()
+
+            # Clear the session key reference
+            request.session['cart_merged'] = True
+
+            # return the merge cart
+            serializer = self.get_serializer(user_cart)
+            return self.get_response(
+                status.HTTP_200_OK,
+                "Carts merged successully",
+                serializer.data
+            )
+
+        except Exception as e:
+            print(f"Error during cart merge: {str(e)}")
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"Error merging carts: {str(e)}", 
+            )
