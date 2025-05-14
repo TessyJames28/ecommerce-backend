@@ -58,6 +58,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     )
     country = models.CharField(max_length=50, default="Nigeria")
     state = models.CharField(max_length=50, default="Lagos")
+    # home_address = models.CharField(max_length=300, null=True, blank=True)
     password = models.CharField(max_length=128, null=True, blank=True)
     is_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
