@@ -57,6 +57,7 @@ class RegisterUserView(GenericAPIView):
                 "email": user.email,
                 "full_name": user.full_name,
                 "phone_number": user.phone_number,
+                # 'home_address': user.home_address,
                 "is_staff": user.is_staff,
                 "is_superuser": user.is_superuser,
                 "is_seller": user.is_seller,
@@ -89,6 +90,7 @@ class UserLoginView(GenericAPIView):
                 "email": user.email,
                 "full_name": user.full_name,
                 "phone_number": user.phone_number,
+                # "home_address": user.home_address,
                 "is_staff": user.is_staff,
                 "is_superuser": user.is_superuser,
                 "is_seller": user.is_seller,
@@ -152,6 +154,7 @@ class GoogleLoginView(GenericAPIView):
             "message": "Failed to exchange code for token",
             "error": token_response
         }, status=status.HTTP_400_BAD_REQUEST)
+    
 
     def post(self, request, *args, **kwargs):
         """Override the post method to handle Google login"""
