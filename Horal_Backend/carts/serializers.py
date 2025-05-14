@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from .models import Cart, CartItem
-from products.utility import product_models
 from django.contrib.contenttypes.models import ContentType
 from products.models import (
     BabyProduct, VehicleProduct, FashionProduct, ProductVariant,
@@ -8,17 +7,29 @@ from products.models import (
     HealthAndBeautyProduct, GadgetProduct, Color, SizeOption
 )
 
+product_models = [
+    BabyProduct,
+    VehicleProduct,
+    FashionProduct,
+    GadgetProduct,
+    ElectronicsProduct,
+    AccessoryProduct,
+    FoodProduct,
+    HealthAndBeautyProduct
+]
+
+
 
 class CartItemSerializer(serializers.ModelSerializer):
     """Serializer for cart item"""
     item_total_price = serializers.SerializerMethodField()
     product = serializers.SerializerMethodField()
-    variant_detail = serializers.SerializerMethodField()
+    # variant_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
-        fields = ['id', 'variant', 'quantity', 'item_total_price', 'product', 'variant_detail']
-        read_only_fields = ['id', 'variant', 'quantity', 'item_total_price', 'product', 'variant_detail']
+        fields = ['id', 'variant', 'quantity', 'item_total_price', 'product']
+        read_only_fields = ['id', 'variant', 'quantity', 'item_total_price', 'product']
     
 
     def get_product(self, obj):
@@ -59,26 +70,31 @@ class CartItemSerializer(serializers.ModelSerializer):
 
 class CartSerializer(serializers.ModelSerializer):
     """Serializer for the cart model"""
-    items = CartItemSerializer(many=True, read_only=True)
+    items = CartItemSerializer(many=True, read_only=True, source='cart_item')
     total_price = serializers.SerializerMethodField()
+    total_item = serializers.SerializerMethodField()
 
     class Meta:
         model = Cart
-        fields = ['id', 'user', 'created_at', 'items', 'total_price']
-        read_only_fields = ['id', 'user', 'created_at', 'items', 'total_price']
+        fields = ['id', 'created_at', 'total_item', 'items', 'total_price']
+        read_only_fields = ['id', 'created_at', 'items', 'total_price']
 
 
     def get_total_price(self, obj):
         return obj.total_price
+    
+    def get_total_item(self, obj):
+        return obj.total_item
     
 
 class CartItemCreateSerializer(serializers.Serializer):
     """Handles the creation of cart items based on existing product"""
     product_id = serializers.UUIDField()
     color = serializers.ChoiceField(choices=Color.choices)
-    standard_size = serializers.ChoiceField(choices=SizeOption.StandardSize.choices, required=True)
-    custom_size_unit = serializers.ChoiceField(choices=SizeOption.SizeUnit.choices, required=True)
-    custom_size_value = serializers.DecimalField(max_digits=5, decimal_places=2, required=True)
+    quantity = serializers.IntegerField(default=1, min_value=1)
+    standard_size = serializers.ChoiceField(choices=SizeOption.StandardSize.choices, allow_null=True, required=False)
+    custom_size_unit = serializers.ChoiceField(choices=SizeOption.SizeUnit.choices, allow_null=True, required=False)
+    custom_size_value = serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True, required=False)
 
 
     def validate(self, data):
@@ -95,21 +111,28 @@ class CartItemCreateSerializer(serializers.Serializer):
         if not product:
             raise serializers.ValidationError("Product not found")
         
-
         content_type = ContentType.objects.get_for_model(product)
-        variant = ProductVariant.objects.filter(
-            content_type=content_type,
-            object_id=product.id,
-            color=data['color'],
-            standard_size=data.get('standard_size'),
-            custom_size_unit=data.get('custom_size_unit'),
-            custom_size_value=data.get('custom_size_value'),
-        ).first()
+        filter_kwargs = {
+            'content_type': content_type,
+            'object_id': product.id,
+        }
+
+        # Conditionally include additional fields
+        if data.get('color') is not None:
+            filter_kwargs['color'] = data['color']
+        if data.get('standard_size') is not None:
+            filter_kwargs['standard_size'] = data['standard_size']
+        if data.get('custom_size_unit') is not None:
+            filter_kwargs['custom_size_unit'] = data['custom_size_unit']
+        if data.get('custom_size_value') is not None:
+            filter_kwargs['custom_size_value'] = data['custom_size_value']
+       
+        variant = ProductVariant.objects.filter(**filter_kwargs).first()
 
         if not variant:
             raise serializers.ValidationError("No matching variant found")
         
-        if variant.stock_quantity < data['quantity']:
+        if variant.stock_quantity < data.get('quantity', 1):
             raise serializers.ValidationError("Insufficient stock for this product variant")
         
         data['variant'] = variant
@@ -118,18 +141,38 @@ class CartItemCreateSerializer(serializers.Serializer):
 
 
     def create(self, validated_data):
-        """Create cart using existing product"""
-        user = self.context['request'].user
-        cart, _ = Cart.objects.get_or_create(user=user)
+        """Create cart item for authenticated or anonymous users"""
+        request = self.context['request']
+
+        # Use the cart provided in context (if available) or get from request
+        cart = self.context.get('cart')
+        if not cart:
+            # Get or create cart based on user authentication status
+            if request.user.is_authenticated:
+                cart, _ = Cart.objects.get_or_create(user=request.user)
+            else:
+                session_key = request.session.session_key
+                if not session_key:
+                    request.session.create()
+                    session_key = request.session.session_key
+
+                cart, _ = Cart.objects.get_or_create(session_key=session_key)
+
         variant = validated_data['variant']
         quantity = validated_data['quantity']
 
-        cart_item, created = CartItem.objects.get_or_create(cart=cart, variant=variant)
+        # Check if the item already exists in the cart
+        cart_item, created = CartItem.objects.get_or_create(
+            cart=cart,
+            variant=variant,
+            defaults={'quantity': quantity}
+        )
+
         if not created:
             cart_item.quantity += quantity
-        else:
-            cart_item.quantity = quantity
+            # Ensure stock quantity is not exceeded
+            if cart_item.quantity > cart_item.variant.stock_quantity:
+                cart_item.quantity = cart_item.variant.stock_quantity
+            cart_item.save()
 
-
-        cart_item.save()
         return cart_item
