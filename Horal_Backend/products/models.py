@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 import uuid
+from users.models import Location
 from sellers.models import SellerKYC, Shop
 
 # Create your models here.
@@ -30,6 +31,8 @@ class Color(models.TextChoices):
     YELLOW = 'yellow', 'Yellow'
     BLACK = 'black', 'Black'
     SILVER = 'silver', 'Silver'
+    GOLD = 'gold', 'Gold'
+    BLACK_GOLD = 'black gold', 'Black Gold'
     WHITE = 'white', 'White'
     ORANGE = 'orange', 'Orange'
     PURPLE = 'purple', 'Purple'
@@ -45,6 +48,7 @@ class Color(models.TextChoices):
     MAROON = 'maroon', 'Maroon'
     TURQUOISE = 'turquoise', 'Turquoise'
     OLIVE = 'olive', 'Olive'
+    BEIGE = 'beige', 'Beige'
     
 
 class SizeOption(models.Model):
@@ -77,10 +81,12 @@ class ProductCondition(models.TextChoices):
     USED = 'used', 'Used'
 
 
-class AgeGroup(models.TextChoices):
-    NEW_BORN = 'new_born', 'New Born'
-    INFANT = 'infant', 'Infant'
-    TODDLER = 'toddler', 'Toddler'
+class ChildrenSubCategory(models.TextChoices):
+    INFANT = 'infant', '0 - 6 Months'
+    TODDLER = 'toddler', '6 Months - 2 Years'
+    PRESCHOOL = "preschool", "2 - 5 Years",
+    KIDS = "kids", "6 - 9 Years"
+    PRETEEN = 'preteen', '10 - 12 Years'
 
 
 class EngineType(models.TextChoices):
@@ -107,6 +113,13 @@ class PowerSource(models.TextChoices):
     SOLAR = 'solar', 'Solar'
 
 
+class PowerOutput(models.TextChoices):
+    LOW = "low", "Low (<10W)"
+    MEDIUM = "medium", "Medium (10-30W)"
+    HIGH = "high", "High (30-65W)"
+    ULTRA = "ultra", "Ultra (65W+)"
+
+
 class Type(models.TextChoices):
     CASE = 'case', 'Case'
     CHARGER = 'charger', 'Charger'
@@ -124,6 +137,97 @@ class FoodCondition(models.TextChoices):
     FROZEN = 'frozen', 'Frozen'
     CANNED = 'canned', 'Canned'
 
+class FuelType(models.TextChoices):
+    PETROL = 'petrol', 'Petrol'
+    DIESEL = 'diesel', 'Diesel'
+    CNG = 'cng', 'CNG'
+    LPG = 'lpg', 'LPG'
+
+
+class EngineSize(models.TextChoices):
+    EXTRASMALL = 'extra-small', 'under 1.0-liter'
+    SMALL = 'small', '1.0-2.0-liter'
+    MEDIUM = 'medium', '2.0-3.0-liter'
+    LARGE = 'large', '3.0-liter+'
+
+
+class SleeveLength(models.TextChoices):
+    SLEEVELESS = "sleeveless", "Sleeveless"
+    SHORT = "short", "Short Sleeve"
+    THREE_QUARTER = "3/4", "Three Quarter"
+    LONG = "long", "Long Sleeve"
+    CAP = "cap", "Cap Sleeve"
+
+class Neckline(models.TextChoices):
+    ROUND = "round", "Round Neck"
+    V_NECK = "v_neck", "V-Neck"
+    COLLARED = "collared", "Collared"
+    OFF_SHOULDER = "off_shoulder", "Off Shoulder"
+    SWEETHEART = "sweetheart", "Sweetheart"
+    HALTER = "halter", "Halter"
+    TURTLENECK = "turtleneck", "Turtleneck"
+
+
+class GadgetSubCategory(models.TextChoices):
+    SMARTPHONE = "smartphone", "Smartphone"
+    LAPTOP = "laptop", "Laptop"
+    TABLET = "tablet", "Tablet"
+    SMARTWATCH = "smartwatch", "Smartwatch"
+    CAMERA = "camera", "Camera"
+    GAME_CONSOLE = "game_console", "Game Console"
+    OTHER = "other", "Other"
+
+class FashionSubCategory(models.TextChoices):
+    CLOTHING = "clothing", "Clothing"
+    SHOES = "shoes", "Shoes"
+    BAGS = "bags", "Bags"
+    JEWELRY = "jewelry", "Jewelry"
+    ACCESSORY = "accessory", "Accessory"
+
+class ElectronicsSubCategory(models.TextChoices):
+    TV = "tv", "Television"
+    HOME_THEATER = "home_theater", "Home Theater"
+    FRIDGE = "fridge", "Refrigerator"
+    AIR_CONDITIONER = "ac", "Air Conditioner"
+    FAN = "fan", "Fan"
+    SPEAKER = "speaker", "Speaker"
+    OTHER = "other", "Other"
+
+class AccessorySubCategory(models.TextChoices):
+    PHONE_CASE = "phone_case", "Phone Case"
+    CHARGER = "charger", "Charger"
+    WATCH_BAND = "watch_band", "Watch Band"
+    USB_CABLE = "usb_cable", "USB Cable"
+    HEADPHONES = "headphones", "Headphones"
+    STYLUS = "stylus", "Stylus"
+    SCREEN_GUARD = "screen_guard", "Screen Guard"
+
+
+class Occasion(models.Model):
+    """Occassion options for fashion products"""
+    name = models.CharField(max_length=50, unique=True)
+
+    def __str__(self):
+        return self.name
+    
+    # occasion_list = ['Casual', 'Formal', 'Wedding', 'Party', 'Sports', 'Office', 'Traditional']
+    # for name in occasion_list:
+    #     Occasion.objects.get_or_create(name=name)
+
+
+class PublishedProductManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(is_published=True)
+
+
+class ProductLocationMixin(models.Model):
+    """Reusable location fields for product models"""
+    state = models.CharField(max_length=50)
+    local_govt = models.CharField(max_length=150)
+
+    class Meta:
+        abstract = True
+
     
 class BaseProduct(models.Model):
     """Base model for products."""
@@ -132,12 +236,18 @@ class BaseProduct(models.Model):
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2)    
     quantity = models.PositiveIntegerField(default=0)
+    quantity = models.PositiveIntegerField(default=0)
+    production_date = models.DateField(null=True, blank=True)
     condition = models.CharField(max_length=50, choices=ProductCondition.choices, default=ProductCondition.NEW)
-    brand_name = models.CharField(max_length=100, null=True, blank=True)
-    location = models.CharField(max_length=255, null=True, blank=True)
+    brand = models.CharField(max_length=100, null=True, blank=True)
+    is_published = models.BooleanField(default=False)
     live_video_url = models.URLField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Manager
+    objects = models.Manager() # default manager for all products
+    published = PublishedProductManager() # only published
 
     class Meta:
         abstract = True
@@ -148,7 +258,7 @@ class BaseProduct(models.Model):
             content_type=ContentType.objects.get_for_model(self.__class__),
             object_id=self.id
         )
-
+    
 
 class ProductVariant(models.Model):
     """Model to distinguish each individual product variants per sizes and color"""
@@ -163,6 +273,7 @@ class ProductVariant(models.Model):
     standard_size = models.CharField(max_length=10, choices=SizeOption.StandardSize.choices, null=True, blank=True)
     custom_size_value = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
     stock_quantity = models.PositiveBigIntegerField(default=0)
+    reserved_quantity = models.PositiveIntegerField(default=0)
     price_override = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     class Meta:
@@ -171,6 +282,12 @@ class ProductVariant(models.Model):
             'standard_size', 'color',
             'custom_size_unit', 'custom_size_value'
         ) # prevent duplicate products
+
+
+    @property
+    def avaialble_stock(self):
+        return self.stock_quantity - self.reserved_quantity
+    
 
     def __str__(self):
         if self.standard_size:
@@ -184,27 +301,31 @@ class ProductVariant(models.Model):
         return f"{self.product} - {size_display} - {color_display}"
 
 
-class BabyProduct(BaseProduct):
-    """Model for baby products."""
+class ChildrenProduct(BaseProduct, ProductLocationMixin):
+    """Model for baby and children products in one unified model."""
     shop = models.ForeignKey(
         Shop,
         on_delete=models.CASCADE,
-        related_name='baby_products'
+        related_name='children_products'
     )
     category = models.ForeignKey(
         Category,
         on_delete=models.CASCADE,
         null=False,
-        related_name='baby_products'
+        related_name='children_products'
+    )
+    sub_category = models.CharField(
+        max_length=20,
+        choices=ChildrenSubCategory.choices,
+        default=ChildrenSubCategory.INFANT
     )
     material = models.CharField(max_length=100, null=True, blank=True)
-    age_group = models.CharField(max_length=50, choices=AgeGroup.choices, default=AgeGroup.NEW_BORN)
     weight_capacity = models.CharField(max_length=50, null=True, blank=True)
     safety_certifications = models.TextField(null=True, blank=True)
     images = models.ManyToManyField(ImageLink, related_name='baby_products', blank=False)
 
 
-class VehicleProduct(BaseProduct):
+class VehicleProduct(BaseProduct, ProductLocationMixin):
     """Model for vehicle products."""
     shop = models.ForeignKey(
         Shop,
@@ -221,18 +342,20 @@ class VehicleProduct(BaseProduct):
     model = models.CharField(max_length=100, null=True, blank=True)
     year = models.PositiveIntegerField()
     mileage = models.PositiveIntegerField()
-    engine_type = models.CharField(max_length=50, choices=EngineType.choices, default=EngineType.PETROL)
+    engine_type = models.CharField(max_length=20, choices=EngineType.choices, default=EngineType.PETROL)
+    engine_size = models.CharField(max_length=20, choices=EngineSize.choices, default=EngineSize.SMALL)
+    fule_type = models.CharField(max_length=20, choices=FuelType.choices, default=FuelType.PETROL)
     transmission = models.CharField(max_length=50, choices=Transmission.choices, default=Transmission.MANUAL)
     num_doors = models.PositiveIntegerField()
     num_seats = models.PositiveIntegerField()
     vin = models.CharField(max_length=17, unique=True)
-    color_exterior = models.CharField(max_length=50, null=True, blank=True)
-    color_interior = models.CharField(max_length=50, null=True, blank=True)
+    color_exterior = models.CharField(max_length=20, choices=Color.choices, null=True, blank=True)
+    color_interior = models.CharField(max_length=20, choices=Color.choices, null=True, blank=True)
     seating_capacity = models.PositiveIntegerField()
     images = models.ManyToManyField(ImageLink, related_name='vehicle_products', blank=False)
 
 
-class GadgetProduct(BaseProduct):
+class GadgetProduct(BaseProduct, ProductLocationMixin):
     """Model for gadget products."""
     shop = models.ForeignKey(
         Shop,
@@ -245,6 +368,7 @@ class GadgetProduct(BaseProduct):
         null=False,
         related_name='gadget_products'
     )
+    sub_category = models.CharField(max_length=50, choices=GadgetSubCategory.choices, default=GadgetSubCategory.OTHER)
     model = models.CharField(max_length=100)
     processor = models.CharField(max_length=100)
     ram = models.CharField(max_length=50)
@@ -252,10 +376,9 @@ class GadgetProduct(BaseProduct):
     screen_size = models.CharField(max_length=50)
     operating_system = models.CharField(max_length=50, choices=OperatingSystem.choices, default=OperatingSystem.WINDOWS)
     connectivity = models.CharField(max_length=100)
-    color = models.CharField(max_length=50, null=True, blank=True)
     images = models.ManyToManyField(ImageLink, related_name='gadget_products', blank=False)
 
-class FashionProduct(BaseProduct):
+class FashionProduct(BaseProduct, ProductLocationMixin):
     """Model for fashion products."""
     shop = models.ForeignKey(
         Shop,
@@ -268,13 +391,16 @@ class FashionProduct(BaseProduct):
         null=False,
         related_name='fashion_products'
     )
+    sub_category = models.CharField(max_length=50, choices=FashionSubCategory.choices, default=FashionSubCategory.CLOTHING)
+    occasion = models.ManyToManyField(Occasion, related_name="fashion_products", blank=True)
     material = models.CharField(max_length=100, null=True, blank=True)
     style = models.CharField(max_length=100, null=True, blank=True)
-    color = models.CharField(max_length=50, null=True, blank=True)
+    sleeve_length = models.CharField(max_length=20, choices=SleeveLength.choices, null=True, blank=True)
+    neckline = models.CharField(max_length=30, choices=Neckline.choices, null=True, blank=True)
     images = models.ManyToManyField(ImageLink, related_name='fashion_products', blank=False)
 
 
-class ElectronicsProduct(BaseProduct):
+class ElectronicsProduct(BaseProduct, ProductLocationMixin):
     """Model for electronics products."""
     shop = models.ForeignKey(
         Shop,
@@ -287,17 +413,17 @@ class ElectronicsProduct(BaseProduct):
         null=False,
         related_name='electronics_products'
     )
+    sub_category = models.CharField(max_length=50, choices=ElectronicsSubCategory.choices, default=ElectronicsSubCategory.OTHER)
     model = models.CharField(max_length=100)
-    power_output = models.CharField(max_length=50)
+    power_output = models.CharField(max_length=50, choices=PowerOutput.choices, default=PowerOutput.LOW)
     features = models.TextField(null=True, blank=True)
     connectivity = models.CharField(max_length=100)
     voltage = models.CharField(max_length=50)
-    color = models.CharField(max_length=50, null=True, blank=True)
     power_source = models.CharField(max_length=50, choices=PowerSource.choices, default=PowerSource.ELECTRIC)
     images = models.ManyToManyField(ImageLink, related_name='electronics_products', blank=False)
 
 
-class AccessoryProduct(BaseProduct):
+class AccessoryProduct(BaseProduct, ProductLocationMixin):
     """Model for accessory products."""
     shop = models.ForeignKey(
         Shop,
@@ -310,15 +436,15 @@ class AccessoryProduct(BaseProduct):
         null=False,
         related_name='accessory_products'
     )
+    sub_category = models.CharField(max_length=50, choices=AccessorySubCategory.choices, default=AccessorySubCategory.PHONE_CASE )
     material = models.CharField(max_length=100, null=True, blank=True)
     compatibility = models.CharField(max_length=100, null=True, blank=True)
     dimensions = models.CharField(max_length=100, null=True, blank=True)
-    color = models.CharField(max_length=50, null=True, blank=True)
     type = models.CharField(max_length=50, choices=Type.choices, default=Type.CASE)
     images = models.ManyToManyField(ImageLink, related_name='accessory_products', blank=False)
 
 
-class HealthAndBeautyProduct(BaseProduct):
+class HealthAndBeautyProduct(BaseProduct, ProductLocationMixin):
     """Model for health and beauty products."""
     shop = models.ForeignKey(
         Shop,
@@ -343,7 +469,7 @@ class HealthAndBeautyProduct(BaseProduct):
     images = models.ManyToManyField(ImageLink, related_name='health_beauty_products', blank=False)
 
 
-class FoodProduct(BaseProduct):
+class FoodProduct(BaseProduct, ProductLocationMixin):
     """Model for food products."""
     shop = models.ForeignKey(
         Shop,
