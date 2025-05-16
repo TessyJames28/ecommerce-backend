@@ -5,6 +5,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
+from django.core.exceptions import ValidationError
 
 
 # Create your models here.
@@ -13,6 +14,22 @@ phone_number_validator = RegexValidator(
     message=_("Phone number must be exactly 11 digits long."),
 )
 
+
+def validate_password(self, password):
+        """Enforce strong password requirement"""
+        if not password or len(password) < 8:
+            raise ValidationError(_("Password must be at least 8 characters long."))
+        if not re.search(r'[A-Z]', password):
+            raise ValidationError(_("Password must contain at least one uppercase letter."))
+        if not re.search(r'[a-z]', password):
+            raise ValidationError(_("Password must contain at least one lowercase letter."))
+        if not re.search(r'[0-9]', password):
+            raise ValidationError(_("Password must contain at least one digit."))
+        if not re.search(r'[@$!#%*?&^(),.?\":{}|<>]', password):
+            raise ValidationError(_("Password must contain at least one special character."))
+        if re.search(r'\s', password):
+            raise ValidationError(_("Password must not contain spaces."))
+    
 
 class CustomUserManager(BaseUserManager):
     """Custom user manager for CustomUser model."""
@@ -56,9 +73,6 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         null=True,
         blank=True
     )
-    country = models.CharField(max_length=50, default="Nigeria")
-    state = models.CharField(max_length=50, default="Lagos")
-    # home_address = models.CharField(max_length=300, null=True, blank=True)
     password = models.CharField(max_length=128, null=True, blank=True)
     is_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
@@ -75,7 +89,27 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return f"{self.email}: {self.full_name}"
     
-    class meta:
+    class Meta:
         verbose_name = "User"
         verbose_name_plural = "Users"
         ordering = ["-created_at"]
+
+
+class Location(models.Model):
+    """Model for users location"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='location'
+    )
+    street_address = models.CharField(max_length=500)
+    local_govt = models.CharField(max_length=150)
+    landmark = models.CharField(max_length=150)
+    country = models.CharField(max_length=50, default="Nigeria")
+    state = models.CharField(max_length=50, default="Lagos")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.full_name}, {self.street_address}"
