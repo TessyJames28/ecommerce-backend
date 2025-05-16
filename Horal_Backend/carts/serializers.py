@@ -2,13 +2,13 @@ from rest_framework import serializers
 from .models import Cart, CartItem
 from django.contrib.contenttypes.models import ContentType
 from products.models import (
-    BabyProduct, VehicleProduct, FashionProduct, ProductVariant,
+    ChildrenProduct, VehicleProduct, FashionProduct, ProductVariant,
     ElectronicsProduct, AccessoryProduct, FoodProduct,
     HealthAndBeautyProduct, GadgetProduct, Color, SizeOption
 )
 
 product_models = [
-    BabyProduct,
+    ChildrenProduct,
     VehicleProduct,
     FashionProduct,
     GadgetProduct,
