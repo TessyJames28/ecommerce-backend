@@ -1,9 +1,11 @@
 from rest_framework import serializers
 from .models import (
-    Category, ImageLink, ProductVariant, SizeOption,
-    Shop, BabyProduct, VehicleProduct, GadgetProduct,
+    AccessorySubCategory, Category, ChildrenProduct,
+    ChildrenSubCategory, ElectronicsSubCategory,
+    FashionSubCategory, GadgetSubCategory, ImageLink,
+    Occasion, ProductVariant, VehicleProduct, GadgetProduct,
     FashionProduct, ElectronicsProduct, AccessoryProduct,
-    HealthAndBeautyProduct, FoodProduct
+    HealthAndBeautyProduct, FoodProduct, BaseProduct
 )
 
 
@@ -21,6 +23,7 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = '__all__'
         read_only_fields = ['id']
+
 
 class ProductVariantSerializer(serializers.ModelSerializer):
     """Serializer for product variant model which include sizes and colors."""
@@ -52,12 +55,68 @@ class ProductCreateMixin:
         return instance
     
 
+    def update(self, instance, validated_data):
+        """
+        Product update especially for nested fields like images and variants
+        """
+        images = validated_data.pop('images', [])
+        variants = validated_data.pop('variants', [])
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if images:
+            instance.images.clear()
+            for img in images:
+                image = ImageLink.objects.create(**img)
+                instance.images.add(image)
+
+        if variants:
+            instance.get_variants().delete()
+            for data in variants:
+                ProductVariant.objects.create(product=instance, **data)
+
+        return instance 
+    
+
+class ProductRepresentationMixin:
+    def to_representation(Self, instance):
+        """Centralize the to_representation logic"""
+        data = super().to_representation(instance)
+
+        # List of base_field attributes
+        base_fields = {
+            'id', 'title', 'description', 'price', 'quantity',
+            'production_date', 'condition', 'brand',
+            'is_published', 'live_video_url', 'created_at',
+            'updated_at', 'images', 'shop', 'category'
+        }
+
+        base_data = {}
+        spec_data = {}
+
+        for key, value in data.items():
+            if key in base_fields or key == "images":
+                base_data[key] = value
+            elif key == "state" or key == "local_govt":
+                base_data[key] = value
+            else:
+                spec_data[key] = value
+
+        return {
+            **base_data,
+            "specification": spec_data
+        }
+    
+
 class BaseProductSerializer(serializers.ModelSerializer):
     """Serializer for the base product model"""
     images = ImageLinkSerializer(many=True)
     variants = ProductVariantSerializer(many=True, write_only=True, required=False)
     variants_details = serializers.SerializerMethodField(read_only=True)
-
+    quantity = serializers.SerializerMethodField()
+    
     def get_variants_details(self, obj):
         variant_qs = obj.get_variants() # defined in BaseProduct
         return ProductVariantSerializer(variant_qs, many=True).data
@@ -67,17 +126,44 @@ class BaseProductSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("At least one image is required.")
         return value
     
+    def get_quantity(self, obj):
+        return obj.quantity
+    
+    # def get_location(self, obj):
+    #     if obj.location:
+    #         return {
+    #             "id": str(obj.location.id),
+    #             "state": obj.location.state,
+    #             "local_govt": obj.location.local_govt,
+    #             "landmark": obj.location.landmark,
+    #             "street_address": obj.location.street_address,
+    #         }
+    #     return None
+
+    
 
 # Pre-category product serializers
-class BabyProductSerializer(ProductCreateMixin, BaseProductSerializer):
+class ChildrenProductSerializer(
+    ProductCreateMixin,
+    ProductRepresentationMixin,
+    BaseProductSerializer
+):
+
+    sub_category = serializers.ChoiceField(choices=ChildrenSubCategory.choices)
+
     """Serializer to handle baby category"""
     class Meta:
-        model = BabyProduct
+        model = ChildrenProduct
         fields = '__all__'
         read_only_fields = ['id']
     
 
-class VehicleProductSerializer(ProductCreateMixin, BaseProductSerializer):
+class VehicleProductSerializer(
+    ProductCreateMixin,
+    ProductRepresentationMixin,
+    BaseProductSerializer
+):
+    
     """serializer to handle vehicle product category creation"""
     class Meta:
         model = VehicleProduct
@@ -85,7 +171,13 @@ class VehicleProductSerializer(ProductCreateMixin, BaseProductSerializer):
         read_only_fields = ['id']
     
 
-class GadgetProductSerializer(ProductCreateMixin, BaseProductSerializer):
+class GadgetProductSerializer(
+    ProductCreateMixin,
+    ProductRepresentationMixin,
+    BaseProductSerializer
+):
+    sub_category = serializers.ChoiceField(choices=GadgetSubCategory.choices)
+    
     """serializer for Gadget product model creation"""
     class Meta:
         model = GadgetProduct
@@ -93,31 +185,61 @@ class GadgetProductSerializer(ProductCreateMixin, BaseProductSerializer):
         read_only_fields = ['id']
 
 
-class FashionProductSerializer(ProductCreateMixin, BaseProductSerializer):
+class OccasionSerializer(serializers.ModelSerializer):
+    """Occasion Serializer"""
+    class Meta:
+        model = Occasion 
+        fields = ['id', 'name']
+
+
+class FashionProductSerializer(
+    ProductCreateMixin,
+    ProductRepresentationMixin,
+    BaseProductSerializer
+):
     """Serializer to handle fashion category product creation"""
+    sub_category = serializers.ChoiceField(choices=FashionSubCategory.choices)
+    occasions = OccasionSerializer(many=True, read_only=True)
+
     class Meta:
         model = FashionProduct
         fields = '__all__'
         read_only_fields = ['id']
 
 
-class ElectronicsProductSerializer(ProductCreateMixin, BaseProductSerializer):
+class ElectronicsProductSerializer(
+    ProductCreateMixin,
+    ProductRepresentationMixin,
+    BaseProductSerializer
+):
     """serializer to handle electronics product category creation"""
+    sub_category = serializers.ChoiceField(choices=ElectronicsSubCategory.choices)
+
     class Meta:
         model = ElectronicsProduct
         fields = '__all__'
         read_only_fields = ['id']
 
 
-class AccessoryProductSerializer(ProductCreateMixin, BaseProductSerializer):
+class AccessoryProductSerializer(
+    ProductCreateMixin,
+    ProductRepresentationMixin,
+    BaseProductSerializer
+):
     """Serializer to handle Accesory product category creation"""
+    sub_category = serializers.ChoiceField(choices=AccessorySubCategory.choices)
+
     class Meta:
         model = AccessoryProduct
         fields = '__all__'
         read_only_fields = ['id']
 
 
-class HealthAndBeautyProductSerializer(ProductCreateMixin, BaseProductSerializer):
+class HealthAndBeautyProductSerializer(
+    ProductCreateMixin,
+    ProductRepresentationMixin,
+    BaseProductSerializer
+):
     """
     Serializer to handle the creation of health 
     and beauty products category
@@ -128,7 +250,11 @@ class HealthAndBeautyProductSerializer(ProductCreateMixin, BaseProductSerializer
         read_only_fields = ['id']
 
 
-class FoodProductSerializer(ProductCreateMixin, BaseProductSerializer):
+class FoodProductSerializer(
+    ProductCreateMixin,
+    ProductRepresentationMixin,
+    BaseProductSerializer
+):
     """serializer to handle Food product category creation"""
     class Meta:
         model = FoodProduct
@@ -139,7 +265,7 @@ class FoodProductSerializer(ProductCreateMixin, BaseProductSerializer):
 # Dynamic serializer solver (for views)
 def get_product_serializer(category_name):
     mapping = {
-        'babies': BabyProductSerializer,
+        'children': ChildrenProductSerializer,
         'vehicles': VehicleProductSerializer,
         'gadget': GadgetProductSerializer,
         'fashion': FashionProductSerializer,
