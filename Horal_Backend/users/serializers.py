@@ -1,6 +1,6 @@
 import re
 from rest_framework import serializers
-from .models import CustomUser
+from .models import CustomUser, Location
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
@@ -206,3 +206,10 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         user.set_password(new_password)
         user.save(update_fields=['password'])
         return user
+    
+
+class LocationSerializer(serializers.ModelSerializer):
+    """Location serializer"""
+    class Meta:
+        model = Location
+        fields = ['id', 'street_address', 'local_govt', 'landmark', 'state', 'country']
