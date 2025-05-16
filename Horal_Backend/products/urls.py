@@ -14,6 +14,8 @@ urlpatterns = [
     path('<str:category_name>/create/', views.ProductCreateView.as_view(), name='product-create'),
     # Product endpoint to retrieve, update, and delete products
     path('<str:category_name>/<uuid:pk>/', views.ProductDetailView.as_view(), name='product-detail'),
+    # Single product detail view
+    path('<str:category_name>/<uuid:pk>/product/', views.SingleProductDetailView.as_view(), name="single_product_view"),
     
     # Shop products endpoints
     path('shop/<uuid:shop_id>/get-products/', views.ShopProductListView.as_view(), name='shop-products'),
