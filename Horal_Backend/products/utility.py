@@ -2,12 +2,12 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import (
-    Category, Shop, BabyProduct, VehicleProduct, GadgetProduct,
+    ChildrenProduct, VehicleProduct, GadgetProduct,
     FashionProduct, ElectronicsProduct, AccessoryProduct,
     HealthAndBeautyProduct, FoodProduct
 )
 from .serializers import (
-    BabyProductSerializer, VehicleProductSerializer, GadgetProductSerializer,
+    ChildrenProductSerializer, VehicleProductSerializer, GadgetProductSerializer,
     FashionProductSerializer, ElectronicsProductSerializer, FoodProductSerializer,
     HealthAndBeautyProductSerializer, AccessoryProductSerializer
 ) 
@@ -15,7 +15,7 @@ from .serializers import (
 
 # List of all product models and their serializers
 product_models = [
-    (BabyProduct, BabyProductSerializer, 'babies'),
+    (ChildrenProduct, ChildrenProductSerializer, 'babies'),
     (VehicleProduct, VehicleProductSerializer, 'vehicles'),
     (GadgetProduct, GadgetProductSerializer, 'gadget'),
     (FashionProduct, FashionProductSerializer, 'fashion'),
@@ -32,7 +32,6 @@ class BaseResponseMixin:
 
     def get_response(self, status_code, message, data=None):
         """Format the API response"""
-        print("get response called")
         response_data = {
             "status": "success" if status_code < 400 else "error",
             "status_code": status_code,
@@ -41,14 +40,13 @@ class BaseResponseMixin:
 
         if data is not None:
             response_data["data"] = data
-        print("get response 2nd call")
         return Response(response_data, status=status_code)
     
 
     def get_product_model_by_category(self, category_name):
         """Get the product model based on category name"""
         mapping = {
-            'babies': BabyProduct,
+            'children': ChildrenProduct,
             'vehicles': VehicleProduct,
             'gadget': GadgetProduct,
             'fashion': FashionProduct,
@@ -98,3 +96,10 @@ class IsSellerAdminOrSuperuser(IsAuthenticated):
             request.user and request.user.is_authenticated and
             (request.user.is_staff or request.user.is_superuser or request.user.is_seller)
         )      
+    
+
+# helper function to update total stock for products after purchases
+def update_quantity(product):
+    total = sum(v.stock_quantity + v.reserved_quantity for v in product.get_variants())
+    product.quantity = total
+    product.save(update_fields=['quantity'])
