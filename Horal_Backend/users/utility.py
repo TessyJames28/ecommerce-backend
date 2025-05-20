@@ -1,6 +1,9 @@
+import re
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from google.oauth2.credentials import Credentials
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 import requests
 
@@ -71,3 +74,21 @@ def verify_google_token(token_id, refresh_token, client_id):
             return user_info
         else:
             raise ValueError("Failed to refresh expired token")
+
+
+def validate_strong_password(password):
+    """Enforce strong password requirement"""
+    if not password or len(password) < 8:
+        raise ValidationError(_("Password must be at least 8 characters long."))
+    if not re.search(r'[A-Z]', password):
+        raise ValidationError(_("Password must contain at least one uppercase letter."))
+    if not re.search(r'[a-z]', password):
+        raise ValidationError(_("Password must contain at least one lowercase letter."))
+    if not re.search(r'[0-9]', password):
+        raise ValidationError(_("Password must contain at least one digit."))
+    if not re.search(r'[@$!#%*?&^(),.?\":{}|<>]', password):
+        raise ValidationError(_("Password must contain at least one special character."))
+    if re.search(r'\s', password):
+        raise ValidationError(_("Password must not contain spaces."))
+    
+    return password
