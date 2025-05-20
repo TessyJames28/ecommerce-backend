@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
@@ -33,22 +34,33 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
         
         try:
             with transaction.atomic():
+                existing_order = Order.objects.filter(user=user, status=Order.Status.PENDING).first()
+                if existing_order:
+                    serializer = self.get_serializer(existing_order)
+                    print(serializer)
+                    return self.get_response(
+                        status.HTTP_200_OK,
+                        "You already have a pending order",
+                        serializer.data
+                    )
 
-                # Calculate total
+                # If no existing order, continue creating one and calculate total
                 total = cart.total_price
                 order = Order.objects.create(user=user, total_amount=total)
 
             
                 for item in cart.cart_item.all():
                     variant = item.variant
+                    print(variant)
 
                     # Check if requested quantity can be reserved
-                    if item.quantity > variant.available_stock:
+                    if item.quantity > variant.stock_quantity:
                         raise ValidationError(
                             f"Only {variant.available_stock} items available for {variant}"
                         )
                     # Reserve the stock
                     variant.reserved_quantity += item.quantity
+                    variant.stock_quantity -= item.quantity  # Deduct immediately upon reservation
                     variant.save()
                     update_quantity(variant.product)
 
@@ -58,6 +70,8 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                         quantity=item.quantity,
                         unit_price=item.variant.price_override or item.variant.product.price
                     )
+
+                print(order.order_items.all())
 
                 serializer = self.get_serializer(order)
 
@@ -75,7 +89,7 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
         except Exception as e:
             return self.get_response(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
-                "An unexpected error occurred while processing your order."
+                str(e)
             )
         
 
@@ -117,7 +131,6 @@ class PaymentCallbackView(GenericAPIView, BaseResponseMixin):
                         
                         # Deduct from total stock after successful payment
                         variant.reserved_quantity -= item.quantity
-                        variant.stock_quantity -= item.quantity
                         variant.save()
                         update_quantity(variant.product)
 
@@ -129,8 +142,20 @@ class PaymentCallbackView(GenericAPIView, BaseResponseMixin):
                     for item in order.order_items.all():
                         variant = item.variant
                         variant.reserved_quantity -= item.quantity
+                        variant.stock_quantity += item.quantity
                         variant.save()
                         update_quantity(variant.product)
+
+                    # Update the order status
+                    print("Before deletion")
+                    order.delete()
+                    print("After deletion")
+
+                    return self.get_response(
+                        status.HTTP_400_BAD_REQUEST,
+                        f"Payment {status_input.lower()}. Order status updated accordingly."
+                    )
+       
 
                 # Update the order status
                 order.status = status_input
@@ -153,4 +178,35 @@ class PaymentCallbackView(GenericAPIView, BaseResponseMixin):
             f"Order updated to {status_input}",
             serializer.data
         )
-        
+
+
+class OrderDeleteView(GenericAPIView):
+    """
+    class to handle the delete view for order
+    and reset reserved quantities
+    """
+
+    def delete(self, request, *args, **kwargs):
+        order_id = self.kwargs.get('pk')
+        order = get_object_or_404(Order, pk=order_id, user=request.user)
+
+        with transaction.atomic():
+            for item in order.order_items.all():
+                variant = item.variant
+
+                # reset the reserved quantity
+                variant.reserved_quantity = max(0, variant.reserved_quantity - item.quantity)
+                variant.stock_quantity += item.quantity
+                variant.save()
+
+                # Recalculate total quantity for the product
+                update_quantity(variant.product)
+
+            order.delete()
+
+        return Response({
+            "status": "success",
+            "status code": status.HTTP_204_NO_CONTENT,
+            "message": "Order deleted and reserved stock released"
+        })
+    
