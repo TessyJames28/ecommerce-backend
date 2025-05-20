@@ -24,6 +24,11 @@ class Cart(models.Model):
     @property
     def total_price(self):
         return sum(item.item_total_price for item in self.cart_item.all())
+    
+
+    @property
+    def total_item(self):
+        return len(self.cart_item.all())
 
     def __str__(self):
         return f"{self.user.full_name}'s cart"
@@ -33,7 +38,7 @@ class CartItem(models.Model):
     """Eachitem added to the cart will point to a variant"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='cart_item')
-    variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE)
+    variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, null=True, blank=True)
     quantity = models.PositiveIntegerField(default=1)
 
     class Meta:
