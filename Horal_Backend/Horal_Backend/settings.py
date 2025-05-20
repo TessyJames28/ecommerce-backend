@@ -15,17 +15,28 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+import environ
+import os
+
+# Initialise environment variables
+env = environ.Env(
+    DEBUG=(bool, False)
+)
+
+# Reading from .env file
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-b1j4e9*p5(_4il@-aofyorwk4$&jvw6!x68+(s0vb=@#mzcti6'
+SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 
 
 # Application definition
@@ -40,7 +51,11 @@ INSTALLED_APPS = [
     'users',
     'sellers',
     'notifications',
+    'products',
+    'carts',
+    'orders',
     'anymail',
+    'drf_yasg',
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
@@ -49,16 +64,28 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'carts.middleware.SessionFixMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    # Custom middleware
+    'carts.middleware.CartMiddleware',
+    
 ]
 
 REST_FRAMEWORK = {
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 30,
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',
     ]
 }
 
@@ -66,7 +93,7 @@ from datetime import timedelta
 
 #JWT Settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
@@ -75,14 +102,37 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
+# Google OAuth2 settings
+GOOGLE_OAUTH = {
+    "WEB_CLIENT_ID": env('WEB_CLIENT_ID'),
+    "MOBILE_CLIENT_ID": env('MOBILE_CLIENT_ID'),
+    "CLIENT_SECRET": env('CLIENT_SECRET'),
+    "REDIRECT_URI": env('REDIRECT_URI'),
+}
+
+
+# Mailgun settings
+# MAILGUN_API_KEY = env('MAILGUN_API_KEY')
+# MAILGUN_DOMAIN = env('MAILGUN_DOMAIN')
+# MAILGUN_API_URL = env('MAILGUN_API_URL').format(MAILGUN_DOMAIN)
+
+# EMAIL_BACKEND = env('EMAIL_BACKEND')
+# ANYMAIL = {
+#     'MAILGUN_API_KEY': MAILGUN_API_KEY,
+#     'MAILGUN_SENDER_DOMAIN': MAILGUN_DOMAIN,
+# }
+
+# DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
+
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Redis configuration for django
 CACHES = {
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://127.0.0.1:6379/1",
+        "BACKEND": env('BACKEND'),
+        "LOCATION": env('LOCATION'),
         "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "CLIENT_CLASS": env('CLIENT_CLASS'),
         }
     }
 }
@@ -121,6 +171,12 @@ DATABASES = {
 # auth user model
 AUTH_USER_MODEL = 'users.CustomUser'
 
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    # Add additional backends if necessary
+]
+
+
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
@@ -154,11 +210,11 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
-import os
+# import os
 
-STATIC_URL = 'static/'
-MEDIA_URL = 'media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# STATIC_URL = 'static/'
+# MEDIA_URL = 'media/'
+# MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
