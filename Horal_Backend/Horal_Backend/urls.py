@@ -41,7 +41,7 @@ urlpatterns = [
     path('api/v1/seller/', include('sellers.urls')),
     path('api/v1/product/', include('products.urls')),
     path('api/v1/cart/', include('carts.urls')),
-    path('api/v1/orders', include('orders.urls')),
+    path('api/v1/order/', include('orders.urls')),
     # path('api/v1/profiles/', include('profiles.urls')),
 
     # Swagger & Redoc URLs
