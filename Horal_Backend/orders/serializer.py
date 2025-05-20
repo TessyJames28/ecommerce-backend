@@ -18,8 +18,13 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     """Serializer for order model"""
-    items = OrderItemSerializer(many=True, read_only=True)
+    items = OrderItemSerializer(many=True, read_only=True, source='order_items')
 
     class Meta:
         model = Order
         fields = ['id', 'user', 'created_at', 'status', 'total_amount', 'items']
+
+
+    def get_items(self, obj):
+        """Retrieve all order items"""
+        return OrderItemSerializer(obj.order_items.all(), many=True).data
