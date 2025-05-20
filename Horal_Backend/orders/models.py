@@ -1,6 +1,7 @@
 from django.db import models
 from users.models import CustomUser
 from products.models import ProductVariant
+from carts.models import Cart
 import uuid
 
 
@@ -25,6 +26,10 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Order #{self.id} by {self.user}"
+    
+
+    def get_carts(self):
+        return Cart.objects.filter(user=self.user).first()
     
 
 class OrderItem(models.Model):
