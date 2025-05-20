@@ -56,12 +56,14 @@ INSTALLED_APPS = [
     'orders',
     'anymail',
     'drf_yasg',
+    'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -75,6 +77,18 @@ MIDDLEWARE = [
     'carts.middleware.CartMiddleware',
     
 ]
+
+
+# Add Cors settings
+CORS_ALLOWED_ORIGINS = [
+    'https://www.horal.ng/',
+    "http://localhost:3000",       # React dev server
+    "http://127.0.0.1:3000",
+]
+
+CORS_ALLOW_ALL_ORIGINS = True
+
+CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
