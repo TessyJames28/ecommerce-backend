@@ -9,6 +9,18 @@ urlpatterns = [
     path('categories/<uuid:pk>/', views.CategoryDetailView.as_view(), name='category-detail'),
     path('categories/<uuid:pk>/view/', views.SingleCategoryDetailView.as_view(), name='single_category-detail'),
 
+    # Product variant endpoint
+    path('variants/<uuid:variant_id>/', views.ProductVariantView.as_view(), name='product-variant'),
+
+    # Sub categories endpoint
+    path('subcategory/create/', views.SubCategoryCreateView.as_view(), name="create-subcategory"),
+
+    # GET Endpoint
+    path('subcategory/<uuid:category_id>/view/', views.SubCategoryListView.as_view(), name="get-subcategory"),
+
+    # PUT and DELETE endpoints
+    path('subcategory/<uuid:category_id>/', views.SubCategoryDetailView.as_view(), name="subcategory-endpoints"),
+
     # Product endpoints
     path('', views.ProductListView.as_view(), name='product-list'),
     path('<str:category_name>/create/', views.ProductCreateView.as_view(), name='product-create'),
@@ -19,8 +31,5 @@ urlpatterns = [
     
     # Shop products endpoints
     path('shop/<uuid:shop_id>/get-products/', views.ShopProductListView.as_view(), name='shop-products'),
-    
-    # Product variant endpoint
-    path('variants/<uuid:variant_id>/', views.ProductVariantView.as_view(), name='product-variant'),
 
 ]
