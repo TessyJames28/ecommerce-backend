@@ -1,10 +1,11 @@
 from datetime import timezone
 from django.utils.timezone import now
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.core.exceptions import PermissionDenied
 from .utility import refresh_google_token, verify_google_token
-from users.models import CustomUser
+from users.models import CustomUser, Location
 from users.serializers import (
     CustomUserSerializer,
     LoginSerializer,
@@ -12,6 +13,7 @@ from users.serializers import (
     PasswordResetConfirmSerializer,
     OTPVerificationSerializer,
     PasswordResetRequestSerializer,
+    LocationSerializer,
 )
 from rest_framework.response import Response
 from rest_framework import status
@@ -90,7 +92,6 @@ class UserLoginView(GenericAPIView):
                 "email": user.email,
                 "full_name": user.full_name,
                 "phone_number": user.phone_number,
-                # "home_address": user.home_address,
                 "is_staff": user.is_staff,
                 "is_superuser": user.is_superuser,
                 "is_seller": user.is_seller,
@@ -272,7 +273,10 @@ class PasswordResetRequestView(GenericAPIView):
         return Response({
             "status": "success",
             "status_code": status.HTTP_200_OK,
-            "message": "Password reset OTP sent successfully"
+            "message": "Password reset OTP sent successfully",
+            "data": {
+                "user_id": user.id,
+            }
         }, status=status.HTTP_200_OK)
     
         if settings.DEBUG:
@@ -343,3 +347,144 @@ if settings.DEBUG:
                 return Response({"email": email, "error": "No OTP found"}, status=404)
             except CustomUser.DoesNotExist:
                 return Response({"error": "User not found"}, status=404)
+            
+
+class CreateLocationView(GenericAPIView):
+    """Handle the Location creation"""
+    serializer_class = LocationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        """Create user location"""
+
+        # Check if location already exists for the user
+        if hasattr(request.user, 'location'):
+            return Response({
+                "status": "error",
+                "status code": status.HTTP_400_BAD_REQUEST,
+                "message": "Location already exists. Please update it instead."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # location = serializer.save()
+        location = self.perform_create(serializer)
+
+        response_data = {
+            "status": "success",
+            "status code": status.HTTP_201_CREATED,
+            "message": "User location registered successfully",
+            "data": self.get_serializer(location).data
+        }
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
+    
+
+    def perform_create(self, serializer):
+        """Automatically assign request.user to the Location instance"""
+        return serializer.save(user=self.request.user)
+
+
+class LocationUpdateDeleteView(GenericAPIView):
+    """View endpoint to handle user location update and deletion"""
+    serializer_class = LocationSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = Location.objects.all()
+
+
+    def get_object(self, pk, request):
+        """Check for permission"""
+        location = get_object_or_404(Location, pk=pk)
+        if request.method in ['PUT', 'PATCH']:
+            if location.user != request.user:
+                raise PermissionDenied("You do not have permission to access this location.")
+        return location
+    
+
+    def put(self, request, pk, *args, **kwargs):
+        """Update user location"""
+        location = self.get_object(pk, request)
+        serializer = self.get_serializer(location, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        response_data = {
+            "status": "success",
+            "status code": status.HTTP_200_OK,
+            "message": "User location updated successfully",
+            "location": serializer.data
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
+    
+
+    def patch(self, request, pk, *args, **kwargs):
+        """partially update user location"""
+        location = self.get_object(pk, request)
+        serializer = self.get_serializer(location, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        response_data = {
+            "status": "success",
+            "status code": status.HTTP_200_OK,
+            "message": "User location updated successfully",
+            "location": serializer.data
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
+    
+
+    def delete(self, request, pk, *args, **kwargs):
+        """Delete user location"""
+        # Check for permission, only staff and superuser can delete user location
+        if not request.user.is_staff and not request.user.is_superuser:
+            raise PermissionDenied("Only staff or superusers can delete user locations")
+        
+        location = self.get_object(pk, request)
+        location.delete()
+
+        response_data = {
+            "status": "success",
+            "status code": status.HTTP_204_NO_CONTENT,
+            "message": "User location deleted successfully",
+        }
+
+        return Response(response_data, status=status.HTTP_204_NO_CONTENT)
+
+
+
+class SingleLocationView(GenericAPIView):
+    """View endpoint to handle single user location view"""
+    serializer_class = LocationSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = Location.objects.all()
+
+    def get(self, request, pk, *args, **kwargs):
+        """Get a single user location by location ID"""
+        location = get_object_or_404(Location, pk=pk)
+
+        if location.user != request.user:
+            return Response({
+                "status": "error",
+                "status code": status.HTTP_403_FORBIDDEN,
+                "message": "You do not have permission to view this location."
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = self.get_serializer(location)
+        user = request.user
+
+        response_data = {
+            "status": "success",
+            "status code": status.HTTP_200_OK,
+            "message": "User location retrieved successfully",
+            "user": {
+                "id": str(user.id),
+                "full_name": user.full_name,
+                "email": user.email,
+                "phone_number": user.phone_number,
+            },
+            'location': serializer.data,
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
