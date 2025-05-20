@@ -15,6 +15,7 @@ class Category(models.Model):
         return self.name
 
 
+
 class SubCategory(models.Model):
     """Model for the different sucategory"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -28,6 +29,7 @@ class SubCategory(models.Model):
     
 
 class ImageLink(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     url = models.URLField()
     alt_text = models.CharField(max_length=255, null=True, blank=True)
     
