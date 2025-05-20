@@ -7,6 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from django.utils.timezone import now
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from notifications.utility import verify_otp
+from .utility import validate_strong_password
 
 class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -33,19 +34,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
     def validate_password(self, password):
         """Enforce strong password requirement"""
-        if not password or len(password) < 8:
-            raise ValidationError(_("Password must be at least 8 characters long."))
-        if not re.search(r'[A-Z]', password):
-            raise ValidationError(_("Password must contain at least one uppercase letter."))
-        if not re.search(r'[a-z]', password):
-            raise ValidationError(_("Password must contain at least one lowercase letter."))
-        if not re.search(r'[0-9]', password):
-            raise ValidationError(_("Password must contain at least one digit."))
-        if not re.search(r'[@$!#%*?&^(),.?\":{}|<>]', password):
-            raise ValidationError(_("Password must contain at least one special character."))
-        if re.search(r'\s', password):
-            raise ValidationError(_("Password must not contain spaces."))
-        
+        validate_strong_password(password)
         return password
     
 
@@ -179,6 +168,12 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     user_id = serializers.UUIDField(required=True)
     new_password = serializers.CharField(required=True, write_only=True)
     confirm_password = serializers.CharField(required=True, write_only=True)
+
+    def validate_new_password(self, value):
+        """Enforce strong password requirement"""
+        validate_strong_password(value)
+        return value
+    
 
     def validate(self, attrs):
         """Validate the password reset confirmation"""
