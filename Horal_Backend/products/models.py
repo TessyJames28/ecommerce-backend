@@ -13,6 +13,18 @@ class Category(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class SubCategory(models.Model):
+    """Model for the different sucategory"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="subcategories")
+    name = models.CharField(max_length=100)
+    slug = models.CharField(max_length=100, null=True, blank=True)
+
+
+    def __str__(self):
+        return f"{self.name} ({self.category.name})"
     
 
 class ImageLink(models.Model):
@@ -236,7 +248,6 @@ class BaseProduct(models.Model):
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2)    
     quantity = models.PositiveIntegerField(default=0)
-    quantity = models.PositiveIntegerField(default=0)
     production_date = models.DateField(null=True, blank=True)
     condition = models.CharField(max_length=50, choices=ProductCondition.choices, default=ProductCondition.NEW)
     brand = models.CharField(max_length=100, null=True, blank=True)
@@ -314,10 +325,12 @@ class ChildrenProduct(BaseProduct, ProductLocationMixin):
         null=False,
         related_name='children_products'
     )
-    sub_category = models.CharField(
-        max_length=20,
-        choices=ChildrenSubCategory.choices,
-        default=ChildrenSubCategory.INFANT
+    sub_category = models.ForeignKey(
+        SubCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='children_products'
     )
     material = models.CharField(max_length=100, null=True, blank=True)
     weight_capacity = models.CharField(max_length=50, null=True, blank=True)
@@ -336,6 +349,13 @@ class VehicleProduct(BaseProduct, ProductLocationMixin):
         Category,
         on_delete=models.CASCADE,
         null=False,
+        related_name='vehicle_products'
+    )
+    sub_category = models.ForeignKey(
+        SubCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='vehicle_products'
     )
     make = models.CharField(max_length=100, null=True, blank=True)
@@ -368,7 +388,13 @@ class GadgetProduct(BaseProduct, ProductLocationMixin):
         null=False,
         related_name='gadget_products'
     )
-    sub_category = models.CharField(max_length=50, choices=GadgetSubCategory.choices, default=GadgetSubCategory.OTHER)
+    sub_category = models.ForeignKey(
+        SubCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='gadget_products'
+    )
     model = models.CharField(max_length=100)
     processor = models.CharField(max_length=100)
     ram = models.CharField(max_length=50)
@@ -391,7 +417,13 @@ class FashionProduct(BaseProduct, ProductLocationMixin):
         null=False,
         related_name='fashion_products'
     )
-    sub_category = models.CharField(max_length=50, choices=FashionSubCategory.choices, default=FashionSubCategory.CLOTHING)
+    sub_category = models.ForeignKey(
+        SubCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='fashion_products'
+    )
     occasion = models.ManyToManyField(Occasion, related_name="fashion_products", blank=True)
     material = models.CharField(max_length=100, null=True, blank=True)
     style = models.CharField(max_length=100, null=True, blank=True)
@@ -413,7 +445,13 @@ class ElectronicsProduct(BaseProduct, ProductLocationMixin):
         null=False,
         related_name='electronics_products'
     )
-    sub_category = models.CharField(max_length=50, choices=ElectronicsSubCategory.choices, default=ElectronicsSubCategory.OTHER)
+    sub_category = models.ForeignKey(
+        SubCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='electronics_products'
+    )
     model = models.CharField(max_length=100)
     power_output = models.CharField(max_length=50, choices=PowerOutput.choices, default=PowerOutput.LOW)
     features = models.TextField(null=True, blank=True)
@@ -436,7 +474,13 @@ class AccessoryProduct(BaseProduct, ProductLocationMixin):
         null=False,
         related_name='accessory_products'
     )
-    sub_category = models.CharField(max_length=50, choices=AccessorySubCategory.choices, default=AccessorySubCategory.PHONE_CASE )
+    sub_category = models.ForeignKey(
+        SubCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='accessory_products'
+    )
     material = models.CharField(max_length=100, null=True, blank=True)
     compatibility = models.CharField(max_length=100, null=True, blank=True)
     dimensions = models.CharField(max_length=100, null=True, blank=True)
@@ -455,6 +499,13 @@ class HealthAndBeautyProduct(BaseProduct, ProductLocationMixin):
         Category,
         on_delete=models.CASCADE,
         null=False,
+        related_name='health_beauty_products'
+    )
+    sub_category = models.ForeignKey(
+        SubCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='health_beauty_products'
     )
     ingredients = models.TextField(null=True, blank=True)
@@ -480,6 +531,13 @@ class FoodProduct(BaseProduct, ProductLocationMixin):
         Category,
         on_delete=models.CASCADE,
         null=False,
+        related_name='food_products'
+    )
+    sub_category = models.ForeignKey(
+        SubCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='food_products'
     )
     ingredients = models.TextField(null=True, blank=True)
