@@ -87,6 +87,41 @@ class CartView(GenericAPIView, BaseResponseMixin):
         )
     
 
+class CartDeleteView(GenericAPIView, BaseResponseMixin):
+        """
+        Handle cart deletion by users
+        """
+        serializer_class = CartSerializer
+        permission_classes = [AllowAny]
+        authentication_classes = [SessionOrAnonymousAuthentication]
+
+
+        def get_cart(self, request):
+            """Get or create a cart based on user authentication status"""
+            cart_view = CartView()
+            return cart_view.get_cart(request)
+
+        def delete(self, request, cart_id):
+            """
+            Method to delete a cart
+            """
+            # cart = self.get_cart(request)
+            user_cart = get_object_or_404(Cart, id=cart_id)
+
+            if not user_cart:
+                return self.get_response(
+                    status.HTTP_404_NOT_FOUND,
+                    "User cart not found"
+                )
+            
+            user_cart.delete()
+            return Response({
+                "status": "success",
+                "status_code": status.HTTP_204_NO_CONTENT,
+                "message": "Cart deleted successfully"
+            })
+
+
 
 class CartItemCreateView(GenericAPIView, BaseResponseMixin):
     """Handle item creation on cart by resolving variant_id"""
@@ -139,13 +174,6 @@ class CartItemUpdateDeleteView(GenericAPIView, BaseResponseMixin):
 
     def get_cart_item(self, request, item_id):
         """Get cart item based on autehntication status"""
-        # if request.user.is_authenticated:
-        #     return get_object_or_404(CartItem, id=item_id, cart__user=request.user)
-        # else:
-        #     session_key = request.session.session_key
-        #     if not session_key:
-        #         return None
-        #     return get_object_or_404(CartItem, id=item_id, cart__session_key=session_key)
         try:
             cart = self.get_cart(request)
             return get_object_or_404(CartItem, id=item_id, cart=cart)
