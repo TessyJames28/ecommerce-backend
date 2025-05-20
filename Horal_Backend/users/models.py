@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
+from .utility import validate_strong_password
 
 
 # Create your models here.
@@ -14,22 +15,6 @@ phone_number_validator = RegexValidator(
     message=_("Phone number must be exactly 11 digits long."),
 )
 
-
-def validate_password(self, password):
-        """Enforce strong password requirement"""
-        if not password or len(password) < 8:
-            raise ValidationError(_("Password must be at least 8 characters long."))
-        if not re.search(r'[A-Z]', password):
-            raise ValidationError(_("Password must contain at least one uppercase letter."))
-        if not re.search(r'[a-z]', password):
-            raise ValidationError(_("Password must contain at least one lowercase letter."))
-        if not re.search(r'[0-9]', password):
-            raise ValidationError(_("Password must contain at least one digit."))
-        if not re.search(r'[@$!#%*?&^(),.?\":{}|<>]', password):
-            raise ValidationError(_("Password must contain at least one special character."))
-        if re.search(r'\s', password):
-            raise ValidationError(_("Password must not contain spaces."))
-    
 
 class CustomUserManager(BaseUserManager):
     """Custom user manager for CustomUser model."""
@@ -86,6 +71,12 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     USERNAME_FIELD = 'email'  # use email instead of username
     # REQUIRED_FIELDS = ["full_name", "phone_number"]  # required fields for createsuperuser
 
+
+    def set_password(self, raw_password):
+        validate_strong_password(raw_password)
+        super().set_password(raw_password)
+
+        
     def __str__(self):
         return f"{self.email}: {self.full_name}"
     
