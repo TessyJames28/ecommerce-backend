@@ -3,7 +3,7 @@ from .models import (
     AccessorySubCategory, Category, ChildrenProduct,
     ChildrenSubCategory, ElectronicsSubCategory,
     FashionSubCategory, GadgetSubCategory, ImageLink,
-    Occasion, ProductVariant, VehicleProduct, GadgetProduct,
+    Occasion, ProductVariant, SubCategory, VehicleProduct, GadgetProduct,
     FashionProduct, ElectronicsProduct, AccessoryProduct,
     HealthAndBeautyProduct, FoodProduct, BaseProduct
 )
@@ -25,13 +25,21 @@ class CategorySerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
+class SubCategorySerializer(serializers.ModelSerializer):
+    """Class that handles subcategory serialization"""
+
+    class Meta:
+        model = SubCategory 
+        fields = ['id', 'name', 'slug', 'category']
+
+
 class ProductVariantSerializer(serializers.ModelSerializer):
     """Serializer for product variant model which include sizes and colors."""
     class Meta:
         model = ProductVariant
         fields = [
             'id', 'color', 'custom_size_unit', 'standard_size',
-            'custom_size_value', 'stock_quantity', 'price_override'
+            'custom_size_value', 'stock_quantity', 'reserved_quantity', 'price_override'
         ]
         read_only_fields = ['id']
 
@@ -51,6 +59,10 @@ class ProductCreateMixin:
         # Create variants
         for data in variants:
             ProductVariant.objects.create(product=instance, **data)
+
+        # Update product quantity based on stock
+        from .utility import update_quantity
+        update_quantity(instance)
 
         return instance
     
@@ -77,12 +89,18 @@ class ProductCreateMixin:
             for data in variants:
                 ProductVariant.objects.create(product=instance, **data)
 
+        # Update product quantity based on stock
+        from .utility import update_quantity
+        update_quantity(instance)
+
         return instance 
     
 
 class ProductRepresentationMixin:
     def to_representation(Self, instance):
         """Centralize the to_representation logic"""
+        from .utility import update_quantity
+        update_quantity(instance)
         data = super().to_representation(instance)
 
         # List of base_field attributes
