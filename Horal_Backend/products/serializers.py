@@ -167,8 +167,6 @@ class ChildrenProductSerializer(
     BaseProductSerializer
 ):
 
-    sub_category = serializers.ChoiceField(choices=ChildrenSubCategory.choices)
-
     """Serializer to handle baby category"""
     class Meta:
         model = ChildrenProduct
@@ -194,7 +192,6 @@ class GadgetProductSerializer(
     ProductRepresentationMixin,
     BaseProductSerializer
 ):
-    sub_category = serializers.ChoiceField(choices=GadgetSubCategory.choices)
     
     """serializer for Gadget product model creation"""
     class Meta:
@@ -216,7 +213,6 @@ class FashionProductSerializer(
     BaseProductSerializer
 ):
     """Serializer to handle fashion category product creation"""
-    sub_category = serializers.ChoiceField(choices=FashionSubCategory.choices)
     occasions = OccasionSerializer(many=True, read_only=True)
 
     class Meta:
@@ -231,7 +227,6 @@ class ElectronicsProductSerializer(
     BaseProductSerializer
 ):
     """serializer to handle electronics product category creation"""
-    sub_category = serializers.ChoiceField(choices=ElectronicsSubCategory.choices)
 
     class Meta:
         model = ElectronicsProduct
@@ -245,7 +240,6 @@ class AccessoryProductSerializer(
     BaseProductSerializer
 ):
     """Serializer to handle Accesory product category creation"""
-    sub_category = serializers.ChoiceField(choices=AccessorySubCategory.choices)
 
     class Meta:
         model = AccessoryProduct
