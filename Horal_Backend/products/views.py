@@ -291,11 +291,11 @@ class ProductBySubcategoryView(GenericAPIView, BaseResponseMixin):
                 serializer = serializer_class(products, many=True)
                 product_data.extend(serializer.data)
 
-            return self.get_response(
-                status.HTTP_200_OK,
-                f"Products under subcategory {subcategory.name} retrieved successfully",
-                product_data
-            )
+        return self.get_response(
+            status.HTTP_200_OK,
+            f"Products under subcategory {subcategory.name} retrieved successfully",
+            product_data
+        )
 
 
 class ProductCreateView(GenericAPIView, BaseResponseMixin):
