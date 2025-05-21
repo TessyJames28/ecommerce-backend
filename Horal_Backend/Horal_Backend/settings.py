@@ -103,6 +103,10 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 30,
 }
 
+SWAGGER_SETTINGS = {
+   'USE_SESSION_AUTH': False
+}
+
 from datetime import timedelta
 
 #JWT Settings
