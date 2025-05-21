@@ -32,9 +32,9 @@ schema_view = get_schema_view(
         license=openapi.License(name="BSD License"),
     ),
     public=True,
-    permission_classes=[permissions.AllowAny],
-    authentication_classes=[], # Explicitly empty to prevent authentication
+    permission_classes=(permissions.AllowAny,),
 )
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -50,5 +50,4 @@ urlpatterns = [
     path('api/v1/cart/', include('carts.urls')),
     path('api/v1/order/', include('orders.urls')),
     # Optional: Redirect from root to Swagger UI
-    path('', lambda request: redirect('schema-swagger-ui')),
 ]
