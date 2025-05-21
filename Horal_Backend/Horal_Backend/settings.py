@@ -228,6 +228,9 @@ USE_TZ = True
 
 
 LOGIN_URL = '/admin/login/'  # Redirect to admin login instead of /accounts/login/
+CSRF_TRUSTED_ORIGINS = [
+    'https://horal-backend.up.railway.app',
+]
 
 STATIC_URL = 'static/'
 MEDIA_URL = 'media/'
