@@ -81,7 +81,7 @@ MIDDLEWARE = [
 
 # Add Cors settings
 CORS_ALLOWED_ORIGINS = [
-    'https://www.horal.ng/',
+    'https://www.horal.ng',
     "http://localhost:3000",       # React dev server
     "http://127.0.0.1:3000",
 ]
@@ -224,11 +224,11 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
-# import os
 
-# STATIC_URL = 'static/'
-# MEDIA_URL = 'media/'
-# MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+STATIC_URL = 'static/'
+MEDIA_URL = 'media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
