@@ -20,9 +20,6 @@ from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from django.shortcuts import redirect
-from django.views.decorators.csrf import csrf_exempt
-from rest_framework.decorators import permission_classes
-
 
 # Swagger API configuration
 schema_view = get_schema_view(
@@ -36,13 +33,8 @@ schema_view = get_schema_view(
     ),
     public=True,
     permission_classes=[permissions.AllowAny],
-    authentication_classes=[],  # Prevent auth for schema
+    authentication_classes=[],
 )
-
-# Swagger views wrapped with AllowAny + csrf_exempt
-swagger_view = csrf_exempt(permission_classes([permissions.AllowAny])(schema_view.with_ui('swagger', cache_timeout=0)))
-redoc_view = csrf_exempt(permission_classes([permissions.AllowAny])(schema_view.with_ui('redoc', cache_timeout=0)))
-json_view = csrf_exempt(permission_classes([permissions.AllowAny])(schema_view.without_ui(cache_timeout=0)))
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -56,11 +48,24 @@ urlpatterns = [
     path('', lambda request: redirect('schema-swagger-ui')),
 ]
 
-# Swagger + Redoc routes (wrapped)
+# Swagger + Redoc views: FORCE no auth
 urlpatterns += [
-    re_path(r'^swagger(?P<format>\.json|\.yaml)$', json_view, name='schema-json'),
-    path('swagger/', swagger_view, name='schema-swagger-ui'),
-    path('redoc/', redoc_view, name='schema-redoc'),
+    re_path(
+        r'^swagger(?P<format>\.json|\.yaml)$',
+        schema_view.without_ui(cache_timeout=0),
+        {'permission_classes': [permissions.AllowAny], 'authentication_classes': []},
+        name='schema-json'
+    ),
+    path(
+        'swagger/',
+        schema_view.with_ui('swagger', cache_timeout=0),
+        {'permission_classes': [permissions.AllowAny], 'authentication_classes': []},
+        name='schema-swagger-ui'
+    ),
+    path(
+        'redoc/',
+        schema_view.with_ui('redoc', cache_timeout=0),
+        {'permission_classes': [permissions.AllowAny], 'authentication_classes': []},
+        name='schema-redoc'
+    ),
 ]
-
-
