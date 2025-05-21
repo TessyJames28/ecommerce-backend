@@ -21,13 +21,6 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from django.shortcuts import redirect
 
-# Create a custom Swagger view that explicitly disables authentication
-class BothHttpAndHttpsSchemaGenerator(openapi.SchemaGenerator):
-    def get_schema(self, request=None, public=False):
-        schema = super().get_schema(request, public)
-        schema.schemes = ["http", "https"]
-        return schema
-
 # Swagger API configuration
 schema_view = get_schema_view(
     openapi.Info(
@@ -39,16 +32,9 @@ schema_view = get_schema_view(
         license=openapi.License(name="BSD License"),
     ),
     public=True,
-    generator_class=BothHttpAndHttpsSchemaGenerator,
     permission_classes=[permissions.AllowAny],
     authentication_classes=[], # Explicitly empty to prevent authentication
-    patterns=[
-        path('api/v1/user/', include('users.urls')),
-        path('api/v1/seller/', include('sellers.urls')),
-        path('api/v1/product/', include('products.urls')),
-        path('api/v1/cart/', include('carts.urls')),
-        path('api/v1/order/', include('orders.urls')),
-    ])
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
