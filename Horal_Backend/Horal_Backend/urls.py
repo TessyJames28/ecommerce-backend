@@ -33,7 +33,7 @@ schema_view = get_schema_view(
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),
-    servers=[openapi.Server(url="https://horal-backend.up.railway.app/api/v1")]
+    url="https://horal-backend.up.railway.app/api/v1",
 )
 
 
