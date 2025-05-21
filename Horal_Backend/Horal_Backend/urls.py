@@ -32,8 +32,7 @@ schema_view = get_schema_view(
         license=openapi.License(name="BSD License"),
     ),
     public=True,
-    permission_classes=[permissions.AllowAny],
-    authentication_classes=[],
+    permission_classes=[permissions.IsAuthenticated],
 )
 
 urlpatterns = [
@@ -43,29 +42,26 @@ urlpatterns = [
     path('api/v1/product/', include('products.urls')),
     path('api/v1/cart/', include('carts.urls')),
     path('api/v1/order/', include('orders.urls')),
-
-    # Optional: Redirect root to Swagger
+    # Optional: Redirect from root to Swagger UI
     path('', lambda request: redirect('schema-swagger-ui')),
 ]
 
-# Swagger + Redoc views: FORCE no auth
+# Swagger + Redoc Docs
 urlpatterns += [
     re_path(
         r'^swagger(?P<format>\.json|\.yaml)$',
         schema_view.without_ui(cache_timeout=0),
-        {'permission_classes': [permissions.AllowAny], 'authentication_classes': []},
         name='schema-json'
     ),
     path(
         'swagger/',
         schema_view.with_ui('swagger', cache_timeout=0),
-        {'permission_classes': [permissions.AllowAny], 'authentication_classes': []},
         name='schema-swagger-ui'
     ),
     path(
         'redoc/',
         schema_view.with_ui('redoc', cache_timeout=0),
-        {'permission_classes': [permissions.AllowAny], 'authentication_classes': []},
         name='schema-redoc'
     ),
 ]
+
