@@ -82,11 +82,11 @@ MIDDLEWARE = [
 
 
 # Add Cors settings
-CORS_ALLOWED_ORIGINS = [
-    'https://www.horal.ng',
-    "http://localhost:3000",       # React dev server
-    "http://127.0.0.1:3000",
-]
+# CORS_ALLOWED_ORIGINS = [
+#     'https://www.horal.ng',
+#     "http://localhost:3000",       # React dev server
+#     "http://127.0.0.1:3000",
+# ]
 
 CORS_ALLOW_ALL_ORIGINS = True
 
