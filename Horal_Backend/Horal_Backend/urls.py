@@ -20,6 +20,9 @@ from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from django.shortcuts import redirect
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import permission_classes
+
 
 # Swagger API configuration
 schema_view = get_schema_view(
@@ -33,8 +36,13 @@ schema_view = get_schema_view(
     ),
     public=True,
     permission_classes=[permissions.AllowAny],
-    authentication_classes=[], # Explicitly empty to prevent authentication
+    authentication_classes=[],  # Prevent auth for schema
 )
+
+# Swagger views wrapped with AllowAny + csrf_exempt
+swagger_view = csrf_exempt(permission_classes([permissions.AllowAny])(schema_view.with_ui('swagger', cache_timeout=0)))
+redoc_view = csrf_exempt(permission_classes([permissions.AllowAny])(schema_view.with_ui('redoc', cache_timeout=0)))
+json_view = csrf_exempt(permission_classes([permissions.AllowAny])(schema_view.without_ui(cache_timeout=0)))
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -43,26 +51,16 @@ urlpatterns = [
     path('api/v1/product/', include('products.urls')),
     path('api/v1/cart/', include('carts.urls')),
     path('api/v1/order/', include('orders.urls')),
-    # Optional: Redirect from root to Swagger UI
+
+    # Optional: Redirect root to Swagger
     path('', lambda request: redirect('schema-swagger-ui')),
 ]
 
-# Swagger + Redoc Docs
+# Swagger + Redoc routes (wrapped)
 urlpatterns += [
-    re_path(
-        r'^swagger(?P<format>\.json|\.yaml)$',
-        schema_view.without_ui(cache_timeout=0),
-        name='schema-json'
-    ),
-    path(
-        'swagger/',
-        schema_view.with_ui('swagger', cache_timeout=0),
-        name='schema-swagger-ui'
-    ),
-    path(
-        'redoc/',
-        schema_view.with_ui('redoc', cache_timeout=0),
-        name='schema-redoc'
-    ),
+    re_path(r'^swagger(?P<format>\.json|\.yaml)$', json_view, name='schema-json'),
+    path('swagger/', swagger_view, name='schema-swagger-ui'),
+    path('redoc/', redoc_view, name='schema-redoc'),
 ]
+
 
