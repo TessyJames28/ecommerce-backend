@@ -131,7 +131,7 @@ REDOC_SETTINGS = {
 }
 
 
-FORCE_SCRIPT_NAME = env('FORCE_SCRIPT_NAME')
+# FORCE_SCRIPT_NAME = env('FORCE_SCRIPT_NAME')
 
 
 from datetime import timedelta
