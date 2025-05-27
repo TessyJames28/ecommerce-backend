@@ -121,7 +121,15 @@ SWAGGER_SETTINGS = {
     ],
 
    'USE_SESSION_AUTH': False,
+   'PERSIST_AUTH': True,
+    'REFETCH_SCHEMA_WITH_AUTH': True,
+    'REFETCH_SCHEMA_ON_LOGOUT': True,
 }
+
+REDOC_SETTINGS = {
+    'LAZY_RENDERING': False,
+}
+
 
 FORCE_SCRIPT_NAME = env('FORCE_SCRIPT_NAME')
 
@@ -280,6 +288,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # This is where collectstat
 
 # Optional compression and caching:
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
