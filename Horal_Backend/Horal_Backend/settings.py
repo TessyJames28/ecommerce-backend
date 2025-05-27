@@ -107,18 +107,11 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 30,
 }
 
-# Swagger settings
 SWAGGER_SETTINGS = {
-    'SECURITY_DEFINITIONS': {
-        'Bearer': {
-            'type': 'apiKey',
-            'name': 'Authorization',
-            'in': 'header',
-            'description': 'JWT Authorization header. Example: Bearer <your-token>',
-        }
-    },
-    'USE_SESSION_AUTH': False,  # ✅ Hide Basic Auth
+   'USE_SESSION_AUTH': False
 }
+
+FORCE_SCRIPT_NAME = env('FORCE_SCRIPT_NAME')
 
 
 from datetime import timedelta
