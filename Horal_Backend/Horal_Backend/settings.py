@@ -107,9 +107,19 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 30,
 }
 
+# Swagger settings
 SWAGGER_SETTINGS = {
-   'USE_SESSION_AUTH': False
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header',
+            'description': 'JWT Authorization header. Example: Bearer <your-token>',
+        }
+    },
+    'USE_SESSION_AUTH': False,  # ✅ Hide Basic Auth
 }
+
 
 from datetime import timedelta
 
