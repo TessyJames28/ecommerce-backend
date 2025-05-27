@@ -108,6 +108,18 @@ REST_FRAMEWORK = {
 }
 
 SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header',
+            'description': 'JWT Authorization header using the Bearer scheme. Example: "Authorization: Bearer <token>"'
+        }
+    },
+    'SECURITY_REQUIREMENTS': [
+        {'Bearer': []}
+    ],
+
    'USE_SESSION_AUTH': False
 }
 
@@ -259,7 +271,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://horal-backend.up.railway.app',
 ]
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 # MEDIA_URL = 'media/'
 # MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 

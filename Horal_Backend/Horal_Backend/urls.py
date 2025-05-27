@@ -34,15 +34,6 @@ schema_view = get_schema_view(
     public=True,
     permission_classes=(permissions.AllowAny,),
     # url="https://horal-backend.up.railway.app/api/v1",
-    security=[{'Bearer': []}],
-    security_definitions={
-        'Bearer': openapi.SecurityScheme(
-            type=openapi.TYPE_API_KEY,
-            in_=openapi.IN_HEADER,
-            name='Authorization',
-            description='Use format: Bearer <your-token>',
-        )
-    },
 )
 
 
