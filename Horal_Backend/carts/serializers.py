@@ -90,7 +90,7 @@ class CartSerializer(serializers.ModelSerializer):
 class CartItemCreateSerializer(serializers.Serializer):
     """Handles the creation of cart items based on existing product"""
     product_id = serializers.UUIDField()
-    color = serializers.ChoiceField(choices=Color.choices)
+    color = serializers.ChoiceField(choices=Color.choices, required=False, allow_null=True)
     quantity = serializers.IntegerField(default=1, min_value=1)
     standard_size = serializers.ChoiceField(choices=SizeOption.StandardSize.choices, allow_null=True, required=False)
     custom_size_unit = serializers.ChoiceField(choices=SizeOption.SizeUnit.choices, allow_null=True, required=False)
@@ -118,14 +118,14 @@ class CartItemCreateSerializer(serializers.Serializer):
         }
 
         # Conditionally include additional fields
-        if data.get('color') is not None:
-            filter_kwargs['color'] = data['color']
         if data.get('standard_size') is not None:
             filter_kwargs['standard_size'] = data['standard_size']
         if data.get('custom_size_unit') is not None:
             filter_kwargs['custom_size_unit'] = data['custom_size_unit']
         if data.get('custom_size_value') is not None:
             filter_kwargs['custom_size_value'] = data['custom_size_value']
+        if data.get('color') is not None:
+            filter_kwargs['color'] = data['color']
        
         variant = ProductVariant.objects.filter(**filter_kwargs).first()
 
