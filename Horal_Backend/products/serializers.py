@@ -117,7 +117,7 @@ class ProductRepresentationMixin:
         for key, value in data.items():
             if key in base_fields or key == "images":
                 base_data[key] = value
-            elif key == "state" or key == "local_govt":
+            elif key == "state" or key == "local_govt" or key == "variants_details":
                 base_data[key] = value
             else:
                 spec_data[key] = value
