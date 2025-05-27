@@ -121,7 +121,6 @@ SWAGGER_SETTINGS = {
     ],
 
    'USE_SESSION_AUTH': False,
-   'USE_STATIC_FILES': False, 
 }
 
 FORCE_SCRIPT_NAME = env('FORCE_SCRIPT_NAME')
@@ -277,7 +276,7 @@ STATIC_URL = '/static/'
 # MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')  # This is where collectstatic puts files
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # This is where collectstatic puts files
 
 # Optional compression and caching:
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
