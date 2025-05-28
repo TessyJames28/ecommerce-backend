@@ -248,6 +248,7 @@ class BaseProduct(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=255)
     description = models.TextField()
+    specifications = models.TextField(null=True, blank=True) 
     price = models.DecimalField(max_digits=10, decimal_places=2)    
     quantity = models.PositiveIntegerField(default=0)
     production_date = models.DateField(null=True, blank=True)
@@ -334,10 +335,13 @@ class ChildrenProduct(BaseProduct, ProductLocationMixin):
         blank=True,
         related_name='children_products'
     )
+    images = models.ManyToManyField(ImageLink, related_name='baby_products', blank=False)
     material = models.CharField(max_length=100, null=True, blank=True)
     weight_capacity = models.CharField(max_length=50, null=True, blank=True)
     safety_certifications = models.TextField(null=True, blank=True)
-    images = models.ManyToManyField(ImageLink, related_name='baby_products', blank=False)
+
+    def dummy_method(self):  # temporary
+        pass
 
 
 class VehicleProduct(BaseProduct, ProductLocationMixin):

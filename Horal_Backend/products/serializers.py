@@ -106,7 +106,7 @@ class ProductRepresentationMixin:
         # List of base_field attributes
         base_fields = {
             'id', 'title', 'description', 'price', 'quantity',
-            'production_date', 'condition', 'brand',
+            'production_date', 'condition', 'brand', 'specifications',
             'is_published', 'live_video_url', 'created_at',
             'updated_at', 'images', 'shop', 'category'
         }
