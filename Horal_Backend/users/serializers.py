@@ -10,6 +10,10 @@ from notifications.utility import verify_otp
 from .utility import validate_strong_password
 
 class CustomUserSerializer(serializers.ModelSerializer):
+    is_seller = serializers.BooleanField(default=False)
+    is_staff = serializers.BooleanField(default=False)
+    is_superuser = serializers.BooleanField(default=False)
+
     class Meta:
         model = CustomUser
         fields = ["id", "full_name", "email", "phone_number", "password", "is_staff", "is_superuser", "is_seller", "is_active", "last_login"]
