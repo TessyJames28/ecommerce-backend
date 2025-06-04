@@ -24,23 +24,33 @@ class CartItemSerializer(serializers.ModelSerializer):
     """Serializer for cart item"""
     item_total_price = serializers.SerializerMethodField()
     product = serializers.SerializerMethodField()
-    # variant_detail = serializers.SerializerMethodField()
+    variant_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
-        fields = ['id', 'variant', 'quantity', 'item_total_price', 'product']
+        fields = ['id', 'variant', 'quantity', 'item_total_price', 'product', 'variant_detail']
         read_only_fields = ['id', 'variant', 'quantity', 'item_total_price', 'product']
     
 
     def get_product(self, obj):
         """Get product"""
         product = obj.variant.product
+
+        # Retrieve product image
+        image_url = None
+        if hasattr(product, 'images'):
+            images = product.images.all()
+            if images.exists():
+                image_url = images.first().url
+
         return {
             'id': str(product.id),
             'title': product.title,
             'price': str(product.price),
-            'category': product.category.name,
-            'type': product.__class__.__name__
+            'category': product.category.name if hasattr(product, 'category') else None,
+            'subcategory': product.sub_category.name if hasattr(product, 'sub_category') else None,
+            'type': product.__class__.__name__,
+            'image': image_url
         }
     
 
