@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 import requests
+from rest_framework_simplejwt.tokens import RefreshToken
 
 def refresh_google_token(refresh_token, client_id):
     """Refresh the Google access token using the refresh token."""
@@ -40,7 +41,7 @@ def refresh_google_token(refresh_token, client_id):
         else:
             print(f"Error retrieving user info: {user_info_response.text}")
             return None
-        return new_token_id
+        # return new_token_id
     except Exception as e:
         print(f"Error refreshing Google token: {e}")
         return None
@@ -92,3 +93,12 @@ def validate_strong_password(password):
         raise ValidationError(_("Password must not contain spaces."))
     
     return password
+
+
+def generate_token_for_user(user):
+    """Generate a token for the user"""
+    refresh = RefreshToken.for_user(user)
+    return {
+        'access': str(refresh.access_token),
+        'refresh': str(refresh)
+    }
