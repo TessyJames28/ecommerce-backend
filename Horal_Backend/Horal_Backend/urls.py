@@ -50,5 +50,6 @@ urlpatterns = [
     path('api/v1/product/', include('products.urls')),
     path('api/v1/cart/', include('carts.urls')),
     path('api/v1/order/', include('orders.urls')),
+    path('api/v1/favorite/', include('favorites.urls')),
     # Optional: Redirect from root to Swagger UI
 ]
