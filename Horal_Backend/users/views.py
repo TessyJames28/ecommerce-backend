@@ -1,10 +1,12 @@
 from datetime import timezone
+import json
 from django.utils.timezone import now
 from django.shortcuts import get_object_or_404, render
 from rest_framework.generics import GenericAPIView
+from django_redis import get_redis_connection
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.core.exceptions import PermissionDenied
-from .utility import refresh_google_token, verify_google_token
+from .utility import generate_token_for_user, verify_google_token
 from users.models import CustomUser, Location
 from users.serializers import (
     CustomUserSerializer,
@@ -14,6 +16,7 @@ from users.serializers import (
     OTPVerificationSerializer,
     PasswordResetRequestSerializer,
     LocationSerializer,
+    RegistrationOTPVerificationSerializer,
 )
 from rest_framework.response import Response
 from rest_framework import status
@@ -21,9 +24,12 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from django.conf import settings
 from rest_framework_simplejwt.tokens import RefreshToken
-from notifications.utility import send_otp_email, store_otp, generate_otp, get_stored_otp_for_testing
+from notification.utility import (
+    send_otp_email, generate_otp, store_otp,
+    verify_registration_otp,
+)
+from django.core.cache import cache
 import requests
-
 
 
 def exchange_code_for_token(code):
@@ -45,10 +51,84 @@ class RegisterUserView(GenericAPIView):
     serializer_class = CustomUserSerializer
 
     def post(self, request, *args, **kwargs):
-        """Override the create method to handle user registration"""
+        """
+        Handles user registration and send otp to the email used
+        OTP needs to be verified before account can be registered
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        
+        email = serializer.validated_data["email"]
+        otp = generate_otp()
+
+        # Store registration data temporarily
+        cache.set(f"reg_data:{email}", json.dumps(serializer.validated_data), timeout=300) #5 mins expiry
+        cache.set(f"otp:{email}", otp, timeout=300) # OTP valid for 5 mins too
+
+        # Send OTP
+        send_otp_email(email, otp)
+
+        return Response({
+            "status": "success",
+            "message": "OTP sent to email. Verify to complete registration.",
+            "email": email
+        }, status=status.HTTP_200_OK)
+
+
+class ConfirmRegistrationOTPView(GenericAPIView):
+    """
+    Confirms user otp and registers new user
+    """
+    serializer_class = RegistrationOTPVerificationSerializer
+
+
+    def post(self, request, *args, **kwargs):
+        """
+        Confirms the otp sent to the user
+        If correct registered user successfully
+        If invalid or expired, discard users data on redis
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+        otp = serializer.validated_data["otp"]
+
+        stored_otp = verify_registration_otp(email, otp)
+        if not stored_otp:
+            return Response({
+                "status": "error",
+                "status_code": status.HTTP_400_BAD_REQUEST,
+                "message": "Invalid or expired OTP",
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        user_data_json = cache.get(f"reg_data:{email}")
+        if not user_data_json:
+            return Response({
+                "status": "error",
+                "status_code": status.HTTP_400_BAD_REQUEST,
+                "message": "Registration data expired",
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        user_data = json.loads(user_data_json)
+
+        # activate user and save
+        user_serializer = CustomUserSerializer(data=user_data)
+        user_serializer.is_valid(raise_exception=True)
+        user = user_serializer.save()
+        user.save()
+
+        # Explicitly update is_active and last_login
+        user.is_active = True
+        user.last_login = now()
+        user.save(update_fields=['last_login', 'is_active'])
+
+        # Generate access and refresh token
+        tokens = generate_token_for_user(user)
+
+        # Cleanup Redis
+        cache.delete(f"reg_data:{email}")
+        cache.delete(f"otp:{email}") 
 
         response_data = {
             "status": "success",
@@ -59,11 +139,14 @@ class RegisterUserView(GenericAPIView):
                 "email": user.email,
                 "full_name": user.full_name,
                 "phone_number": user.phone_number,
-                # 'home_address': user.home_address,
                 "is_staff": user.is_staff,
                 "is_superuser": user.is_superuser,
                 "is_seller": user.is_seller,
-                "is_active": user.is_active
+                "is_active": user.is_active,
+                "token": {
+                    "access": tokens["access"],
+                    "refresh": tokens["refresh"],
+                }
             }
         }
 
@@ -78,7 +161,7 @@ class UserLoginView(GenericAPIView):
 
     def post(self, request, *args, **kwargs):
         """Override the post method to handle user login"""
-        serializer = self.get_serializer(data=request.data)
+        serializer = self.get(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
 
@@ -131,8 +214,7 @@ class GoogleLoginView(GenericAPIView):
             full_name = id_info.get('name')
             refresh_token = token_response.get('refresh_token')
 
-            # Now use your logic to create or update the user
-            # Example:
+            # Logic to create or update the user
             user, created = CustomUser.objects.get_or_create(email=email)
             if created:
                 user.full_name = full_name
@@ -179,6 +261,8 @@ class GoogleLoginView(GenericAPIView):
                             
                 email = id_info['email']
                 full_name = id_info['name']
+                # picture_url = id_info['picture']
+
                 # You can also extract other fields like 'picture' if needed
 
                 # Check if user already exists
@@ -237,7 +321,7 @@ class UserLogoutView(GenericAPIView):
 
     def post(self, request, *args, **kwargs):
         """Override the post method to handle user logout"""
-        serializer = self.get_serializer(data=request.data)
+        serializer = self.get(data=request.data)
         if serializer.is_valid():
             serializer.save()
             
@@ -279,12 +363,12 @@ class PasswordResetRequestView(GenericAPIView):
             }
         }, status=status.HTTP_200_OK)
     
-        if settings.DEBUG:
-            stored.otp = get_stored_otp_for_testing(user.id)
-            if stored_otp:
-                response_data['debug'] = {"otp": stored_otp}
+        # if settings.DEBUG:
+        #     stored.otp = get_stored_otp_for_testing(user.id)
+        #     if stored_otp:
+        #         response_data['debug'] = {"otp": stored_otp}
 
-        return Response(response_data, status=status.HTTP_200_OK)
+        # return Response(response_data, status=status.HTTP_200_OK)
     
 
 class VerifyOTPView(GenericAPIView):
@@ -312,7 +396,7 @@ class PasswordResetConfirmView(GenericAPIView):
 
     def post(self, request, *args, **kwargs):
         """Override the post method to handle password reset confirmation"""
-        serializer = self.get_serializer(data=request.data)
+        serializer = self.get(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         # Save the password rest
@@ -328,25 +412,25 @@ class PasswordResetConfirmView(GenericAPIView):
 
 # For testing and development environment
 # Only include this view in development/testing environments
-from django.conf import settings
-if settings.DEBUG:
-    class OTPTestingView(GenericAPIView):
-        """Testing utility - DO NOT USE IN PRODUCTION"""
+# from django.conf import settings
+# if settings.DEBUG:
+#     class OTPTestingView(GenericAPIView):
+#         """Testing utility - DO NOT USE IN PRODUCTION"""
         
-        def post(self, request, *args, **kwargs):
-            """Get stored OTP for a user by email (for testing only)"""
-            email = request.data.get('email')
-            if not email:
-                return Response({"error": "Email parameter required"}, status=400)
+#         def post(self, request, *args, **kwargs):
+#             """Get stored OTP for a user by email (for testing only)"""
+#             email = request.data.get('email')
+#             if not email:
+#                 return Response({"error": "Email parameter required"}, status=400)
                 
-            try:
-                user = CustomUser.objects.get(email=email)
-                otp = get_stored_otp_for_testing(user.id)
-                if otp:
-                    return Response({"email": email, "user_id": user.id, "otp": otp})
-                return Response({"email": email, "error": "No OTP found"}, status=404)
-            except CustomUser.DoesNotExist:
-                return Response({"error": "User not found"}, status=404)
+#             try:
+#                 user = CustomUser.objects.get(email=email)
+#                 otp = get_stored_otp_for_testing(user.id)
+#                 if otp:
+#                     return Response({"email": email, "user_id": user.id, "otp": otp})
+#                 return Response({"email": email, "error": "No OTP found"}, status=404)
+#             except CustomUser.DoesNotExist:
+#                 return Response({"error": "User not found"}, status=404)
             
 
 class CreateLocationView(GenericAPIView):
@@ -365,7 +449,7 @@ class CreateLocationView(GenericAPIView):
                 "message": "Location already exists. Please update it instead."
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        serializer = self.get_serializer(data=request.data)
+        serializer = self.get(data=request.data)
         serializer.is_valid(raise_exception=True)
         # location = serializer.save()
         location = self.perform_create(serializer)
@@ -374,7 +458,7 @@ class CreateLocationView(GenericAPIView):
             "status": "success",
             "status code": status.HTTP_201_CREATED,
             "message": "User location registered successfully",
-            "data": self.get_serializer(location).data
+            "data": self.get(location).data
         }
 
         return Response(response_data, status=status.HTTP_201_CREATED)
@@ -404,7 +488,7 @@ class LocationUpdateDeleteView(GenericAPIView):
     def put(self, request, pk, *args, **kwargs):
         """Update user location"""
         location = self.get_object(pk, request)
-        serializer = self.get_serializer(location, data=request.data)
+        serializer = self.get(location, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
@@ -421,7 +505,7 @@ class LocationUpdateDeleteView(GenericAPIView):
     def patch(self, request, pk, *args, **kwargs):
         """partially update user location"""
         location = self.get_object(pk, request)
-        serializer = self.get_serializer(location, data=request.data, partial=True)
+        serializer = self.get(location, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
@@ -471,7 +555,7 @@ class SingleLocationView(GenericAPIView):
                 "message": "You do not have permission to view this location."
             }, status=status.HTTP_403_FORBIDDEN)
 
-        serializer = self.get_serializer(location)
+        serializer = self.get(location)
         user = request.user
 
         response_data = {
