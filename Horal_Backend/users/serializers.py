@@ -6,8 +6,8 @@ from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
 from django.utils.timezone import now
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
-from notifications.utility import verify_otp
-from .utility import validate_strong_password
+from notification.utility import verify_otp, verify_registration_otp
+from .utility import validate_strong_password, generate_token_for_user
 
 class CustomUserSerializer(serializers.ModelSerializer):
     is_seller = serializers.BooleanField(default=False)
@@ -17,7 +17,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = ["id", "full_name", "email", "phone_number", "password", "is_staff", "is_superuser", "is_seller", "is_active", "last_login"]
-        read_only_fields = ["id", "is_active", "last_login"] # WIll add is_seller, is_staff, and is_superuser later
+        read_only_fields = ["id", 'is_seller', 'is_staff', 'is_superuser', "is_active", "last_login"] # WIll add is_seller, is_staff, and is_superuser later
         extra_kwargs = {
             'email': {'required': True},
             'full_name': {'required': True},
@@ -55,28 +55,20 @@ class LoginSerializer(serializers.ModelSerializer):
     """Serializer for user login"""
     email = serializers.EmailField(required=True)
     password = serializers.CharField(required=True, write_only=True)
-    access = serializers.SerializerMethodField(read_only=True)
-    refresh = serializers.SerializerMethodField(read_only=True)
+    access_token = serializers.SerializerMethodField(read_only=True)
+    refresh_token = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = CustomUser
         fields = ['email', 'password', 'access', 'refresh']
-
-    def get_token(self, user):
-        """Generate a token for the user"""
-        refresh = RefreshToken.for_user(user)
-        return {
-            'access': str(refresh.access_token),
-            'refresh': str(refresh)
-        }
     
     def get_access_token(self, obj):
         """Get the access token for the user"""
-        return self.get_token(obj)['access']
+        return generate_token_for_user(obj)['access']
     
     def get_refresh_token(self, obj):
         """Get the refresh token for the user"""
-        return self.get_token(obj)['refresh']
+        return generate_token_for_user(obj)['refresh']
 
     def validate(self, attrs):
         """Validate the login credentials"""
@@ -143,6 +135,20 @@ class PasswordResetRequestSerializer(serializers.Serializer):
             raise serializers.ValidationError(_("User with this email does not exist."))
         return value
     
+
+class RegistrationOTPVerificationSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    otp = serializers.CharField(required=True, max_length=4, min_length=4)
+
+    # def validate(self, attrs):
+    #     email = attrs.get('email')
+    #     otp = attrs.get('otp')
+
+    #     if not verify_registration_otp(email, otp):
+    #         raise serializers.ValidationError(_("Invalid of expired otp"))
+        
+    #     return attrs
+
 
 class OTPVerificationSerializer(serializers.Serializer):
     """Serializer for password reset confirmation"""
