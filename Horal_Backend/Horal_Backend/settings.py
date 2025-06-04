@@ -51,10 +51,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'users',
     'sellers',
-    'notifications',
     'products',
     'carts',
     'orders',
+    'favorites',
     'anymail',
     'drf_yasg',
     'corsheaders',
@@ -138,7 +138,7 @@ from datetime import timedelta
 
 #JWT Settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
@@ -157,47 +157,47 @@ GOOGLE_OAUTH = {
 
 
 # Mailgun settings
-# MAILGUN_API_KEY = env('MAILGUN_API_KEY')
-# MAILGUN_DOMAIN = env('MAILGUN_DOMAIN')
-# MAILGUN_API_URL = env('MAILGUN_API_URL').format(MAILGUN_DOMAIN)
+MAILGUN_API_KEY = env('MAILGUN_API_KEY')
+MAILGUN_DOMAIN = env('MAILGUN_DOMAIN')
+MAILGUN_API_URL = env('MAILGUN_API_URL').format(MAILGUN_DOMAIN)
 
-# EMAIL_BACKEND = env('EMAIL_BACKEND')
-# ANYMAIL = {
-#     'MAILGUN_API_KEY': MAILGUN_API_KEY,
-#     'MAILGUN_SENDER_DOMAIN': MAILGUN_DOMAIN,
-# }
+EMAIL_BACKEND = env('EMAIL_BACKEND')
+ANYMAIL = {
+    'MAILGUN_API_KEY': MAILGUN_API_KEY,
+    'MAILGUN_SENDER_DOMAIN': MAILGUN_DOMAIN,
+}
 
-# DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Redis configuration for django
-# CACHES = {
-#     "default": {
-#         "BACKEND": env('BACKEND'),
-#         "LOCATION": env('LOCATION'),
-#         "OPTIONS": {
-#             "CLIENT_CLASS": env('CLIENT_CLASS'),
-#         }
-#     }
-# }
-
-
-import urllib.parse as urlparse
-
-redis_url = os.environ.get("REDIS_URL")
-url = urlparse.urlparse(redis_url)
-
 CACHES = {
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": f"redis://{url.hostname}:{url.port}/0",
+        "BACKEND": env('BACKEND'),
+        "LOCATION": env('LOCATION'),
         "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "PASSWORD": url.password,
+            "CLIENT_CLASS": env('CLIENT_CLASS'),
         }
     }
 }
+
+
+# import urllib.parse as urlparse
+
+# redis_url = os.environ.get("REDIS_URL")
+# url = urlparse.urlparse(redis_url)
+
+# CACHES = {
+#     "default": {
+#         "BACKEND": "django_redis.cache.RedisCache",
+#         "LOCATION": f"redis://{url.hostname}:{url.port}/0",
+#         "OPTIONS": {
+#             "CLIENT_CLASS": "django_redis.client.DefaultClient",
+#             "PASSWORD": url.password,
+#         }
+#     }
+# }
 
 
 
