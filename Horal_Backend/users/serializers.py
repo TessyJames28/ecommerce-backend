@@ -55,8 +55,8 @@ class LoginSerializer(serializers.ModelSerializer):
     """Serializer for user login"""
     email = serializers.EmailField(required=True)
     password = serializers.CharField(required=True, write_only=True)
-    access_token = serializers.SerializerMethodField(read_only=True)
-    refresh_token = serializers.SerializerMethodField(read_only=True)
+    access = serializers.SerializerMethodField(read_only=True)
+    refresh = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = CustomUser
@@ -139,15 +139,6 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 class RegistrationOTPVerificationSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     otp = serializers.CharField(required=True, max_length=4, min_length=4)
-
-    # def validate(self, attrs):
-    #     email = attrs.get('email')
-    #     otp = attrs.get('otp')
-
-    #     if not verify_registration_otp(email, otp):
-    #         raise serializers.ValidationError(_("Invalid of expired otp"))
-        
-    #     return attrs
 
 
 class OTPVerificationSerializer(serializers.Serializer):
