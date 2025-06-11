@@ -55,6 +55,9 @@ INSTALLED_APPS = [
     'carts',
     'orders',
     'favorites',
+    'categories',
+    'subcategories',
+    'shops',
     'anymail',
     'drf_yasg',
     'corsheaders',
@@ -172,32 +175,32 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
 # EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Redis configuration for django
-CACHES = {
-    "default": {
-        "BACKEND": env('BACKEND'),
-        "LOCATION": env('LOCATION'),
-        "OPTIONS": {
-            "CLIENT_CLASS": env('CLIENT_CLASS'),
-        }
-    }
-}
-
-
-# import urllib.parse as urlparse
-
-# redis_url = os.environ.get("REDIS_URL")
-# url = urlparse.urlparse(redis_url)
-
 # CACHES = {
 #     "default": {
-#         "BACKEND": "django_redis.cache.RedisCache",
-#         "LOCATION": f"redis://{url.hostname}:{url.port}/0",
+#         "BACKEND": env('BACKEND'),
+#         "LOCATION": env('LOCATION'),
 #         "OPTIONS": {
-#             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-#             "PASSWORD": url.password,
+#             "CLIENT_CLASS": env('CLIENT_CLASS'),
 #         }
 #     }
 # }
+
+
+import urllib.parse as urlparse
+
+redis_url = os.environ.get("REDIS_URL")
+url = urlparse.urlparse(redis_url)
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": f"redis://{url.hostname}:{url.port}/0",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "PASSWORD": url.password,
+        } 
+    }
+}
 
 
 
