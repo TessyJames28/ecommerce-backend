@@ -191,6 +191,8 @@ import urllib.parse as urlparse
 redis_url = os.environ.get("REDIS_URL")
 url = urlparse.urlparse(redis_url)
 
+# Redis caching for project deployment
+
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
