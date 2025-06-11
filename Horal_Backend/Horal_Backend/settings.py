@@ -57,7 +57,7 @@ INSTALLED_APPS = [
     'favorites',
     # 'categories',
     # 'subcategories',
-    'shops',
+    # 'shops',
     'anymail',
     'drf_yasg',
     'corsheaders',
