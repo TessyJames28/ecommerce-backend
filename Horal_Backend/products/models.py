@@ -2,35 +2,14 @@ from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 import uuid
-from users.models import Location
-from sellers.models import SellerKYC, Shop
+from shops.models import Shop
+from categories.models import Category
+from subcategories.models import SubCategory
 
 # Create your models here.
-class Category(models.Model):
-    """Model for product categories."""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=255, unique=True)
-
-    def __str__(self):
-        return self.name
-
-
-
-class SubCategory(models.Model):
-    """Model for the different sucategory"""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="subcategories")
-    name = models.CharField(max_length=100)
-    slug = models.CharField(max_length=100, null=True, blank=True)
-
-
-    def __str__(self):
-        return f"{self.name} ({self.category.name})"
-    
-
 class ImageLink(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    url = models.URLField()
+    url = models.URLField(unique=True)
     alt_text = models.CharField(max_length=255, null=True, blank=True)
     
     def __str__(self):
@@ -63,6 +42,7 @@ class Color(models.TextChoices):
     TURQUOISE = 'turquoise', 'Turquoise'
     OLIVE = 'olive', 'Olive'
     BEIGE = 'beige', 'Beige'
+    TRANSPARENT = 'transparent', 'Transparent'
     
 
 class SizeOption(models.Model):
@@ -93,14 +73,6 @@ class SizeOption(models.Model):
 class ProductCondition(models.TextChoices):
     NEW = 'brand_new', 'Brand New'
     USED = 'used', 'Used'
-
-
-class ChildrenSubCategory(models.TextChoices):
-    INFANT = 'infant', '0 - 6 Months'
-    TODDLER = 'toddler', '6 Months - 2 Years'
-    PRESCHOOL = "preschool", "2 - 5 Years",
-    KIDS = "kids", "6 - 9 Years"
-    PRETEEN = 'preteen', '10 - 12 Years'
 
 
 class EngineType(models.TextChoices):
@@ -138,6 +110,7 @@ class Type(models.TextChoices):
     CASE = 'case', 'Case'
     CHARGER = 'charger', 'Charger'
     SCREEN_PROTECTOR = 'screen_protector', 'Screen Protector'
+    STRAP = 'strap', 'Strap'
 
 
 class SkinType(models.TextChoices):
@@ -180,41 +153,6 @@ class Neckline(models.TextChoices):
     SWEETHEART = "sweetheart", "Sweetheart"
     HALTER = "halter", "Halter"
     TURTLENECK = "turtleneck", "Turtleneck"
-
-
-class GadgetSubCategory(models.TextChoices):
-    SMARTPHONE = "smartphone", "Smartphone"
-    LAPTOP = "laptop", "Laptop"
-    TABLET = "tablet", "Tablet"
-    SMARTWATCH = "smartwatch", "Smartwatch"
-    CAMERA = "camera", "Camera"
-    GAME_CONSOLE = "game_console", "Game Console"
-    OTHER = "other", "Other"
-
-class FashionSubCategory(models.TextChoices):
-    CLOTHING = "clothing", "Clothing"
-    SHOES = "shoes", "Shoes"
-    BAGS = "bags", "Bags"
-    JEWELRY = "jewelry", "Jewelry"
-    ACCESSORY = "accessory", "Accessory"
-
-class ElectronicsSubCategory(models.TextChoices):
-    TV = "tv", "Television"
-    HOME_THEATER = "home_theater", "Home Theater"
-    FRIDGE = "fridge", "Refrigerator"
-    AIR_CONDITIONER = "ac", "Air Conditioner"
-    FAN = "fan", "Fan"
-    SPEAKER = "speaker", "Speaker"
-    OTHER = "other", "Other"
-
-class AccessorySubCategory(models.TextChoices):
-    PHONE_CASE = "phone_case", "Phone Case"
-    CHARGER = "charger", "Charger"
-    WATCH_BAND = "watch_band", "Watch Band"
-    USB_CABLE = "usb_cable", "USB Cable"
-    HEADPHONES = "headphones", "Headphones"
-    STYLUS = "stylus", "Stylus"
-    SCREEN_GUARD = "screen_guard", "Screen Guard"
 
 
 class Occasion(models.Model):
@@ -330,9 +268,9 @@ class ChildrenProduct(BaseProduct, ProductLocationMixin):
     )
     sub_category = models.ForeignKey(
         SubCategory,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.CASCADE,
+        null=False,
+        blank=False,
         related_name='children_products'
     )
     images = models.ManyToManyField(ImageLink, related_name='baby_products', blank=False)
@@ -340,8 +278,14 @@ class ChildrenProduct(BaseProduct, ProductLocationMixin):
     weight_capacity = models.CharField(max_length=50, null=True, blank=True)
     safety_certifications = models.TextField(null=True, blank=True)
 
-    def dummy_method(self):  # temporary
-        pass
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['title', 'brand', 'category', 'shop'],
+                name='unique_children_product_per_shop'
+            )
+        ]
 
 
 class VehicleProduct(BaseProduct, ProductLocationMixin):
@@ -359,9 +303,9 @@ class VehicleProduct(BaseProduct, ProductLocationMixin):
     )
     sub_category = models.ForeignKey(
         SubCategory,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.CASCADE,
+        null=False,
+        blank=False,
         related_name='vehicle_products'
     )
     make = models.CharField(max_length=100, null=True, blank=True)
@@ -381,6 +325,15 @@ class VehicleProduct(BaseProduct, ProductLocationMixin):
     images = models.ManyToManyField(ImageLink, related_name='vehicle_products', blank=False)
 
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['title', 'brand', 'category', 'shop'],
+                name='unique_vehicle_product_per_shop'
+            )
+        ]
+
+
 class GadgetProduct(BaseProduct, ProductLocationMixin):
     """Model for gadget products."""
     shop = models.ForeignKey(
@@ -396,9 +349,9 @@ class GadgetProduct(BaseProduct, ProductLocationMixin):
     )
     sub_category = models.ForeignKey(
         SubCategory,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.CASCADE,
+        null=False,
+        blank=False,
         related_name='gadget_products'
     )
     model = models.CharField(max_length=100)
@@ -409,6 +362,15 @@ class GadgetProduct(BaseProduct, ProductLocationMixin):
     operating_system = models.CharField(max_length=50, choices=OperatingSystem.choices, default=OperatingSystem.WINDOWS)
     connectivity = models.CharField(max_length=100)
     images = models.ManyToManyField(ImageLink, related_name='gadget_products', blank=False)
+
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['title', 'brand', 'category', 'shop'],
+                name='unique_gadget_product_per_shop'
+            )
+        ]
 
 class FashionProduct(BaseProduct, ProductLocationMixin):
     """Model for fashion products."""
@@ -425,9 +387,9 @@ class FashionProduct(BaseProduct, ProductLocationMixin):
     )
     sub_category = models.ForeignKey(
         SubCategory,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.CASCADE,
+        null=False,
+        blank=False,
         related_name='fashion_products'
     )
     occasion = models.ManyToManyField(Occasion, related_name="fashion_products", blank=True)
@@ -436,6 +398,15 @@ class FashionProduct(BaseProduct, ProductLocationMixin):
     sleeve_length = models.CharField(max_length=20, choices=SleeveLength.choices, null=True, blank=True)
     neckline = models.CharField(max_length=30, choices=Neckline.choices, null=True, blank=True)
     images = models.ManyToManyField(ImageLink, related_name='fashion_products', blank=False)
+
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['title', 'brand', 'category', 'shop'],
+                name='unique_fashion_product_per_shop'
+            )
+        ]
 
 
 class ElectronicsProduct(BaseProduct, ProductLocationMixin):
@@ -453,9 +424,9 @@ class ElectronicsProduct(BaseProduct, ProductLocationMixin):
     )
     sub_category = models.ForeignKey(
         SubCategory,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.CASCADE,
+        null=False,
+        blank=False,
         related_name='electronics_products'
     )
     model = models.CharField(max_length=100)
@@ -465,6 +436,14 @@ class ElectronicsProduct(BaseProduct, ProductLocationMixin):
     voltage = models.CharField(max_length=50)
     power_source = models.CharField(max_length=50, choices=PowerSource.choices, default=PowerSource.ELECTRIC)
     images = models.ManyToManyField(ImageLink, related_name='electronics_products', blank=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['title', 'brand', 'category', 'shop'],
+                name='unique_electronics_product_per_shop'
+            )
+        ]
 
 
 class AccessoryProduct(BaseProduct, ProductLocationMixin):
@@ -482,9 +461,9 @@ class AccessoryProduct(BaseProduct, ProductLocationMixin):
     )
     sub_category = models.ForeignKey(
         SubCategory,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.CASCADE,
+        null=False,
+        blank=False,
         related_name='accessory_products'
     )
     material = models.CharField(max_length=100, null=True, blank=True)
@@ -492,6 +471,14 @@ class AccessoryProduct(BaseProduct, ProductLocationMixin):
     dimensions = models.CharField(max_length=100, null=True, blank=True)
     type = models.CharField(max_length=50, choices=Type.choices, default=Type.CASE)
     images = models.ManyToManyField(ImageLink, related_name='accessory_products', blank=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['title', 'brand', 'category', 'shop'],
+                name='unique_accessory_product_per_shop'
+            )
+        ]
 
 
 class HealthAndBeautyProduct(BaseProduct, ProductLocationMixin):
@@ -509,9 +496,9 @@ class HealthAndBeautyProduct(BaseProduct, ProductLocationMixin):
     )
     sub_category = models.ForeignKey(
         SubCategory,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.CASCADE,
+        null=False,
+        blank=False,
         related_name='health_beauty_products'
     )
     ingredients = models.TextField(null=True, blank=True)
@@ -524,6 +511,14 @@ class HealthAndBeautyProduct(BaseProduct, ProductLocationMixin):
     benefits = models.TextField(null=True, blank=True)
     color = models.CharField(max_length=50, null=True, blank=True)
     images = models.ManyToManyField(ImageLink, related_name='health_beauty_products', blank=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['title', 'brand', 'category', 'shop'],
+                name='unique_health_beauty_product_per_shop'
+            )
+        ]
 
 
 class FoodProduct(BaseProduct, ProductLocationMixin):
@@ -541,9 +536,9 @@ class FoodProduct(BaseProduct, ProductLocationMixin):
     )
     sub_category = models.ForeignKey(
         SubCategory,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.CASCADE,
+        null=False,
+        blank=False,
         related_name='food_products'
     )
     ingredients = models.TextField(null=True, blank=True)
@@ -554,3 +549,36 @@ class FoodProduct(BaseProduct, ProductLocationMixin):
     shelf_life = models.CharField(max_length=50, null=True, blank=True)
     size = models.CharField(max_length=50, null=True, blank=True)
     images = models.ManyToManyField(ImageLink, related_name='food_products', blank=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['title', 'brand', 'category', 'shop'],
+                name='unique_food_product_per_shop'
+            )
+        ]
+
+
+class ProductIndex(models.Model):
+    """
+    Model to index all products created from each categories
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.UUIDField()
+    product = GenericForeignKey('content_type', 'object_id')
+    category_name = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+    class Meta:
+        unique_together = ('object_id', 'content_type')
+        indexes = [
+            models.Index(fields=['category_name']),
+            models.Index(fields=['object_id']),
+        ]
+
+
+    def __str__(self):
+        return f"{self.category_name} - {self.object_id}"
+    
