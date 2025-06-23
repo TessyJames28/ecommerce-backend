@@ -162,9 +162,16 @@ class UserLoginView(GenericAPIView):
     def post(self, request, *args, **kwargs):
         """Override the post method to handle user login"""
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except serializer.ValidationError as e:
+            return Response({
+                "status": "error",
+                "status_code": status.HTTP_400_BAD_REQUEST,
+                "message": e.detail if isinstance(e.detail, str) else "Invalid email or password",
+                "errors": e.detail
+            }, status=status.HTTP_400_BAD_REQUEST)
         user = serializer.validated_data['user']
-
 
         response_data = {
             "status": "success",
