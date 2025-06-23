@@ -33,7 +33,7 @@ def send_otp_email(to_email, otp_code):
 #     )
 
 
-def generate_otp(length=4):
+def generate_otp(length=6):
     """Generate a random 4-digit OTP."""
     return ''.join([str(random.randint(0, 9)) for _ in range(length)])
 
