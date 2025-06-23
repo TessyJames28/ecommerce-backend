@@ -84,7 +84,6 @@ colors = [c[0] for c in ImageLink._meta.get_field("url").choices or Color.choice
 
 # Clear data first (optional in dev)
 CustomUser.objects.all().delete()
-# Shop.objects.all().delete()
 Category.objects.all().delete()
 SubCategory.objects.all().delete()
 ImageLink.objects.all().delete()
@@ -171,6 +170,7 @@ for user, shop in sellers:
                 price=price,
                 quantity=20,
                 shop=shop,
+                is_published=1,
                 category=cat,
                 sub_category=sub,
                 state=state,
@@ -254,7 +254,9 @@ for buyer in remaining_users:
 
 
         total = sum(
-            item.price_override or item.product.price for item in items
+            item.price_override or getattr(item.product, 'price', 0)
+            for item in items
+            if item.product is not None
         )
         status = random.choices([
             Order.Status.DELIVERED, Order.Status.CANCELLED,
