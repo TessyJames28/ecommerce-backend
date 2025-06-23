@@ -2,13 +2,20 @@ from django.shortcuts import get_object_or_404
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import SellerKYC, SellerSocials
-from .serializers import SellerKYCFirstScreenSerializer, SellerKYCProofOfAddressSerializer, SellerSocialsSerializer
+from .serializers import (
+    SellerKYCFirstScreenSerializer,
+    SellerKYCProofOfAddressSerializer,
+    SellerSocialsSerializer
+)
 from rest_framework.response import Response
 from rest_framework import status
-from users.models import CustomUser
-from products.utility import IsSuperAdminPermission, BaseResponseMixin
-from .models import Shop
-from .serializers import ShopSerializer
+from products.utility import (
+    IsSuperAdminPermission, BaseResponseMixin,
+    StandardResultsSetPagination, product_models
+)
+from shops.models import Shop
+from shops.serializers import ShopSerializer
+
 
 # Create your views here.
 class SellerKYCIDVerificationView(GenericAPIView):
@@ -231,3 +238,36 @@ class ShopManagementView(GenericAPIView, BaseResponseMixin):
             "status_code": status.HTTP_204_NO_CONTENT,
             "message": "Shop deleted successfully with all its products"
         })
+    
+
+class ShopProductListView(GenericAPIView, BaseResponseMixin):
+    """
+    API endpoint to list all products of a shop
+    """ 
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    pagination_class = StandardResultsSetPagination
+
+    def get(self, request, shop_id, *args, **kwargs):
+        """Get all products of a shop"""
+        shop = get_object_or_404(Shop, pk=shop_id)
+
+        products_data = []
+
+        for model, serializer_class, category_name in product_models:
+            products = model.published.filter(shop=shop)
+            if products.exists():
+                serializer = serializer_class(products, many=True)
+                for product_data in serializer.data:
+                    product_data['category_name'] = category_name
+                    products_data.append(product_data)
+                    print(products_data)
+
+        page = self.paginate_queryset(products_data)
+        if page is not None:
+            paginated_response = self.get_paginated_response(products_data)
+            paginated_response.data["status"] = "success"
+            paginated_response.data["status_code"] = status.HTTP_200_OK
+            paginated_response.data["message"] = "Shop products retrieved successfully"
+        
+        return paginated_response
