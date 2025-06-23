@@ -6,6 +6,7 @@ from products.models import (
     FashionProduct, GadgetProduct, ElectronicsProduct,
     AccessoryProduct, FoodProduct, HealthAndBeautyProduct,
 )
+from products.models import ProductIndex
 
 
 CATEGORY_MODELS = {
@@ -72,52 +73,34 @@ class FavoritesSerializer(serializers.ModelSerializer):
 class AddToFavoritesSerializer(serializers.Serializer):
     """Serializer for adding product to favorites"""
     product_id = serializers.UUIDField()
-    product_type = serializers.CharField(help_text="Class name of the product (e.g., 'ElectronicsProduct')")
 
     def validate(self, data):
-        """Validate that the product exists"""
+        """Validate product exists in ProductIndex"""
         product_id = data['product_id']
-        product_type = data['product_type'].lower()
-
-        # Find the correct model class
-        model_class = CATEGORY_MODELS.get(product_type)
-
-        if not model_class:
-            raise serializers.ValidationError(f"Invalid product type: {product_type}")
-        
         try:
-            product = model_class.objects.get(id=product_id)
-            data['product'] = product
-            data['content_type'] = ContentType.objects.get_for_model(model_class)
+            product_index = ProductIndex.objects.get(id=product_id)
+            data['product_index'] = product_index
             return data
-        except model_class.DoesNotExist:
+        except ProductIndex.DoesNotExist:
             raise serializers.ValidationError(f"Product with ID {product_id} not found.")
-        
 
     def create(self, validated_data):
-        """Add product to favorites for authenticated or anonymous users"""
         request = self.context['request']
 
-        # Get or create favorites based on user authentication status
         if request.user.is_authenticated:
             favorites, _ = Favorites.objects.get_or_create(user=request.user)
         else:
-            # for anonymous users, use a session key
             session_key = request.session.session_key
             if not session_key:
                 request.session.create()
                 session_key = request.session.session_key
-
             favorites, _ = Favorites.objects.get_or_create(session_key=session_key)
 
-        # Create the favorite item
-        content_type = validated_data['content_type']
-        object_id = validated_data['product'].id
+        product_index = validated_data['product_index']
 
-        favorite_item, created = FavoriteItem.objects.get_or_create(
+        favorite_item, _ = FavoriteItem.objects.get_or_create(
             favorites=favorites,
-            content_type=content_type,
-            object_id=object_id
+            product_index=product_index
         )
 
         return favorite_item
