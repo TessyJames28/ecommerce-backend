@@ -8,6 +8,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.core.exceptions import PermissionDenied
 from .utility import generate_token_for_user, verify_google_token
 from users.models import CustomUser, Location
+from rest_framework.exceptions import ValidationError
 from users.serializers import (
     CustomUserSerializer,
     LoginSerializer,
@@ -164,7 +165,7 @@ class UserLoginView(GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
-        except serializer.ValidationError as e:
+        except ValidationError as e:
             return Response({
                 "status": "error",
                 "status_code": status.HTTP_400_BAD_REQUEST,
