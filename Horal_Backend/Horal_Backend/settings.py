@@ -55,9 +55,11 @@ INSTALLED_APPS = [
     'carts',
     'orders',
     'favorites',
-    # 'categories',
-    # 'subcategories',
-    # 'shops',
+    'categories',
+    'subcategories',
+    'shops',
+    'ratings',
+    'user_profile',
     'anymail',
     'drf_yasg',
     'corsheaders',
@@ -141,7 +143,7 @@ from datetime import timedelta
 
 #JWT Settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
@@ -188,21 +190,20 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
 
 import urllib.parse as urlparse
 
-redis_url = os.environ.get("REDIS_URL")
+redis_url = env("REDIS_URL")
 url = urlparse.urlparse(redis_url)
-
-# Redis caching for project deployment
 
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": f"redis://{url.hostname}:{url.port}/0",
+        "LOCATION": f"{url.scheme}://{url.hostname}:{url.port}/0",
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             "PASSWORD": url.password,
-        } 
+        }
     }
 }
+
 
 
 
@@ -281,7 +282,7 @@ USE_TZ = True
 
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://horal-backend.up.railway.app',
+
 ]
 
 STATIC_URL = '/static/'
