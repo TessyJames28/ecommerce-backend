@@ -14,9 +14,11 @@ def create_product_index(sender, instance, created, **kwargs):
     if not created:
         return
     
-    category_name = MODEL_CATEGORY_MAP.get(sender)
-    if not category_name:
+    # Ensure only models in MODEL_CATEGORY_MAP are indexed
+    if sender not in MODEL_CATEGORY_MAP:
         return
+    
+    category_name = MODEL_CATEGORY_MAP[sender]
     
     ProductIndex.objects.get_or_create(
         id=instance.id,

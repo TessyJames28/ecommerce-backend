@@ -299,7 +299,7 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
             queryset = queryset.filter(category_name__iexact=category)
     
         for index in queryset:
-            product = index.product
+            product = index.linked_product
             if product is None:
                 continue  # Skip if GenericForeignKey couldn't resolve
             

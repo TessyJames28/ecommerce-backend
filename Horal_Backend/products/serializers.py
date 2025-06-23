@@ -344,4 +344,4 @@ def get_product_serializer(category_name):
         'foods': FoodProductSerializer
     }
 
-    return mapping.get(category_name)
+    return mapping.get(category_name.strip().lower())

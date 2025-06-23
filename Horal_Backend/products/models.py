@@ -566,7 +566,7 @@ class ProductIndex(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.UUIDField()
-    product = GenericForeignKey('content_type', 'object_id')
+    linked_product = GenericForeignKey('content_type', 'object_id')
     category_name = models.CharField(max_length=50)
     created_at = models.DateTimeField(auto_now_add=True)
 
