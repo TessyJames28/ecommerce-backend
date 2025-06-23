@@ -4,7 +4,8 @@ from datetime import timedelta
 from django.db import transaction
 from collections import defaultdict
 
-from orders.models import Order, Variant  # Make sure paths are correct
+from orders.models import Order
+from products.models import ProductVariant  # Make sure paths are correct
 
 class Command(BaseCommand):
     help = "Cancel pending orders older than 30 minutes and update reserved quantities"
@@ -31,7 +32,7 @@ class Command(BaseCommand):
                 orders_to_update.append(order)
 
             if variants_to_update:
-                Variant.objects.bulk_update(variants_to_update.values(), ['reserved_quantity'])
+                ProductVariant.objects.bulk_update(variants_to_update.values(), ['reserved_quantity'])
             if orders_to_update:
                 Order.objects.bulk_update(orders_to_update, ['status'])
 
