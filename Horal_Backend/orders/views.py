@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
+from products.utility import IsSuperAdminPermission
 
 from .models import Order, OrderItem
 from .serializer import OrderItemSerializer, OrderSerializer
@@ -203,4 +204,58 @@ class OrderDeleteView(GenericAPIView):
             "status code": status.HTTP_204_NO_CONTENT,
             "message": "Order deleted and reserved stock released"
         })
+
+
+
+class AdminAllOrderView(GenericAPIView, BaseResponseMixin):
+    """Class to handle the retrieval of all orders"""
+    permission_classes = [IsSuperAdminPermission]
+    serializer_class = OrderSerializer
+
+    def get(self, request):
+        """Retrieve all orders and their items"""
+        queryset = Order.objects.all().select_related('user').prefetch_related('order_items')
+        serializer = self.serializer_class(queryset, many=True)
+
+        return self.get_response(
+            status.HTTP_200_OK,
+            "All orders retrieved successfully.",
+            serializer.data
+        )
     
+
+class UserOrderListView(GenericAPIView, BaseResponseMixin):
+    """List all order from a single user"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = OrderSerializer
+
+    def get(self, request):
+        """Retrieve all order for a single seller"""
+        queryset = Order.objects.filter(user=request.user).prefetch_related('order_items')
+        serializer = self.serializer_class(queryset, many=True)
+        return self.get_response(
+            status.HTTP_200_OK,
+            "User orders retrieved successfully",
+            serializer.data
+        )
+    
+
+class OrderDetailView(GenericAPIView, BaseResponseMixin):
+    """Class to view order details"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = OrderSerializer
+
+    def get(self, request, order_id):
+        if request.user.is_staff or request.user.is_superuser:
+            order = get_object_or_404(Order, id=order_id)
+        else:
+            order = get_object_or_404(Order, id=order_id, user=request.user)
+
+        serializer = self.serializer_class(order)
+        return self.get_response(
+            status.HTTP_200_OK,
+            "Order details retrieved successfully",
+            serializer.data
+        )
+    
+      
