@@ -6,15 +6,27 @@ from users.models import CustomUser
 from carts.models import Cart
 from orders.models import Order
 from favorites.models import Favorites
+from django.db import transaction
+from django.contrib.auth import get_user_model
+import threading
+import time
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def create_user_profile(sender, instance, created, **kwargs):
-    if created and not instance.is_superuser or instance.is_staff:
-        Profile.objects.create(
-            user=instance,
-            full_name=f"{instance.full_name}",
-            email=instance.email
-        )
+
+    if not created:
+        return
+
+    if instance.is_staff or instance.is_superuser:
+        return
+
+    Profile.objects.get_or_create(
+        user=instance,
+        defaults={
+            "full_name": instance.full_name,
+            "email": instance.email
+        }
+    )
 
 
 @receiver(post_delete, sender=CustomUser)
