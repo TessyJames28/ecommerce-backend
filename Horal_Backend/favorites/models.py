@@ -3,6 +3,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from users.models import CustomUser
 import uuid
+from products.models import ProductIndex
 
 # Create your models here.
 class Favorites(models.Model):
@@ -38,19 +39,17 @@ class FavoriteItem(models.Model):
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     favorites = models.ForeignKey(Favorites, on_delete=models.CASCADE, related_name='items')
-
-    # Generic relation to product
-    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.UUIDField()
-    product = GenericForeignKey('content_type', 'object_id')
-    
+    product_index = models.ForeignKey(ProductIndex, on_delete=models.CASCADE)
     added_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['favorites', 'content_type', 'object_id']
+        unique_together = ['favorites', 'product_index']
         ordering = ['-added_at']
 
 
     def __str__(self):
-        product_name = getattr(self.product, 'title', 'Unknown Product')
-        return f"{product_name} in favorites"
+        return f"{self.product_index.product.title if self.product_index and self.product_index.product else 'No Product'}"
+    
+    @property
+    def product(self):
+        return self.product_index.product
