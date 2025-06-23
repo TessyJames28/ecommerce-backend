@@ -33,6 +33,7 @@ schema_view = get_schema_view(
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),
+    url="http://127.0.0.1:8000",
     # url="https://horal-backend.up.railway.app/api/v1",
 )
 
@@ -41,8 +42,11 @@ urlpatterns = [
     path('admin/', admin.site.urls),
 
     #swagger
-    path('', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+
+    # Add this for JSON schema (OpenAPI spec)
+    path('swagger.json', schema_view.without_ui(cache_timeout=0), name='schema-json'),
 
     #App URL
     path('api/v1/user/', include('users.urls')),
@@ -51,5 +55,10 @@ urlpatterns = [
     path('api/v1/cart/', include('carts.urls')),
     path('api/v1/order/', include('orders.urls')),
     path('api/v1/favorite/', include('favorites.urls')),
+    path('api/v1/category/', include('categories.urls')),
+    path('api/v1/shop/', include('shops.urls')),
+    path('api/v1/subcategory/', include('subcategories.urls')),
+    path('api/v1/rating/', include('ratings.urls')),
+    path('api/v1/profile/', include('user_profile.urls')),
     # Optional: Redirect from root to Swagger UI
 ]
