@@ -33,7 +33,7 @@ schema_view = get_schema_view(
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),
-    url="http://127.0.0.1:8000",
+    url="https://ecommerce-backend-a5oq.onrender.com/api/v1",
     # url="https://horal-backend.up.railway.app/api/v1",
 )
 

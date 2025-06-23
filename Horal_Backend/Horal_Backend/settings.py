@@ -37,7 +37,7 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=["127.0.0.1", "localhost"])
 
 
 # Application definition
@@ -282,7 +282,7 @@ USE_TZ = True
 
 
 CSRF_TRUSTED_ORIGINS = [
-
+    'https://ecommerce-backend-a5oq.onrender.com',
 ]
 
 STATIC_URL = '/static/'
