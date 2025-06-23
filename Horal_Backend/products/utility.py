@@ -1,5 +1,6 @@
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 
 from .models import (
     ChildrenProduct, VehicleProduct, GadgetProduct,
@@ -15,7 +16,7 @@ from .serializers import (
 
 # List of all product models and their serializers
 product_models = [
-    (ChildrenProduct, ChildrenProductSerializer, 'babies'),
+    (ChildrenProduct, ChildrenProductSerializer, 'children'),
     (VehicleProduct, VehicleProductSerializer, 'vehicles'),
     (GadgetProduct, GadgetProductSerializer, 'gadget'),
     (FashionProduct, FashionProductSerializer, 'fashion'),
@@ -57,6 +58,19 @@ class BaseResponseMixin:
         }
 
         return mapping.get(category_name.lower())
+    
+
+# Product category mapping
+CATEGORY_MODEL_MAP = {
+    "fashion": FashionProduct,
+    "foods": FoodProduct,
+    "gadget": GadgetProduct,
+    "electronics": ElectronicsProduct,
+    "accessories": AccessoryProduct,
+    "health and beauty": HealthAndBeautyProduct,
+    "vehicles": VehicleProduct,
+    "children": ChildrenProduct,
+}
     
 
 # Permissions
@@ -103,3 +117,25 @@ def update_quantity(product):
     total = sum(v.stock_quantity + v.reserved_quantity for v in product.get_variants())
     product.quantity = total
     product.save(update_fields=['quantity'])
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    """Class for product page pagination"""
+    page_size = 30 # default per page
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+def get_product_queryset():
+    """Get all product queryset from different categories"""
+    from itertools import chain
+    return list(chain(
+        FashionProduct.objects.all(),
+        FoodProduct.objects.all(),
+        GadgetProduct.objects.all(),
+        ElectronicsProduct.objects.all(),
+        AccessoryProduct.objects.all(),
+        HealthAndBeautyProduct.objects.all(),
+        VehicleProduct.objects.all(),
+        ChildrenProduct.objects.all(),
+    ))
