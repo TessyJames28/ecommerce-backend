@@ -289,8 +289,8 @@ STATIC_URL = '/static/'
 # MEDIA_URL = 'media/'
 # MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # This is where collectstatic puts files
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+# STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # This is where collectstatic puts files
 
 # Optional compression and caching:
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
