@@ -6,6 +6,10 @@ from .models import (
     FashionProduct, ElectronicsProduct, AccessoryProduct,
     HealthAndBeautyProduct, FoodProduct,
 )
+from categories.serializers import CategorySerializer
+from subcategories.serializers import SubCategoryProductSerializer
+from categories.models import Category
+from subcategories.models import SubCategory
 
 
 class ImageLinkSerializer(serializers.ModelSerializer):
@@ -129,36 +133,40 @@ class ProductRepresentationMixin:
         from .utility import update_quantity
         update_quantity(instance)
         data = super().to_representation(instance)
-        data['category_name'] = instance.category.name if instance.category else None
-        data['sub_category_name'] = instance.sub_category.name if instance.sub_category else None
+        data['category'] = CategorySerializer(instance.category).data
+        data['sub_category'] = SubCategoryProductSerializer(instance.sub_category).data
 
         # List of base_field attributes
         base_fields = {
             'id', 'title', 'description', 'price', 'quantity',
             'production_date', 'condition', 'brand', 'specifications',
             'is_published', 'live_video_url', 'created_at',
-            'updated_at', 'images', 'shop', 'category'
+            'updated_at', 'shop', 'state', 'local_govt'
         }
 
-        fields = ["images", "state", "local_govt", "variants_details", "category_name"]
+        cat_data = ['category', 'sub_category']
+
+        fields = ["images", "variants_details"]
 
         base_data = {}
         spec_data = {}
+        category_data ={}
+        field_data = {}
 
         for key, value in data.items():
-            if key in base_fields or key in fields:
+            if key in base_fields:
                 base_data[key] = value
-            elif key == "state" or key == "local_govt" or key == "variants_details":
-                base_data[key] = value
+            elif key in fields:
+                field_data[key] = value
+            elif key in cat_data:
+                category_data[key] = value
             else:
                 spec_data[key] = value
 
-        # Add category_type from model class name
-        # model_name = instance.__class__.__name__.lower().replace('product', '')
-        # base_data['category_type'] = model_name  # e.g. 'fashion', 'gadget', etc.
-
         return {
             **base_data,
+            **field_data,
+            "category_object": category_data,
             "specification": spec_data
         }
     
@@ -192,6 +200,13 @@ class ChildrenProductSerializer(
 ):
 
     """Serializer to handle baby category"""
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
+
     class Meta:
         model = ChildrenProduct
         fields = '__all__'
@@ -206,6 +221,13 @@ class VehicleProductSerializer(
 ):
     
     """serializer to handle vehicle product category creation"""
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
+
     class Meta:
         model = VehicleProduct
         fields = '__all__'
@@ -220,6 +242,13 @@ class GadgetProductSerializer(
 ):
     
     """serializer for Gadget product model creation"""
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
+
     class Meta:
         model = GadgetProduct
         fields = '__all__'
@@ -240,6 +269,12 @@ class FashionProductSerializer(
     BaseProductSerializer
 ):
     """Serializer to handle fashion category product creation"""
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
     occasion = serializers.SlugRelatedField(
         queryset=Occasion.objects.all(),
         many=True,
@@ -259,6 +294,12 @@ class ElectronicsProductSerializer(
     BaseProductSerializer
 ):
     """serializer to handle electronics product category creation"""
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
 
     class Meta:
         model = ElectronicsProduct
@@ -273,6 +314,12 @@ class AccessoryProductSerializer(
     BaseProductSerializer
 ):
     """Serializer to handle Accesory product category creation"""
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
 
     class Meta:
         model = AccessoryProduct
@@ -290,6 +337,13 @@ class HealthAndBeautyProductSerializer(
     Serializer to handle the creation of health 
     and beauty products category
     """
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
+
     class Meta:
         model = HealthAndBeautyProduct
         fields = '__all__'
@@ -303,6 +357,13 @@ class FoodProductSerializer(
     BaseProductSerializer
 ):
     """serializer to handle Food product category creation"""
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
+    
     class Meta:
         model = FoodProduct
         fields = '__all__'

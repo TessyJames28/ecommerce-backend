@@ -346,7 +346,6 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
             if products.exists():
                 serializer = MixedProductSerializer(product)
                 data = serializer.data
-                data['category_name'] = index.category_name
                 products_data.append(data)
 
         page = self.paginate_queryset(products_data)
