@@ -13,3 +13,11 @@ class SubCategorySerializer(serializers.ModelSerializer):
     
     def get_category_name(self, obj):
         return  f"{obj.category.name}"
+    
+
+class SubCategoryProductSerializer(serializers.ModelSerializer):
+    """Class that handles subcategory serialization"""
+
+    class Meta:
+        model = SubCategory 
+        fields = ['id', 'name', 'slug']
