@@ -52,4 +52,4 @@ class FavoriteItem(models.Model):
     
     @property
     def product(self):
-        return self.product_index.product
+        return self.product_index.linked_product
