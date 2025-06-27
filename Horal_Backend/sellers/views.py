@@ -5,7 +5,8 @@ from .models import SellerKYC, SellerSocials
 from .serializers import (
     SellerKYCFirstScreenSerializer,
     SellerKYCProofOfAddressSerializer,
-    SellerSocialsSerializer
+    SellerSocialsSerializer,
+    SellerProfileSerializer
 )
 from rest_framework.response import Response
 from rest_framework import status
@@ -271,3 +272,47 @@ class ShopProductListView(GenericAPIView, BaseResponseMixin):
             paginated_response.data["message"] = "Shop products retrieved successfully"
         
         return paginated_response
+
+
+class SellerProfileView(GenericAPIView):
+    """
+    View to retrieve the complete seller profile
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = SellerProfileSerializer
+
+    def get(self, request, *args, **kwargs):
+        user = request.user
+
+        if not user.is_seller:
+            return Response({
+                "status": "error",
+                "message": "Only sellers can access this endpoint."
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = self.get_serializer(user)
+        return Response({
+            "status": "success",
+            "message": "Seller profile retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+class SellerProfileUpdateView(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SellerProfileSerializer
+
+    def patch(self, request, *args, **kwargs):
+        serializer = self.get_serializer(
+            request.user,
+            data=request.data,
+            partial=True  # Allow partial updates
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({
+            "status": "success",
+            "message": "Seller profile updated successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
