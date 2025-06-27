@@ -6,6 +6,7 @@ from products.models import (
     ElectronicsProduct, AccessoryProduct, FoodProduct,
     HealthAndBeautyProduct, GadgetProduct, Color, SizeOption
 )
+from products.serializers import MixedProductSerializer
 
 product_models = [
     ChildrenProduct,
@@ -24,37 +25,21 @@ class CartItemSerializer(serializers.ModelSerializer):
     """Serializer for cart item"""
     item_total_price = serializers.SerializerMethodField()
     product = serializers.SerializerMethodField()
-    variant_detail = serializers.SerializerMethodField()
+    user_selected_variant = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
-        fields = ['id', 'variant', 'quantity', 'item_total_price', 'product', 'variant_detail']
+        fields = ['id', 'variant', 'quantity', 'item_total_price', 'product', 'user_selected_variant']
         read_only_fields = ['id', 'variant', 'quantity', 'item_total_price', 'product']
     
 
     def get_product(self, obj):
         """Get product"""
         product = obj.variant.product
+        return MixedProductSerializer().to_representation(product)
 
-        # Retrieve product image
-        image_url = None
-        if hasattr(product, 'images'):
-            images = product.images.all()
-            if images.exists():
-                image_url = images.first().url
 
-        return {
-            'id': str(product.id),
-            'title': product.title,
-            'price': str(product.price),
-            'category': product.category.name if hasattr(product, 'category') else None,
-            'subcategory': product.sub_category.name if hasattr(product, 'sub_category') else None,
-            'type': product.__class__.__name__,
-            'image': image_url
-        }
-    
-
-    def get_variant_detail(self, obj):
+    def get_user_selected_variant(self, obj):
         variant = obj.variant
 
         if variant.standard_size:
