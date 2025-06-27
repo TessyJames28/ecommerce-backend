@@ -36,7 +36,13 @@ class CartItemSerializer(serializers.ModelSerializer):
     def get_product(self, obj):
         """Get product"""
         product = obj.variant.product
-        return MixedProductSerializer().to_representation(product)
+        if not product:
+            return None  # or a fallback serializer/data
+        try:
+            return MixedProductSerializer().to_representation(product)
+        except Exception as e:
+            print(f"Error serializing product: {e}")
+            return None
 
 
     def get_user_selected_variant(self, obj):
