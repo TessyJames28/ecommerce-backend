@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q, Avg
 from django.core.exceptions import PermissionDenied
 from sellers.models import SellerKYC
+from sellers.serializers import SellerProfileSerializer
 from django.http import Http404
 from rest_framework.exceptions import NotFound
 from shops.models import Shop
@@ -144,11 +145,17 @@ class SingleProductDetailView(GenericAPIView, BaseResponseMixin):
             })
         
         serializer = self.get_serializer(product)
-        return self.get_response(
-            status.HTTP_200_OK,
-            "Product retrieved successfully",
-            serializer.data
-        )    
+
+        # Serialize seller profile
+        seller = product.shop.owner.user
+        seller_profile_serializer = SellerProfileSerializer(seller)
+        return Response({
+            "status": "success",
+            "status_codes": status.HTTP_200_OK,
+            "message": "Product retrieved successfully",
+            "product": serializer.data,
+            "seller_data": seller_profile_serializer.data
+        }, status=status.HTTP_200_OK)    
 
 
 class ProductDetailView(GenericAPIView, BaseResponseMixin):
