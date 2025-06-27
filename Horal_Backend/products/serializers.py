@@ -370,6 +370,22 @@ class FoodProductSerializer(
         read_only_fields = ['id']
 
 
+# Dynamic serializer solver (for views)
+def get_product_serializer(category_name):
+    mapping = {
+        'children': ChildrenProductSerializer,
+        'vehicles': VehicleProductSerializer,
+        'gadget': GadgetProductSerializer,
+        'fashion': FashionProductSerializer,
+        'electronics': ElectronicsProductSerializer,
+        'accessories': AccessoryProductSerializer,
+        'health and beauty': HealthAndBeautyProductSerializer,
+        'foods': FoodProductSerializer
+    }
+
+    return mapping.get(category_name.strip().lower())
+
+
 class MixedProductSerializer(serializers.Serializer):
     def to_representation(self, instance):
         model_name = instance.__class__.__name__.lower()
@@ -386,23 +402,8 @@ class MixedProductSerializer(serializers.Serializer):
         }
 
         serializer_class = mapping.get(model_name)
+
         if not serializer_class:
             raise serializers.ValidationError(f"No serializer found for model {model_name}")
         
         return serializer_class(instance).data
-
-
-# Dynamic serializer solver (for views)
-def get_product_serializer(category_name):
-    mapping = {
-        'children': ChildrenProductSerializer,
-        'vehicles': VehicleProductSerializer,
-        'gadget': GadgetProductSerializer,
-        'fashion': FashionProductSerializer,
-        'electronics': ElectronicsProductSerializer,
-        'accessories': AccessoryProductSerializer,
-        'health and beauty': HealthAndBeautyProductSerializer,
-        'foods': FoodProductSerializer
-    }
-
-    return mapping.get(category_name.strip().lower())
