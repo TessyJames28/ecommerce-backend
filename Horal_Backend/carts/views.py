@@ -177,7 +177,7 @@ class CartItemUpdateDeleteView(GenericAPIView, BaseResponseMixin):
         try:
             cart = self.get_cart(request)
             return get_object_or_404(CartItem, id=item_id, cart=cart)
-        except exec as e:
+        except Exception as e:
             print(f"Error getting cart item: {str(e)}")
             return None
         
