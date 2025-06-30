@@ -87,15 +87,20 @@ MIDDLEWARE = [
 
 
 # Add Cors settings
-# CORS_ALLOWED_ORIGINS = [
-#     'https://www.horal.ng',
-#     "http://localhost:3000",       # React dev server
-#     "http://127.0.0.1:3000",
-# ]
-
-CORS_ALLOW_ALL_ORIGINS = True
-
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    'https://www.horal.ng',
+    "https://horal.ng",
+    "http://localhost:3000",       # React dev server
+    "http://127.0.0.1:3000",
+]
+
+
+SESSION_COOKIE_SAMESITE = "None"
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SAMESITE = "None"
+CSRF_COOKIE_SECURE = True
+
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SWAGGER_DOCS_BASE_URL= env('SWAGGER_DOCS_BASE_URL')
@@ -186,6 +191,15 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
 #         }
 #     }
 # }
+
+
+# Paystack Payment Setup
+# settings.py
+# PAYSTACK_SECRET_KEY = env('PAYSTACK_SECRET_KEY')
+# PAYSTACK_PUBLIC_KEY = env('PAYSTACK_PUBLIC_KEY')
+# PAYSTACK_INITIALIZE_URL = env('PAYSTACK_INITIALIZE_URL')
+# PAYSTACK_VERIFY_URL = env('PAYSTACK_VERIFY_URL')
+
 
 
 import urllib.parse as urlparse
