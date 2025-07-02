@@ -60,5 +60,6 @@ urlpatterns = [
     path('api/v1/subcategory/', include('subcategories.urls')),
     path('api/v1/rating/', include('ratings.urls')),
     path('api/v1/profile/', include('user_profile.urls')),
+    path('api/v1/payment/', include('payment.urls')),
     # Optional: Redirect from root to Swagger UI
 ]
