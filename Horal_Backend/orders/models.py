@@ -15,6 +15,8 @@ class Order(models.Model):
         CANCELLED = "cancelled", "Cancelled"
         SHIPPED = "shipped", "Shipped"
         DELIVERED = "delivered", "Delivered"
+        RETURN_REQUESTED = "return_requested", "Return Requested"
+        RETURNED = "returned", "Returned"
 
 
     """Model to represents a user's placed order"""
@@ -48,3 +50,20 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.variant} X {self.quantity}"
+    
+
+class OrderReturnRequest(models.Model):
+    """
+    Model to handle order cancellation
+    Users request for order refund
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE)
+    reason = models.TextField()
+    approved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+
+    def __str__(self):
+        return f"Return request for {self.order.id}"
