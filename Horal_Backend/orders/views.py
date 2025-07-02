@@ -2,14 +2,19 @@ from django.shortcuts import get_object_or_404
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from products.utility import IsSuperAdminPermission
+from payment.views import trigger_refund
+from payment.models import PaystackTransaction
+from payment.utility import update_order_status
 
+from .utility import approve_return
 from .models import Order, OrderItem
-from .serializer import OrderItemSerializer, OrderSerializer
-from carts.models import Cart, CartItem
+from .serializer import OrderReturnRequest, OrderSerializer, OrderReturnRequestSerializer
+from carts.models import Cart
 from products.utility import BaseResponseMixin, update_quantity
 
 # Create your views here.
@@ -47,6 +52,7 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                 # If no existing order, continue creating one and calculate total
                 total = cart.total_price
                 order = Order.objects.create(user=user, total_amount=total)
+                update_order_status(order, Order.Status.PENDING, user, force=True)
 
             
                 for item in cart.cart_item.all():
@@ -61,6 +67,8 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                     variant.reserved_quantity += item.quantity
                     variant.stock_quantity -= item.quantity  # Deduct immediately upon reservation
                     variant.save()
+                    print(f"Variant: {variant}")
+                    print(variant.product)
                     update_quantity(variant.product)
 
                     OrderItem.objects.create(
@@ -84,95 +92,12 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
             )
         
         except Exception as e:
+            print(e)
             return self.get_response(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 str(e)
             )
         
-
-class PaymentCallbackView(GenericAPIView, BaseResponseMixin):
-    """Update order status after payment"""
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, *args, **kwargs):
-        """Handles order creation after payment"""
-        order_id = request.data.get('order_id')
-        status_input = request.data.get('status') # e.g paid, failed, cancelled
-
-        if not order_id or not status_input:
-            return self.get_response(
-                status.HTTP_400_BAD_REQUEST,
-                "order_id and status are required"
-            )
-
-        try:
-            order = Order.objects.get(id=order_id, user=request.user)
-        except Order.DoesNotExist:
-            return self.get_response(
-                status.HTTP_404_NOT_FOUND,
-                "Order not found"
-            )
-        
-        if status_input not in Order.Status.values:
-            return self.get_response(
-                status.HTTP_400_BAD_REQUEST,
-                "Invalid status value"
-            )
-        
-        try:
-            with transaction.atomic():
-                # If status is 'paid', deduct stock and clear cart
-                if status_input == Order.Status.PAID:
-                    for item in order.order_items.all():
-                        variant = item.variant
-                        
-                        # Deduct from total stock after successful payment
-                        variant.reserved_quantity -= item.quantity
-                        variant.save()
-                        update_quantity(variant.product)
-
-                    # Clear cart
-                    CartItem.objects.filter(cart__user=request.user).delete()
-
-                    # if failed or cancelled, leave stock as is but update status
-                elif status_input in [Order.Status.FAILED, Order.Status.CANCELLED]:
-                    for item in order.order_items.all():
-                        variant = item.variant
-                        variant.reserved_quantity -= item.quantity
-                        variant.stock_quantity += item.quantity
-                        variant.save()
-                        update_quantity(variant.product)
-
-                    # Update the order status
-                    order.delete()
-
-                    return self.get_response(
-                        status.HTTP_400_BAD_REQUEST,
-                        f"Payment {status_input.lower()}. Order status updated accordingly."
-                    )
-       
-
-                # Update the order status
-                order.status = status_input
-                order.save()
-        except ValidationError as e:
-            return self.get_response(
-                status.HTTP_400_BAD_REQUEST,
-                str(e)
-            )
-        
-        except Exception:
-            return self.get_response(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                "Something went wrong while updating your order"
-            )
-
-        serializer = OrderSerializer(order)
-        return self.get_response(
-            status.HTTP_200_OK,
-            f"Order updated to {status_input}",
-            serializer.data
-        )
 
 
 class OrderDeleteView(GenericAPIView):
@@ -257,5 +182,123 @@ class OrderDetailView(GenericAPIView, BaseResponseMixin):
             "Order details retrieved successfully",
             serializer.data
         )
+
+
+class OrderReturnRequestView(GenericAPIView, BaseResponseMixin):
+    """
+    Class to handle order return request
+    For order cancellation and request for a refund
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = OrderReturnRequestSerializer
+
+    def post(self, request, *args, **kwargs):
+        """
+        Allow users with real and paid purchases to cancel
+        Paid orders and request a refund
+        """
+        order_id = request.data.get('order_id')
+        reason = request.data.get('reason')
+
+        if not order_id or not reason:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "order_id and reason required"
+            )
+        
+        try:
+            order = Order.objects.get(id=order_id, user=request.user)
+        except Order.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "Order not found"
+            )
+        
+        # Check if the order has been paid for
+        if order.status != Order.Status.PAID:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Only paid orders can be returned"
+            )
+        
+        # Check to prevent duplicate request
+        if OrderReturnRequest.objects.filter(order=order).exists():
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Order cancellation and return request already initiated"
+            )
+        
+        # Create request
+        order_return = OrderReturnRequest.objects.create(order=order, reason=reason)
+
+        update_order_status(order, Order.Status.RETURN_REQUESTED, request.user)
+
+        serializer = self.get_serializer(order_return)
+
+        return self.get_response(
+            status.HTTP_201_CREATED,
+            "Order cancellation and return request submitted",
+            serializer.data
+        )
     
-      
+
+class ApproveReturnView(APIView, BaseResponseMixin):
+    """
+    Class to allow admin or superuser to approve return request
+    """
+    permission_classes = [IsSuperAdminPermission]
+
+
+    def post(self, request):
+        """Allows admin to approve cancellation request"""
+        return_id = request.data.get('return_id')
+
+        if not return_id:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "return_id is required"
+            )
+        
+        try:
+            req = OrderReturnRequest.objects.select_related('order').get(id=return_id)
+        except OrderReturnRequest.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "Return or cancellation request not found"
+            )
+        
+        # Check if the request is already approved
+        if req.approved:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Cancellation request already approved"
+            )
+        
+        # Approve and restock
+        approve_return(req, request.user)
+
+        # Find the transaction for this order
+        try:
+            tx = PaystackTransaction.objects.get(order=req.order)
+        except PaystackTransaction.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "Associated payment transaction not found"
+            )
+        
+        # Trigger refund
+        refund_result = trigger_refund(tx.reference)
+
+        if not refund_result.get("status"):
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Return approved but refund failed",
+                refund_result
+            )
+    
+        return self.get_response(
+            status.HTTP_200_OK,
+            "Return approved and refund initiated",
+            refund_result
+        )
+ 
