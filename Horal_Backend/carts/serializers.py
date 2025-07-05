@@ -7,18 +7,7 @@ from products.models import (
     HealthAndBeautyProduct, GadgetProduct, Color, SizeOption
 )
 from products.serializers import MixedProductSerializer
-
-product_models = [
-    ChildrenProduct,
-    VehicleProduct,
-    FashionProduct,
-    GadgetProduct,
-    ElectronicsProduct,
-    AccessoryProduct,
-    FoodProduct,
-    HealthAndBeautyProduct
-]
-
+from products.utility import product_models_list
 
 
 class CartItemSerializer(serializers.ModelSerializer):
@@ -101,7 +90,7 @@ class CartItemCreateSerializer(serializers.Serializer):
     def validate(self, data):
         """Validate product in the cart"""
         product = None
-        for model in product_models:
+        for model in product_models_list:
             try:
                 product = model.objects.get(id=data['product_id'])
                 break
