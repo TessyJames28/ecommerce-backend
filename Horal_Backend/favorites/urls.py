@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     FavoritesView, AddToFavoritesView,
-    MergeFavoritesView, RemoveFromFavoritesView,
+    RemoveFromFavoritesView,
     CheckFavoriteStatusView
 )
 
@@ -13,6 +13,5 @@ urlpatterns = [
     path('add/', AddToFavoritesView.as_view(), name="add-to-favorites"),
     path('<uuid:item_id>/', RemoveFromFavoritesView.as_view(), name='remove-from-favorites'),
     path('check/', CheckFavoriteStatusView.as_view(), name="check-favorite-status"),
-    path('merge/', MergeFavoritesView.as_view(), name="merge-favorites"),
 
 ]
