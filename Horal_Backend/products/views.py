@@ -1,9 +1,11 @@
-from django.shortcuts import render
+from django.utils.timezone import now
 from rest_framework import status, permissions
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Avg
+from collections import defaultdict
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import Q, Avg, Count, Sum
 from django.core.exceptions import PermissionDenied
 from sellers.models import SellerKYC
 from sellers.serializers import SellerProfileSerializer
@@ -17,14 +19,16 @@ from itertools import chain
 from .utility import (
     BaseResponseMixin, product_models, IsAuthenticated,
     IsSellerAdminOrSuperuser, StandardResultsSetPagination,
-    get_product_queryset
+    product_models_list, track_recently_viewed_product
 )
-from .models import ProductIndex
+from .models import ProductIndex, RecentlyViewedProduct
 from categories.models import Category
 from subcategories.models import SubCategory
+from orders.models import OrderItem
 from .models import ProductVariant
 from .serializers import get_product_serializer, MixedProductSerializer
-  
+from carts.authentication import SessionOrAnonymousAuthentication
+
 
 class ProductBySubcategoryView(GenericAPIView, BaseResponseMixin):
     """Class that returns products linked to a specific subcategory"""
@@ -116,15 +120,30 @@ class SingleProductDetailView(GenericAPIView, BaseResponseMixin):
     authentication_classes = []
 
 
-    def get(self, request, pk, *args, **kwargs):
-        """Get a product by ID"""
-        try:
-            index = get_object_or_404(ProductIndex, object_id=pk)
-        except Http404:
-           raise NotFound({
+    def get(self, request, slug, *args, **kwargs):
+        """Get a product by slug"""
+        product = None
+
+        for model in product_models_list:
+            product = model.objects.filter(slug=slug).first()
+            if product:
+                break
+        
+        if not product:
+            raise NotFound({
                 "status": "error",
-                "status_code": 404,
-                "message": "Product not found",
+                "status_code": status.HTTP_404_NOT_FOUND,
+                "message": "Product not found"
+            })
+        
+        # Get index to resolve category and model
+        try:
+            index = ProductIndex.objects.get(object_id=product.id)
+        except ProductIndex.DoesNotExist:
+            raise NotFound({
+                "status": "error",
+                "status_code": status.HTTP_404_NOT_FOUND,
+                "message": "Product index not found"
             })
         
         # get the product model based on category
@@ -136,23 +155,20 @@ class SingleProductDetailView(GenericAPIView, BaseResponseMixin):
                 f"Invalid category: {category_name}"
             )
         
-        # Get the product
-        try:
-            product = get_object_or_404(product_model, pk=pk)
-        except Http404:
-           raise NotFound({
-                "status": "error",
-                "status_code": 404,
-                "message": "Product not found",
-            })
-        
+        # Serialize product
         serializer = self.get_serializer(product)
 
         # Serialize seller profile
         seller = product.shop.owner.user
         seller_profile_serializer = SellerProfileSerializer(seller)
-        reviews = UserRating.objects.filter(product=pk)
+        
+        # serialize product review
+        reviews = UserRating.objects.filter(product=product.id)
         product_rating = UserRatingSerializer(reviews, many=True)
+        
+        # Track recently viewed product
+        track_recently_viewed_product(request, index)
+
         return Response({
             "status": "success",
             "status_codes": status.HTTP_200_OK,
@@ -464,4 +480,99 @@ class ProductVariantView(GenericAPIView, BaseResponseMixin):
                     "colors_for_custom_size": list(colors_for_custom_size)
                 }
             }
+        )
+    
+
+class RecentlyViewedProductView(GenericAPIView, BaseResponseMixin):
+    """Class to retrieve recently viewed products"""
+    permission_classes = [AllowAny]
+    authentication_classes = [SessionOrAnonymousAuthentication]
+    serializer_class = MixedProductSerializer
+
+    def get(self, request, *args, **kwargs):
+        """Retrieve users recently viewed products"""
+        user = request.user
+        session_key = request.session.session_key
+        
+
+        if not session_key:
+            request.session['init'] = True
+            request.session.save()
+            session_key = request.session.session_key
+            
+
+        # fetched viewed items for user or anonymous users
+        if user.is_authenticated:
+            views = RecentlyViewedProduct.objects.filter(user=user)
+        else:
+            views = RecentlyViewedProduct.objects.filter(session_key=session_key)
+
+        
+        views = views.select_related('product_index')[:20]
+        product_ids = [v.product_index.object_id for v in views]
+        
+        # Match across product models
+        products = []
+        for model in product_models_list:
+            matched = model.objects.filter(id__in=product_ids)
+            products.extend(matched)
+
+        # preserve original view order
+        product_sorted = sorted(products, key=lambda x: product_ids.index(x.id))
+        serializer = self.get_serializer(product_sorted, many=True)
+
+        return self.get_response(
+            status.HTTP_200_OK,
+            "Recently viewd products retrieved successfully",
+            serializer.data
+        )
+
+
+class TopSellingProductView(GenericAPIView, BaseResponseMixin):
+    """
+    Class to handle the the retrieve top selling products
+    """
+    serializer_class = MixedProductSerializer
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        """
+        Retrieve top selling products
+        Count most sold variants and map back to products
+        """
+        top_items = (
+            OrderItem.objects
+            .values('variant__content_type', 'variant__object_id')
+            .annotate(total_sold=Sum('quantity'))
+            .order_by('-total_sold')[:30] # top 30
+        )
+
+        # Groip by content_type to fetch products from each model
+        product_map = defaultdict(list)
+        for item in top_items:
+            product_map[item['variant__content_type']].append(item['variant__object_id'])
+        
+        products = []
+        for ct_id, obj_ids in product_map.items():
+            model = ContentType.objects.get_for_id(ct_id).model_class()
+            products.extend(
+                model.objects.filter(id__in=obj_ids)
+            )
+
+        # Get product ids to preserve order
+        def sort_key(product):
+            for i, item in enumerate(top_items):
+                if product.id == item['variant__object_id'] and \
+                    ContentType.objects.get_for_model(product).id == item['variant__content_type']:
+                    return i
+            return len(top_items)  # If not found, place at the end
+
+        # preserve the order of product_ids
+        products_sorted = sorted(products, key=sort_key)
+        serializer = self.get_serializer(products_sorted, many=True)
+
+        return self.get_response(
+            status.HTTP_200_OK,
+            "Top selling products retrieved successfully",
+            serializer.data
         )
