@@ -1,11 +1,11 @@
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-
+from django.utils.timezone import now
 from .models import (
     ChildrenProduct, VehicleProduct, GadgetProduct,
     FashionProduct, ElectronicsProduct, AccessoryProduct,
-    HealthAndBeautyProduct, FoodProduct
+    HealthAndBeautyProduct, FoodProduct, RecentlyViewedProduct
 )
 from .serializers import (
     ChildrenProductSerializer, VehicleProductSerializer, GadgetProductSerializer,
@@ -24,6 +24,17 @@ product_models = [
     (AccessoryProduct, AccessoryProductSerializer, 'accessories'),
     (HealthAndBeautyProduct, HealthAndBeautyProductSerializer, 'health and beauty'),
     (FoodProduct, FoodProductSerializer, 'foods')
+]
+
+product_models_list = [
+    ChildrenProduct,
+    VehicleProduct,
+    FashionProduct,
+    GadgetProduct,
+    ElectronicsProduct,
+    AccessoryProduct,
+    FoodProduct,
+    HealthAndBeautyProduct
 ]
 
 class BaseResponseMixin:
@@ -139,3 +150,43 @@ def get_product_queryset():
         VehicleProduct.objects.all(),
         ChildrenProduct.objects.all(),
     ))
+
+def track_recently_viewed_product(request, index):
+    """Function to track recently viewed products"""
+    if request.user.is_authenticated:
+        RecentlyViewedProduct.objects.update_or_create(
+            user=request.user,
+            product_index=index,
+            defaults={'viewed_at': now()}
+        )
+    else:
+        session_key = request.session.session_key
+        if not session_key:
+            request.session.save()
+            session_key = request.session.session_key
+
+        RecentlyViewedProduct.objects.update_or_create(
+            session_key=session_key,
+            product_index=index,
+            defaults={'viewed_at': now()}
+        )
+
+
+def merge_recently_viewed_products(session_key, user):
+    if not session_key or not user:
+        return
+    
+    anon_views = RecentlyViewedProduct.objects.filter(session_key=session_key)
+
+    for view in anon_views:
+        # if already exists under the user, update timestamp if newer
+        obj, created = RecentlyViewedProduct.objects.update_or_create(
+            user=user,
+            product_index=view.product_index,
+            defaults={
+                'viewed_at': max(view.viewed_at, now())
+            }
+        )
+
+    # Clean up anon views after merge
+    anon_views.delete()
