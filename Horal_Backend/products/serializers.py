@@ -25,10 +25,10 @@ class ProductVariantSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductVariant
         fields = [
-            'id', 'color', 'custom_size_unit', 'standard_size',
+            'id', 'color', 'custom_size_unit', 'standard_size', 'sku',
             'custom_size_value', 'stock_quantity', 'reserved_quantity', 'price_override'
         ]
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'sku']
 
 
 class ProductCreateMixin:
@@ -138,7 +138,7 @@ class ProductRepresentationMixin:
 
         # List of base_field attributes
         base_fields = {
-            'id', 'title', 'description', 'price', 'quantity',
+            'id', 'title', 'slug', 'description', 'price', 'quantity',
             'production_date', 'condition', 'brand', 'specifications',
             'is_published', 'live_video_url', 'created_at',
             'updated_at', 'shop', 'state', 'local_govt'
