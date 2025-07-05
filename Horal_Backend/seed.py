@@ -103,6 +103,14 @@ for cat_name, subs in categories_data.items():
 sellers = []
 buyers = []
 
+admin = CustomUser.objects.create_superuser(
+        email=f"adminuser@mail.com",
+        password="TestPass123!",
+        full_name=f"Admin User",
+        phone_number=f"08033556677",
+        is_active=True
+    )
+
 for i in range(30):
     user = CustomUser.objects.create_user(
         email=f"user{i}@mail.com",
@@ -277,6 +285,8 @@ for buyer in remaining_users:
             )
         if status == Order.Status.DELIVERED:
             delivered_variants.extend((buyer, item) for item in items)
+    cart.delete()
+
 
 # === RATINGS ===
 for (buyer, item) in random.sample(delivered_variants, min(120, len(delivered_variants))):
