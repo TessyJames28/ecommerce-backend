@@ -8,6 +8,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.core.exceptions import PermissionDenied
 from .utility import generate_token_for_user, verify_google_token
 from users.models import CustomUser, Location
+from django.contrib.auth.signals import user_logged_in
 from rest_framework.exceptions import ValidationError
 from users.serializers import (
     CustomUserSerializer,
@@ -193,6 +194,10 @@ class UserLoginView(GenericAPIView):
                 }
             }
         }
+        
+        # Manually send log in signal
+        user_logged_in.send(sender=user.__class__, request=request, user=user)
+
         return Response(response_data, status=status.HTTP_200_OK)
     
 
@@ -228,6 +233,9 @@ class GoogleLoginView(GenericAPIView):
                 user.full_name = full_name
             user.is_active = True
             user.save()
+
+            # Manually send log in signal
+            user_logged_in.send(sender=user.__class__, request=request, user=user)
 
             return Response({
                 "status": "success",
