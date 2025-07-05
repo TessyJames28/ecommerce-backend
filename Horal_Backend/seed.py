@@ -300,6 +300,14 @@ for (buyer, item) in random.sample(delivered_variants, min(120, len(delivered_va
     if not product_index:
         continue
 
+    order_item = OrderItem.objects.filter(variant=item, order__user=buyer).first()
+    if not order_item:
+        continue
+
+    # ✅ Skip if this user already rated this order_item for this product
+    if UserRating.objects.filter(user=buyer, order_item=order_item, product=product_index).exists():
+        continue
+
     UserRating.objects.create(
         user=buyer,
         order_item=OrderItem.objects.filter(variant=item, order__user=buyer).first(),
