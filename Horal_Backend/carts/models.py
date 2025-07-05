@@ -31,7 +31,10 @@ class Cart(models.Model):
         return len(self.cart_item.all())
 
     def __str__(self):
-        return f"{self.user.full_name}'s cart"
+        if self.user:
+            return f"{self.user.full_name}'s cart"
+        else:
+            return f"Cart for session {self.session_key}"
     
 
 class CartItem(models.Model):
