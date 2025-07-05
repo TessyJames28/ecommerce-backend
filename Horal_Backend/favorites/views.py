@@ -5,7 +5,6 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from products.utility import BaseResponseMixin
 from carts.authentication import SessionOrAnonymousAuthentication
-from django.contrib.contenttypes.models import ContentType
 from products.models import ProductIndex
 
 from .models import FavoriteItem, Favorites
@@ -159,64 +158,3 @@ class CheckFavoriteStatusView(GenericAPIView, BaseResponseMixin):
             message,
             {"is_favorite": is_favorite}
         )
-    
-
-class MergeFavoritesView(GenericAPIView, BaseResponseMixin):
-    """
-    Merge anonymous favorites with user favorites after login
-    """
-    serializer_class = FavoritesSerializer
-    authentication_classes = [SessionOrAnonymousAuthentication]
-
-    def post(self, request, *args, **kwargs):
-        """
-        Merge anonymous favorites into authenticated user favorites
-        """
-        if not request.user.is_authenticated:
-            return self.get_response(
-                status.HTTP_401_UNAUTHORIZED,
-                "User must be authenticated to merge favorites"
-            )
-        
-        session_key = request.session.session_key
-        if not session_key:
-            return self.get_response(
-                status.HTTP_200_OK,
-                "No anonymous favorites to merge",
-            )
-        
-        try:
-            anonymous_favorites = Favorites.objects.get(session_key=session_key)
-            user_favorites, _ = Favorites.objects.get_or_create(user=request.user)
-
-            # Move items from anonymous favorites to user favorites
-            for item in anonymous_favorites.items.all():
-                # Check if the item already exists in user favorites
-                exists = FavoriteItem.objects.filter(
-                    favorites=user_favorites,
-                    product_index=item.product_index
-                ).exists()
-
-                if not exists:
-                    # Create a new favorite item for the user
-                    FavoriteItem.objects.create(
-                        favorites=user_favorites,
-                        product_index=item.product_index
-                    )
-
-            # Delete the anonymous favorites
-            anonymous_favorites.delete()
-
-            # Return the merged favorites
-            serializer = self.get_serializer(user_favorites)
-            return self.get_response(
-                status.HTTP_200_OK,
-                "Favorites merged successfully",
-                serializer.data
-            )
-        
-        except Favorites.DoesNotExist:
-            return self.get_response(
-                status.HTTP_200_OK,
-                "No anonymous favorites to merge"
-            )
