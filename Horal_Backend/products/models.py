@@ -2,9 +2,12 @@ from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 import uuid
+from django.utils.crypto import get_random_string
+from users.models import CustomUser
 from shops.models import Shop
 from categories.models import Category
 from subcategories.models import SubCategory
+from django.utils.text import slugify
 
 # Create your models here.
 class ImageLink(models.Model):
@@ -185,6 +188,7 @@ class BaseProduct(models.Model):
     """Base model for products."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=255)
+    slug = models.SlugField(unique=True, blank=True)
     description = models.TextField()
     specifications = models.TextField(null=True, blank=True) 
     price = models.DecimalField(max_digits=10, decimal_places=2)    
@@ -205,6 +209,13 @@ class BaseProduct(models.Model):
         abstract = True
 
 
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.title)
+            short_uuid = str(self.id)[:12] # Use first 12 characters of the UUID
+            self.slug = f"{base_slug}-{short_uuid}"
+        super().save(*args, **kwargs)
+
     def get_variants(self):
         return ProductVariant.objects.filter(
             content_type=ContentType.objects.get_for_model(self.__class__),
@@ -220,6 +231,7 @@ class ProductVariant(models.Model):
     product = GenericForeignKey('content_type', 'object_id')
 
     # Variant properties
+    sku = models.CharField(max_length=50, unique=True, blank=True)
     color = models.CharField(max_length=20, choices=Color.choices, null=True,blank=True)
     custom_size_unit = models.CharField(max_length=10, choices=SizeOption.SizeUnit.choices, blank=True, null=True)
     standard_size = models.CharField(max_length=10, choices=SizeOption.StandardSize.choices, null=True, blank=True)
@@ -227,6 +239,25 @@ class ProductVariant(models.Model):
     stock_quantity = models.PositiveBigIntegerField(default=0)
     reserved_quantity = models.PositiveIntegerField(default=0)
     price_override = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+
+    def save(self, *args, **kwargs):
+        if not self.sku:
+            base = slugify(self.product.title)[:5].upper()
+            color = self.color[:3].upper() if self.color else "XXX"
+            size = self.standard_size or self.custom_size_value or "FRE"
+            
+            # Generating a unique SKU
+            for _ in range(10): 
+                random_part = get_random_string(4).upper()
+                candidate = f"{base}-{color}-{size}-{random_part}"
+                if not ProductVariant.objects.filter(sku=candidate).exists():
+                    self.sku = candidate
+                    break
+                else:
+                    raise ValueError("Unable to generate unique SKU after 10 attempts.")
+
+        super().save(*args, **kwargs)
 
     class Meta:
         unique_together = (
@@ -581,4 +612,31 @@ class ProductIndex(models.Model):
 
     def __str__(self):
         return f"{self.category_name} - {self.object_id}"
+
+
+class RecentlyViewedProduct(models.Model):
+    """Model to handle users recently viewed products"""
+    user = models.ForeignKey(
+        CustomUser, on_delete=models.CASCADE,
+        null=True, blank=True
+    )
+    session_key = models.CharField(max_length=100, null=True, blank=True)
+    product_index = models.ForeignKey(ProductIndex, on_delete=models.CASCADE)
+    viewed_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-viewed_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'product_index'],
+                name='unique_user_product_view',
+                condition=models.Q(user__isnull=False)
+            ),
+            models.UniqueConstraint(
+                fields=['session_key', 'product_index'],
+                name='unique_session_product_view',
+                condition=models.Q(user__isnull=True)
+            ),
+        ]
+
     
