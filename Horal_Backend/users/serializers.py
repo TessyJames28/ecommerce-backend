@@ -1,6 +1,6 @@
 import re
 from rest_framework import serializers
-from .models import CustomUser, Location
+from .models import CustomUser, Location, ShippingAddress
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
@@ -138,13 +138,13 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
 class RegistrationOTPVerificationSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
-    otp = serializers.CharField(required=True, max_length=4, min_length=4)
+    otp = serializers.CharField(required=True, max_length=6, min_length=4)
 
 
 class OTPVerificationSerializer(serializers.Serializer):
     """Serializer for password reset confirmation"""
     email = serializers.EmailField(required=True)
-    otp = serializers.CharField(required=True, max_length=4, min_length=4)
+    otp = serializers.CharField(required=True, max_length=6, min_length=4)
 
 
     def validate(self, attrs):
@@ -209,3 +209,15 @@ class LocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Location
         fields = ['id', 'street_address', 'local_govt', 'landmark', 'state', 'country']
+
+
+class ShippingAddressSerializer(serializers.ModelSerializer):
+    """Location serializer"""
+    class Meta:
+        model = ShippingAddress
+        fields = [
+            'id', 'user', 'order', 'phone_number', 'street_address',
+            'local_govt', 'landmark', 'state', 'country'
+        ]
+        read_only_fields = ['user', 'order']
+

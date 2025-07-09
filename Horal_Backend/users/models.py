@@ -104,3 +104,36 @@ class Location(models.Model):
 
     def __str__(self):
         return f"{self.user.full_name}, {self.street_address}"
+
+
+
+class ShippingAddress(models.Model):
+    """Model for users location"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='shipping_addresses'
+    )
+    order = models.OneToOneField(
+        'orders.Order',
+        on_delete=models.CASCADE,
+        related_name='shipping_address'
+    )
+    phone_number = models.CharField(
+        max_length=11,
+        unique=True,
+        validators=[phone_number_validator],
+        null=True,
+        blank=True
+    )
+    street_address = models.CharField(max_length=500)
+    local_govt = models.CharField(max_length=150)
+    landmark = models.CharField(max_length=150)
+    country = models.CharField(max_length=50, default="Nigeria")
+    state = models.CharField(max_length=50, default="Lagos")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.full_name}, {self.street_address}"
