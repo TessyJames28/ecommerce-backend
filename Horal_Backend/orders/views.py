@@ -10,6 +10,10 @@ from products.utility import IsSuperAdminPermission
 from payment.views import trigger_refund
 from payment.models import PaystackTransaction
 from payment.utility import update_order_status
+from notification.utility import (
+    store_order_otp, verify_order_otp, generate_otp,
+    send_otp_email
+)
 
 from .utility import approve_return
 from .models import Order, OrderItem
@@ -23,6 +27,9 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
     """Checkout cart and place order (status: pending)"""
     permission_classes = [IsAuthenticated]
     serializer_class = OrderSerializer
+
+    def get_queryset(self):
+        return Order.objects.filter(user=self.request.user, status=Order.Status.PENDING)
 
 
     def post(self, request, *args, **kwargs):
@@ -98,6 +105,25 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                 str(e)
             )
         
+    def put(self, request, *args, **kwargs):
+        """Partial updates for user address during checkout"""
+        order = self.get_queryset().first()
+
+        if not order:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "No pending order found for address update"
+            )
+        
+        serializer = self.get_serializer(order, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return self.get_response(
+            status.HTTP_200_OK,
+            "Shipping address updated successfully",
+            serializer.data
+        )
 
 
 class OrderDeleteView(GenericAPIView):
@@ -301,4 +327,59 @@ class ApproveReturnView(APIView, BaseResponseMixin):
             "Return approved and refund initiated",
             refund_result
         )
- 
+    
+
+class SendOrderOTPView(APIView, BaseResponseMixin):
+    """
+    Class to send OTP to user for order verification
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Send OTP to user for order verification"""
+        order_id = request.data.get('order_id')
+
+        try:
+            order = Order.objects.get(id=order_id, user=request.user)
+        except Order.DoesNotExist:
+            raise ValidationError("Order not found")
+
+        # Generate and store OTP
+        otp = generate_otp()
+        store_order_otp(order.id, otp)
+        send_otp_email(request.user.email, otp)
+
+        return self.get_response(
+            status.HTTP_200_OK,
+            "OTP sent to your email for order verification",
+        )
+    
+
+class ConfirmOrderOTPView(APIView, BaseResponseMixin):
+    """Class to confirm order OTP for verification"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Confirm the OTP for order verification"""
+        order_id = request.data.get('order_id')
+        otp = request.data.get('otp')
+
+        if not order_id or not otp:
+            raise ValidationError("order_id and otp are required")
+
+        try:
+            order = Order.objects.get(id=order_id, user=request.user)
+        except Order.DoesNotExist:
+            raise ValidationError("Order not found")
+
+        if verify_order_otp(order.id, otp):
+            # Tag the order as OTP-confirmed
+            order.otp_confirmed = True
+            order.save()
+            return self.get_response(
+                status.HTTP_200_OK,
+                "Order OTP confirmed successfully"
+            )
+        else:
+            raise ValidationError("Invalid or expired OTP. Please request a new one")
+
