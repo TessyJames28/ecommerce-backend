@@ -10,6 +10,7 @@ from .utility import generate_token_for_user, verify_google_token
 from users.models import CustomUser, Location
 from django.contrib.auth.signals import user_logged_in
 from rest_framework.exceptions import ValidationError
+from redis.exceptions import ConnectionError as RedisConnectionError
 from users.serializers import (
     CustomUserSerializer,
     LoginSerializer,
@@ -64,8 +65,13 @@ class RegisterUserView(GenericAPIView):
         otp = generate_otp()
 
         # Store registration data temporarily
-        cache.set(f"reg_data:{email}", json.dumps(serializer.validated_data), timeout=300) #5 mins expiry
-        cache.set(f"otp:{email}", otp, timeout=300) # OTP valid for 5 mins too
+        try:
+            cache.set(f"reg_data:{email}", json.dumps(serializer.validated_data), timeout=300) #5 mins expiry
+            cache.set(f"otp:{email}", otp, timeout=300) # OTP valid for 5 mins too
+        except RedisConnectionError:
+            return Response({
+                "error": "Temporary issue accessing verification service. Try again shortly."
+            }, status=503)
 
         # Send OTP
         send_otp_email(email, otp)
