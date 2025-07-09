@@ -1,6 +1,8 @@
 from django.core.mail import send_mail
 from django.core.cache import cache
 from django.conf import settings
+from redis.exceptions import ConnectionError as RedisConnectionError
+from rest_framework.response import Response
 import requests, random
 
 
@@ -49,8 +51,13 @@ def store_otp(user_id, otp_code):
 
 def verify_otp(user_id, otp_code):
     """Verify the OTP from Redis and delete if correct."""
-    cache_key = f"otp:{user_id}"
-    stored_otp = cache.get(cache_key)
+    try:
+        cache_key = f"otp:{user_id}"
+        stored_otp = cache.get(cache_key)
+    except RedisConnectionError:
+        return Response({
+            "error": "Temporary issue accessing verification service. Try again shortly."
+        }, status=503)
     if stored_otp == otp_code:
         cache.delete(cache_key)  # Delete OTP after verification
         return True
@@ -80,11 +87,48 @@ def verify_registration_otp(email, otp_code):
     """
     Verify registration OTP and delete if correct.
     """
-    cache_key = f"otp:{email}"
-    stored_otp = cache.get(cache_key)
+    try:
+        cache_key = f"otp:{email}"
+        stored_otp = cache.get(cache_key)
+    except RedisConnectionError:
+        return Response({
+            "error": "Temporary issue accessing verification service. Try again shortly."
+        }, status=503)
 
     if stored_otp == otp_code:
         cache.delete(cache_key)
+        return True
+
+    return False
+
+
+def store_order_otp(order_id, otp_code):
+    """
+    Store order OTP in Redis with an expiry time.
+    """
+    try:
+        cache_key = f"otp:order:{order_id}"
+        cache.set(cache_key, otp_code, timeout=300)  # 5 minutes expiration
+    except RedisConnectionError:
+        return Response({
+            "error": "Temporary issue accessing verification service. Try again shortly."
+        }, status=503)
+
+
+def verify_order_otp(order_id, otp_code):
+    """
+    Verify the order OTP from Redis and delete if correct.
+    """
+    try:
+        cache_key = f"otp:order:{order_id}"
+        stored_otp = cache.get(cache_key)
+    except RedisConnectionError:
+        return Response({
+            "error": "Temporary issue accessing verification service. Try again shortly."
+        }, status=503)
+
+    if stored_otp == otp_code:
+        cache.delete(cache_key)  # Delete OTP after verification
         return True
 
     return False
