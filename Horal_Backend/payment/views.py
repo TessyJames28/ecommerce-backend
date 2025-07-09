@@ -17,6 +17,7 @@ from .utility import trigger_refund, update_order_status
 from orders.serializer import OrderSerializer
 from products.utility import update_quantity, IsAdminOrSuperuser
 from django.utils.decorators import method_decorator
+from django.core.exceptions import ValidationError
 import uuid
 
 
@@ -31,7 +32,6 @@ class InitializeTransaction(APIView):
         """Function to handle payment initialization on paystack"""
         email = request.data.get("email")
         order_id = request.data.get('order_id') # passed from frontend
-        print(f"email: {email}\norder_id: {order_id}")
         
         try:
             order = Order.objects.get(id=order_id, user__email=email)
@@ -41,6 +41,24 @@ class InitializeTransaction(APIView):
                 "status_code": status.HTTP_404_NOT_FOUND,
                 "message": "Order not found"
             }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check that shipping address is set
+        if not hasattr(order, 'shipping_address'):
+            raise ValidationError("Please set a shipping address before proceeding to payment")
+        
+        # Check for complete location fields
+        shipping = order.shipping_address
+        required_fields = ['country', 'state', 'local_govt', 'phone_number', 'street_address', 'landmark']
+        missing_fields = [field for field in required_fields if not getattr(shipping, field)]
+
+        if missing_fields:
+            raise ValidationError(
+                f"Please complete your shipping address information. Missing fields: {', '.join(missing_fields)}"
+            )
+        
+        if not order.otp_confirmed:
+            raise ValidationError("You must confirm the OTP sent to your email before proceeding to payment.")
+
         
         amount = int(order.total_amount * 100) # convert amount to kobo
         reference = str(uuid.uuid4())
