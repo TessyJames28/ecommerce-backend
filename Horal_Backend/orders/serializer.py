@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from .models import Order, OrderItem, OrderReturnRequest
+from users.serializers import ShippingAddressSerializer
+from users.models import ShippingAddress
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -61,18 +63,41 @@ class OrderSerializer(serializers.ModelSerializer):
     """Serializer for order model"""
     items = OrderItemSerializer(many=True, read_only=True, source='order_items')
     user_email = serializers.SerializerMethodField()
+    shipping_address = ShippingAddressSerializer()
 
     class Meta:
         model = Order
-        fields = ['id', 'user', 'user_email', 'created_at', 'status', 'total_amount', 'items']
+        fields = [
+            'id', 'user', 'user_email', 'created_at', 'status',
+            'total_amount', 'items', 'shipping_address'
+        ]
+        read_only_fields = ['user', 'total_amount', 'status', 'created_at', 'items', 'user_email']
 
-
-    def get_items(self, obj):
-        """Retrieve all order items"""
-        return OrderItemSerializer(obj.order_items.all(), many=True).data
-    
     def get_user_email(self, obj):
         return obj.user.email
+    
+
+    def update(self, instance, validated_data):
+        """Allow the user to set shipping address only once during first checkout"""
+        shipping_address_data = validated_data.pop('shipping_address', None)
+
+        # Check that the order status is still pending
+        if instance.status != Order.Status.PENDING:
+            raise serializers.ValidationError("Address can only be updated when status is pending.")
+        
+        user = instance.user
+
+        # Update base Order fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Update shipping address if provided for first timers
+        if shipping_address_data:
+            address = ShippingAddress.objects.create(user=user, order=instance, **shipping_address_data)
+            address.save()
+
+        return instance
     
 
 class OrderReturnRequestSerializer(serializers.ModelSerializer):
