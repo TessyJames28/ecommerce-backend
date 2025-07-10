@@ -33,6 +33,7 @@ from carts.models import Cart, CartItem
 from orders.models import Order, OrderItem
 from ratings.models import UserRating
 from favorites.models import Favorites, FavoriteItem
+from images import image_urls
 
 # Sample data
 states_and_lgas = {
@@ -131,16 +132,11 @@ for i in range(30):
     else:
         buyers.append(user)
 
-# Create image pool to ensure uniqueness
-image_urls = [f"https://img.com/{uuid.uuid4()}.jpg" for _ in range(1000)]
-image_index = 0
-
 def create_images(count):
     global image_index
     imgs = []
     for _ in range(count):
-        url = image_urls[image_index]
-        image_index += 1
+        url = random.choice(image_urls)
         imgs.append(ImageLink.objects.create(url=url, alt_text="Seeded image"))
     return imgs
 
