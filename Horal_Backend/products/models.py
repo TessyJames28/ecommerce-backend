@@ -12,7 +12,7 @@ from django.utils.text import slugify
 # Create your models here.
 class ImageLink(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    url = models.URLField(unique=True)
+    url = models.URLField()
     alt_text = models.CharField(max_length=255, null=True, blank=True)
     
     def __str__(self):
