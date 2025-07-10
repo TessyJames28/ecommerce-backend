@@ -1,0 +1,45 @@
+from django.db import models
+from users.models import CustomUser
+import uuid
+
+# Create your models here.
+class OrderStatusLog(models.Model):
+    """Model to keep track of order log"""
+    order = models.ForeignKey('orders.Order', on_delete=models.CASCADE, related_name='status_logs')
+    old_status = models.CharField(max_length=50)
+    new_status = models.CharField(max_length=50)
+    changed_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Order {self.order.id}: {self.old_status} → {self.new_status} by {self.changed_by}"
+
+
+class PaystackTransaction(models.Model):
+    """Model to handle paystack transaction response"""
+    class StatusChoices(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        SUCCESS = 'success', 'Success'
+        FAILED = 'failed', 'Failed'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    reference = models.CharField(max_length=100, unique=True)
+    email = models.EmailField()
+    order = models.ForeignKey(
+        'orders.Order', # app_level.model_name
+        on_delete=models.CASCADE, related_name="transactions",
+        null=True, blank=True
+    )
+    user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name="transactions")
+    amount = models.PositiveIntegerField(help_text="Amount in Kobo")
+    status = models.CharField(max_length=10, choices=StatusChoices.choices, default=StatusChoices.PENDING)
+    gateway_response = models.TextField(blank=True, null=True)
+    paid_at = models.DateTimeField(blank=True, null=True)
+    refund_attempted = models.BooleanField(default=False)
+    refund_successful = models.BooleanField(default=False)
+    refund_response = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.email} - {self.reference} - {self.status}"

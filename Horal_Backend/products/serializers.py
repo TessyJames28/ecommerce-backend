@@ -1,12 +1,15 @@
 from rest_framework import serializers
+from django.db.models import Q
 from .models import (
-    AccessorySubCategory, Category, ChildrenProduct,
-    ChildrenSubCategory, ElectronicsSubCategory,
-    FashionSubCategory, GadgetSubCategory, ImageLink,
-    Occasion, ProductVariant, SubCategory, VehicleProduct, GadgetProduct,
+    ChildrenProduct, ImageLink,
+    Occasion, ProductVariant, VehicleProduct, GadgetProduct,
     FashionProduct, ElectronicsProduct, AccessoryProduct,
-    HealthAndBeautyProduct, FoodProduct, BaseProduct
+    HealthAndBeautyProduct, FoodProduct,
 )
+from categories.serializers import CategorySerializer
+from subcategories.serializers import SubCategoryProductSerializer
+from categories.models import Category
+from subcategories.models import SubCategory
 
 
 class ImageLinkSerializer(serializers.ModelSerializer):
@@ -17,37 +20,23 @@ class ImageLinkSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
-class CategorySerializer(serializers.ModelSerializer):
-    """Serializer for category creation"""
-    class Meta:
-        model = Category
-        fields = '__all__'
-        read_only_fields = ['id']
-
-
-class SubCategorySerializer(serializers.ModelSerializer):
-    """Class that handles subcategory serialization"""
-
-    class Meta:
-        model = SubCategory 
-        fields = ['id', 'name', 'slug', 'category']
-
-
 class ProductVariantSerializer(serializers.ModelSerializer):
     """Serializer for product variant model which include sizes and colors."""
     class Meta:
         model = ProductVariant
         fields = [
-            'id', 'color', 'custom_size_unit', 'standard_size',
+            'id', 'color', 'custom_size_unit', 'standard_size', 'sku',
             'custom_size_value', 'stock_quantity', 'reserved_quantity', 'price_override'
         ]
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'sku']
 
 
 class ProductCreateMixin:
     def create(self, validated_data):
         images = validated_data.pop('images', [])
         variants = validated_data.pop('variants', [])
+        names = validated_data.pop("occasion", [])
+
         instance = self.Meta.model.objects.create(**validated_data)
 
         # create and save image in image model
@@ -59,6 +48,15 @@ class ProductCreateMixin:
         # Create variants
         for data in variants:
             ProductVariant.objects.create(product=instance, **data)
+
+        # Create occasion
+        # Dynamic mapping of filtering
+        occasion_query = Q()
+        for name in names:
+            occasion_query |= Q(name__iexact=name)
+        if names:
+            occasions = Occasion.objects.filter(occasion_query)
+            instance.occasion.set(occasions)
 
         # Update product quantity based on stock
         from .utility import update_quantity
@@ -96,34 +94,79 @@ class ProductCreateMixin:
         return instance 
     
 
+class UniqueProductPerShopMixin:
+    def validate(self, attrs):
+        title = attrs.get('title')
+        brand = attrs.get('brand')
+        category = attrs.get('category')
+        shop = attrs.get('shop')
+
+        # skip validation if essential fields are missiing
+        if not title or not shop or not category:
+            return attrs
+        
+        model = self.Meta.model
+        queryset = model.objects.filter(
+            title=title, shop=shop,
+            category=category
+        )
+
+        if brand is not None:
+            queryset = queryset.filter(brand=brand)
+        else:
+            queryset = queryset.filter(brand__isnull=True)
+
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        if queryset.exists():
+            raise serializers.ValidationError({
+                "non_field_errors": ["This product already existings and is being duplicated."]
+            })
+        
+        return attrs
+    
+
 class ProductRepresentationMixin:
-    def to_representation(Self, instance):
+    def to_representation(self, instance):
         """Centralize the to_representation logic"""
         from .utility import update_quantity
         update_quantity(instance)
         data = super().to_representation(instance)
+        data['category'] = CategorySerializer(instance.category).data
+        data['sub_category'] = SubCategoryProductSerializer(instance.sub_category).data
 
         # List of base_field attributes
         base_fields = {
-            'id', 'title', 'description', 'price', 'quantity',
-            'production_date', 'condition', 'brand',
+            'id', 'title', 'slug', 'description', 'price', 'quantity',
+            'production_date', 'condition', 'brand', 'specifications',
             'is_published', 'live_video_url', 'created_at',
-            'updated_at', 'images', 'shop', 'category'
+            'updated_at', 'shop', 'state', 'local_govt'
         }
+
+        cat_data = ['category', 'sub_category']
+
+        fields = ["images", "variants_details"]
 
         base_data = {}
         spec_data = {}
+        category_data ={}
+        field_data = {}
 
         for key, value in data.items():
-            if key in base_fields or key == "images":
+            if key in base_fields:
                 base_data[key] = value
-            elif key == "state" or key == "local_govt":
-                base_data[key] = value
+            elif key in fields:
+                field_data[key] = value
+            elif key in cat_data:
+                category_data[key] = value
             else:
                 spec_data[key] = value
 
         return {
             **base_data,
+            **field_data,
+            "category_object": category_data,
             "specification": spec_data
         }
     
@@ -147,27 +190,23 @@ class BaseProductSerializer(serializers.ModelSerializer):
     def get_quantity(self, obj):
         return obj.quantity
     
-    # def get_location(self, obj):
-    #     if obj.location:
-    #         return {
-    #             "id": str(obj.location.id),
-    #             "state": obj.location.state,
-    #             "local_govt": obj.location.local_govt,
-    #             "landmark": obj.location.landmark,
-    #             "street_address": obj.location.street_address,
-    #         }
-    #     return None
-
-    
 
 # Pre-category product serializers
 class ChildrenProductSerializer(
+    UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
     BaseProductSerializer
 ):
 
     """Serializer to handle baby category"""
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
+
     class Meta:
         model = ChildrenProduct
         fields = '__all__'
@@ -175,12 +214,20 @@ class ChildrenProductSerializer(
     
 
 class VehicleProductSerializer(
+    UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
     BaseProductSerializer
 ):
     
     """serializer to handle vehicle product category creation"""
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
+
     class Meta:
         model = VehicleProduct
         fields = '__all__'
@@ -188,12 +235,20 @@ class VehicleProductSerializer(
     
 
 class GadgetProductSerializer(
+    UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
     BaseProductSerializer
 ):
     
     """serializer for Gadget product model creation"""
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
+
     class Meta:
         model = GadgetProduct
         fields = '__all__'
@@ -204,16 +259,27 @@ class OccasionSerializer(serializers.ModelSerializer):
     """Occasion Serializer"""
     class Meta:
         model = Occasion 
-        fields = ['id', 'name']
+        fields = "__all__"
 
 
 class FashionProductSerializer(
+    UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
     BaseProductSerializer
 ):
     """Serializer to handle fashion category product creation"""
-    occasions = OccasionSerializer(many=True, read_only=True)
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
+    occasion = serializers.SlugRelatedField(
+        queryset=Occasion.objects.all(),
+        many=True,
+        slug_field='name'  # we are matching by the "name" field
+    )
 
     class Meta:
         model = FashionProduct
@@ -222,11 +288,18 @@ class FashionProductSerializer(
 
 
 class ElectronicsProductSerializer(
+    UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
     BaseProductSerializer
 ):
     """serializer to handle electronics product category creation"""
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
 
     class Meta:
         model = ElectronicsProduct
@@ -235,11 +308,18 @@ class ElectronicsProductSerializer(
 
 
 class AccessoryProductSerializer(
+    UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
     BaseProductSerializer
 ):
     """Serializer to handle Accesory product category creation"""
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
 
     class Meta:
         model = AccessoryProduct
@@ -248,6 +328,7 @@ class AccessoryProductSerializer(
 
 
 class HealthAndBeautyProductSerializer(
+    UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
     BaseProductSerializer
@@ -256,6 +337,13 @@ class HealthAndBeautyProductSerializer(
     Serializer to handle the creation of health 
     and beauty products category
     """
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
+
     class Meta:
         model = HealthAndBeautyProduct
         fields = '__all__'
@@ -263,11 +351,19 @@ class HealthAndBeautyProductSerializer(
 
 
 class FoodProductSerializer(
+    UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
     BaseProductSerializer
 ):
     """serializer to handle Food product category creation"""
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all()
+    )
+    sub_category = serializers.PrimaryKeyRelatedField(
+        queryset=SubCategory.objects.all()
+    )
+    
     class Meta:
         model = FoodProduct
         fields = '__all__'
@@ -287,4 +383,27 @@ def get_product_serializer(category_name):
         'foods': FoodProductSerializer
     }
 
-    return mapping.get(category_name.lower())
+    return mapping.get(category_name.strip().lower())
+
+
+class MixedProductSerializer(serializers.Serializer):
+    def to_representation(self, instance):
+        model_name = instance.__class__.__name__.lower()
+
+        mapping = {
+            'fashionproduct': FashionProductSerializer,
+            'foodproduct': FoodProductSerializer,
+            'gadgetproduct': GadgetProductSerializer,
+            'electronicsproduct': ElectronicsProductSerializer,
+            'accessoryproduct': AccessoryProductSerializer,
+            'healthandbeautyproduct': HealthAndBeautyProductSerializer,
+            'vehicleproduct': VehicleProductSerializer,
+            'childrenproduct': ChildrenProductSerializer,
+        }
+
+        serializer_class = mapping.get(model_name)
+
+        if not serializer_class:
+            raise serializers.ValidationError(f"No serializer found for model {model_name}")
+        
+        return serializer_class(instance).data

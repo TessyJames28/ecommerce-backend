@@ -1,277 +1,33 @@
-from django.shortcuts import render
+from django.utils.timezone import now
 from rest_framework import status, permissions
 from rest_framework.generics import GenericAPIView
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Avg
+from collections import defaultdict
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import Q, Avg, Count, Sum
 from django.core.exceptions import PermissionDenied
-from sellers.models import SellerKYC, Shop
+from sellers.models import SellerKYC
+from sellers.serializers import SellerProfileSerializer
+from ratings.serializers import UserRatingSerializer
+from ratings.models import UserRating
+from django.http import Http404
+from rest_framework.exceptions import NotFound
+from shops.models import Shop
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from itertools import chain
 from .utility import (
-    BaseResponseMixin, product_models,
-    IsAdminOrSuperuser, IsAuthenticated,
-    IsSellerAdminOrSuperuser, update_quantity
+    BaseResponseMixin, product_models, IsAuthenticated,
+    IsSellerAdminOrSuperuser, StandardResultsSetPagination,
+    product_models_list, track_recently_viewed_product
 )
-
+from .models import ProductIndex, RecentlyViewedProduct
+from categories.models import Category
+from subcategories.models import SubCategory
+from orders.models import OrderItem
+from .models import ProductVariant
+from .serializers import get_product_serializer, MixedProductSerializer
 from carts.authentication import SessionOrAnonymousAuthentication
-
-from .models import Category, ProductVariant, SubCategory
-from .serializers import (
-    CategorySerializer, get_product_serializer,
-    SubCategorySerializer
-    )
-
-
-class StandardResultsSetPagination(PageNumberPagination):
-    """Class for product page pagination"""
-    page_size = 30 # default per page
-    page_size_query_param = 'page_size'
-    max_page_size = 100
-
-
-class CategoryListView(GenericAPIView, BaseResponseMixin):
-    """
-    API endpoint to list all categories
-    """
-    serializer_class = CategorySerializer
-    authentication_classes = []  # Disable all authentication backends
-    queryset = Category.objects.all()
-    permission_classes = [AllowAny]
-
-    def get(self, request, *args, **kwargs):
-        """Get all categories"""
-        categories = self.get_queryset()
-        serializer = self.get_serializer(categories, many=True)
-        return self.get_response(
-            status.HTTP_200_OK,
-            "Categories retrived successfully",
-            serializer.data
-        )
-    
-
-class CategoryCreateView(GenericAPIView, BaseResponseMixin):
-    """
-    API endpoint to list all categories or create a new one
-    """
-    serializer_class = CategorySerializer
-    queryset = Category.objects.all()
-
-    def get_permissions(self):
-        if self.request.method =='POST':
-            return [IsAdminOrSuperuser()]
-        return []
-    
-
-    def post(self, request, *args, **kwargs):
-        """Create a new category"""
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return self.get_response(
-            status.HTTP_201_CREATED,
-            "Category created successfully",
-            serializer.data
-        )
-    
-
-
-class CategoryDetailView(GenericAPIView, BaseResponseMixin):
-    """
-    API endpoint to update or delete a cetgory by ID
-    and list all products in that category.
-    """
-    serializer_class = CategorySerializer
-    queryset = Category.objects.all()
-
-    def get_permissions(self):
-        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
-            return [IsAdminOrSuperuser()]
-        return[]
-    
-
-    def put(self, request, pk, *args, **kwargs):
-        """update a category"""
-        category = get_object_or_404(Category, pk=pk)
-        serializer = self.get_serializer(category, data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return self.get_response(
-            status.HTTP_200_OK,
-            "Category updated successfully",
-            serializer.data
-        )
-    
-
-    def patch(self, request, pk, *args, **kwargs):
-        """partially update a category"""
-        category = get_object_or_404(Category, pk=pk)
-        serializer = self.get_serializer(category, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return self.get_response(
-            status.HTTP_200_OK,
-            "Category updated successfully",
-            serializer.data
-        )
-    
-
-    def delete(self, request, pk, *args,**kwargs):
-        """Delete a category"""
-        category = get_object_or_404(Category, pk=pk)
-        category.delete()
-        return Response({
-            "status": "success",
-            "status code": status.HTTP_204_NO_CONTENT,
-            "message": "Category deleted successfully",
-        })
-
-
-class SingleCategoryDetailView(GenericAPIView, BaseResponseMixin):
-    """
-    API endpoint to retrieve a single category by ID
-    and list all products in that category.
-    """
-    serializer_class = CategorySerializer
-    queryset = Category.objects.all()  
-    authentication_classes = []  # Disable all authentication backends  
-    pagination_class = StandardResultsSetPagination
-
-    def get(self, request, pk, *args, **kwargs):
-        """Get a single category and all its products by ID"""
-        category = get_object_or_404(Category, pk=pk)
-        category_serializer = self.get_serializer(category)
-
-
-        # Get the product model for this category
-        product_model = self.get_product_model_by_category(category.name)
-        products = product_model.published.filter(
-            category=category) if product_model else []
-        
-        # Paginate the product queryset
-        page = self.paginate_queryset(products)
-        if page is not None:
-            product_serializer = get_product_serializer(category.name)(page, many=True)
-            paginated_response = self.get_paginated_response(product_serializer.data)
-            paginated_response.data["category"] = category_serializer.data
-            paginated_response.data["status"] = "success"
-            paginated_response.data["status_code"] = status.HTTP_200_OK
-            paginated_response.data["message"] = "Category and its products retrieved successfully"
-        
-            return paginated_response
-    
-        product_serializer = get_product_serializer(category.name)(products, many=True)
-        
-        response_data = {
-            'category': category_serializer.data,
-            'products': product_serializer.data
-        }
-
-        return self.get_response(
-            status.HTTP_200_OK,
-            "Category and its products retrieved successfully",
-            response_data
-        )
-
-
-class SubCategoryCreateView(GenericAPIView, BaseResponseMixin):
-    """
-    API endpoint to create sub categories
-    """
-    serializer_class = SubCategorySerializer
-    queryset = SubCategory.objects.all()
-
-    def get_permissions(self):
-        if self.request.method =='POST':
-            return [IsAdminOrSuperuser()]
-        return []
-    
-
-    def post(self, request, *args, **kwargs):
-        """Create a new sub category"""
-        serializer = self.get_serializer(data=request.data)
-        print(serializer)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return self.get_response(
-            status.HTTP_201_CREATED,
-            "Sub category created successfully",
-            serializer.data
-        )
-    
-
-class SubCategoryListView(GenericAPIView, BaseResponseMixin):
-    """Handle the retrival subcategories"""
-    serializer_class = SubCategorySerializer
-    queryset = SubCategory.objects.all()
-    permission_classes = [AllowAny]
-    authentication_classes = []
-
-    def get(self, request, category_id, *args, **kwargs):
-        """Handle the retrieval of sub categories"""
-        category = get_object_or_404(Category, id=category_id)
-        subcategories = SubCategory.objects.filter(category=category)
-        serializer = self.get_serializer(subcategories, many=True)
-        return self.get_response(
-            status.HTTP_200_OK,
-            f"Subcategories for {category.name} retrieved successfully",
-            serializer.data
-        )
-    
-
-class SubCategoryDetailView(GenericAPIView, BaseResponseMixin):
-    """Handle the retrival, update, and deletion of subcategories"""
-    serializer_class = SubCategorySerializer
-    queryset = SubCategory.objects.all()
-    permission_classes = [IsAuthenticated]
-
-    def get_permissions(self):
-        if self.request.method in ['PUT', 'DELETE']:
-            return [IsAdminOrSuperuser()]
-        return[]
-
-
-    def put(self, request, category_id):
-        """Method that updates the subcategory"""
-        subcategory_id = request.data.get("id")
-        if not subcategory_id:
-            return self.get_response(
-                status.HTTP_400_BAD_REQUEST,
-                "Subcategory ID is required"
-            )
-        
-        subcategory = get_object_or_404(SubCategory, id=subcategory_id, category_id=category_id)
-        
-        serializer = self.get_serializer(subcategory, data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-
-        return self.get_response(
-            status.HTTP_200_OK,
-            "Subcategory updated successfully",
-            serializer.data
-        )
-    
-
-    def delete(self, request, category_id, *args, **kwargs):
-        """Method to delete the subcategory"""
-        subcategory_id = request.data.get('id')
-
-        if not subcategory_id:
-            return self.get_response(
-                status.HTTP_400_BAD_REQUEST,
-                "Subcategory ID is required"
-            )
-        
-        subcategory = get_object_or_404(SubCategory, id=subcategory_id, category_id=category_id)
-        
-        subcategory.delete()
-        return Response({
-            "status": "success",
-            "status code": status.HTTP_204_NO_CONTENT,
-            "message": "Subcategory successfully deleted"
-        })
-    
 
 
 class ProductBySubcategoryView(GenericAPIView, BaseResponseMixin):
@@ -306,6 +62,8 @@ class ProductCreateView(GenericAPIView, BaseResponseMixin):
 
     def get_serializer_class(self):
         category_name = self.kwargs.get('category_name')
+        category_name = category_name.replace("-", " ").replace("_", " ").strip().lower()
+        # category = Category.objects.get(name__iexact=normalized_name)
         serializer_class = get_product_serializer(category_name)
         if not serializer_class:
             raise ValueError(f"Invalid category: {category_name}")
@@ -357,23 +115,39 @@ class ProductCreateView(GenericAPIView, BaseResponseMixin):
 
 class SingleProductDetailView(GenericAPIView, BaseResponseMixin):
     """Class to retrieve a single product per id"""
+    serializer_class = MixedProductSerializer
     permission_classes = [AllowAny]
     authentication_classes = []
 
 
-    def get_serializer_class(self):
-        category_name = self.kwargs.get("category_name")
-        serializer_class = get_product_serializer(category_name)
+    def get(self, request, slug, *args, **kwargs):
+        """Get a product by slug"""
+        product = None
 
-        if not serializer_class:
-            raise AssertionError(f"No serializer found for category: {category_name}")
-        return serializer_class
-    
-
-    def get(self, request, pk, category_name, *args, **kwargs):
-        """Get a product by ID"""
-
+        for model in product_models_list:
+            product = model.objects.filter(slug=slug).first()
+            if product:
+                break
+        
+        if not product:
+            raise NotFound({
+                "status": "error",
+                "status_code": status.HTTP_404_NOT_FOUND,
+                "message": "Product not found"
+            })
+        
+        # Get index to resolve category and model
+        try:
+            index = ProductIndex.objects.get(object_id=product.id)
+        except ProductIndex.DoesNotExist:
+            raise NotFound({
+                "status": "error",
+                "status_code": status.HTTP_404_NOT_FOUND,
+                "message": "Product index not found"
+            })
+        
         # get the product model based on category
+        category_name = index.category_name
         product_model = self.get_product_model_by_category(category_name)
         if not product_model:
             return None, self.get_response(
@@ -381,15 +155,28 @@ class SingleProductDetailView(GenericAPIView, BaseResponseMixin):
                 f"Invalid category: {category_name}"
             )
         
-        # Get the product
-        product = get_object_or_404(product_model, pk=pk)
-        
+        # Serialize product
         serializer = self.get_serializer(product)
-        return self.get_response(
-            status.HTTP_200_OK,
-            "Product retrieved successfully",
-            serializer.data
-        )    
+
+        # Serialize seller profile
+        seller = product.shop.owner.user
+        seller_profile_serializer = SellerProfileSerializer(seller)
+        
+        # serialize product review
+        reviews = UserRating.objects.filter(product=product.id)
+        product_rating = UserRatingSerializer(reviews, many=True)
+        
+        # Track recently viewed product
+        track_recently_viewed_product(request, index)
+
+        return Response({
+            "status": "success",
+            "status_codes": status.HTTP_200_OK,
+            "message": "Product retrieved successfully",
+            "product": serializer.data,
+            "seller_data": seller_profile_serializer.data,
+            "product_review": product_rating.data
+        }, status=status.HTTP_200_OK)    
 
 
 class ProductDetailView(GenericAPIView, BaseResponseMixin):
@@ -411,7 +198,14 @@ class ProductDetailView(GenericAPIView, BaseResponseMixin):
             )
         
         # Get the product
-        product = get_object_or_404(product_model, pk=pk)
+        try:
+            product = get_object_or_404(product_model, pk=pk)
+        except Http404:
+           raise NotFound({
+                "status": "error",
+                "status_code": 404,
+                "message": "Product not found",
+            })
 
 
         # Check if the user is the shop owner or an admin/superadmin
@@ -495,39 +289,6 @@ class ProductDetailView(GenericAPIView, BaseResponseMixin):
             return error_response
         product.delete()
         return self.get_response(status.HTTP_204_NO_CONTENT, "Product deleted successfully")
-
-
-class ShopProductListView(GenericAPIView, BaseResponseMixin):
-    """
-    API endpoint to list all products of a shop
-    """ 
-    permission_classes = [AllowAny]
-    authentication_classes = []
-    pagination_class = StandardResultsSetPagination
-
-    def get(self, request, shop_id, *args, **kwargs):
-        """Get all products of a shop"""
-        shop = get_object_or_404(Shop, pk=shop_id)
-
-        products_data = []
-
-        for model, serializer_class, category_name in product_models:
-            products = model.published.filter(shop=shop)
-            if products.exists():
-                serializer = serializer_class(products, many=True)
-                for product_data in serializer.data:
-                    product_data['category_name'] = category_name
-                    products_data.append(product_data)
-                    print(products_data)
-
-        page = self.paginate_queryset(products_data)
-        if page is not None:
-            paginated_response = self.get_paginated_response(products_data)
-            paginated_response.data["status"] = "success"
-            paginated_response.data["status_code"] = status.HTTP_200_OK
-            paginated_response.data["message"] = "Shop products retrieved successfully"
-        
-        return paginated_response
     
 
 class ProductListView(GenericAPIView, BaseResponseMixin):
@@ -536,11 +297,16 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
     """
     authentication_classes = []  # Disable all authentication backends
     pagination_class = StandardResultsSetPagination
+    serializer_class = MixedProductSerializer
+
+
+    def get_queryset(self):
+        return ProductIndex.objects.select_related('content_type')
 
     def get(self, request, *args, **kwargs):
         """Get all products with optional filtering"""
         # Get query parameters
-        category_name = request.query_params.get('category')
+        category = request.query_params.get('category')
         shop_id = request.query_params.get('shop')
         search_query = request.query_params.get('search')
 
@@ -550,17 +316,24 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
         local_govt = request.query_params.get('local_govt')
         price_min = request.query_params.get('price_min')
         price_max = request.query_params.get('price_max')
-        # rating = request.query_params.get('rating')
+        rating = request.query_params.get('rating')
         sub_category = request.query_params.get('sub_category')
 
         products_data = []
-    
-        for model, serializer_class, model_category_name in product_models:
-            # Apply filters
-            query = Q()
 
-            if category_name and category_name.lower() != model_category_name.lower():
-                continue
+        queryset = self.get_queryset()
+
+        if category:
+            queryset = queryset.filter(category_name__iexact=category)
+    
+        for index in queryset:
+            product = index.linked_product
+            if product is None:
+                continue  # Skip if GenericForeignKey couldn't resolve
+            
+            model = product.__class__
+            query = Q(id=product.id)
+        
 
             if shop_id:
                 query &= Q(shop__id=shop_id)
@@ -590,19 +363,18 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
             if sub_category:
                 query &= Q(sub_category__iexact=sub_category)
 
+            # Apply the filter only to the correct model manager
             products = model.published.filter(query)
 
-            # Future support for rating
-            # if rating:
-            #     products = products.annotate(avg_rating=Avg(
-            #         'reviews_-rating'
-            #     )).filter(avg_rating__gte=rating)
+            if rating:
+                products = products.annotate(avg_rating=Avg(
+                    'reviews__rating'
+                )).filter(avg_rating__gte=rating)
 
             if products.exists():
-                serializer = serializer_class(products, many=True)
-                for product_data in serializer.data:
-                    product_data['category_name'] = model_category_name
-                    products_data.append(product_data)
+                serializer = MixedProductSerializer(product)
+                data = serializer.data
+                products_data.append(data)
 
         page = self.paginate_queryset(products_data)
         if page is not None:
@@ -610,8 +382,13 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
             paginated_response.data["status"] = "success"
             paginated_response.data["status_code"] = status.HTTP_200_OK
             paginated_response.data["message"] = "Products retrieved successfully"
+            return paginated_response
         
-        return paginated_response
+        return self.get_response(
+            status.HTTP_200_OK,
+            "Products retrieved successfully",
+            products_data
+        )
     
 
 
@@ -703,4 +480,99 @@ class ProductVariantView(GenericAPIView, BaseResponseMixin):
                     "colors_for_custom_size": list(colors_for_custom_size)
                 }
             }
+        )
+    
+
+class RecentlyViewedProductView(GenericAPIView, BaseResponseMixin):
+    """Class to retrieve recently viewed products"""
+    permission_classes = [AllowAny]
+    authentication_classes = [SessionOrAnonymousAuthentication]
+    serializer_class = MixedProductSerializer
+
+    def get(self, request, *args, **kwargs):
+        """Retrieve users recently viewed products"""
+        user = request.user
+        session_key = request.session.session_key
+        
+
+        if not session_key:
+            request.session['init'] = True
+            request.session.save()
+            session_key = request.session.session_key
+            
+
+        # fetched viewed items for user or anonymous users
+        if user.is_authenticated:
+            views = RecentlyViewedProduct.objects.filter(user=user)
+        else:
+            views = RecentlyViewedProduct.objects.filter(session_key=session_key)
+
+        
+        views = views.select_related('product_index')[:20]
+        product_ids = [v.product_index.object_id for v in views]
+        
+        # Match across product models
+        products = []
+        for model in product_models_list:
+            matched = model.objects.filter(id__in=product_ids)
+            products.extend(matched)
+
+        # preserve original view order
+        product_sorted = sorted(products, key=lambda x: product_ids.index(x.id))
+        serializer = self.get_serializer(product_sorted, many=True)
+
+        return self.get_response(
+            status.HTTP_200_OK,
+            "Recently viewd products retrieved successfully",
+            serializer.data
+        )
+
+
+class TopSellingProductView(GenericAPIView, BaseResponseMixin):
+    """
+    Class to handle the the retrieve top selling products
+    """
+    serializer_class = MixedProductSerializer
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        """
+        Retrieve top selling products
+        Count most sold variants and map back to products
+        """
+        top_items = (
+            OrderItem.objects
+            .values('variant__content_type', 'variant__object_id')
+            .annotate(total_sold=Sum('quantity'))
+            .order_by('-total_sold')[:30] # top 30
+        )
+
+        # Groip by content_type to fetch products from each model
+        product_map = defaultdict(list)
+        for item in top_items:
+            product_map[item['variant__content_type']].append(item['variant__object_id'])
+        
+        products = []
+        for ct_id, obj_ids in product_map.items():
+            model = ContentType.objects.get_for_id(ct_id).model_class()
+            products.extend(
+                model.objects.filter(id__in=obj_ids)
+            )
+
+        # Get product ids to preserve order
+        def sort_key(product):
+            for i, item in enumerate(top_items):
+                if product.id == item['variant__object_id'] and \
+                    ContentType.objects.get_for_model(product).id == item['variant__content_type']:
+                    return i
+            return len(top_items)  # If not found, place at the end
+
+        # preserve the order of product_ids
+        products_sorted = sorted(products, key=sort_key)
+        serializer = self.get_serializer(products_sorted, many=True)
+
+        return self.get_response(
+            status.HTTP_200_OK,
+            "Top selling products retrieved successfully",
+            serializer.data
         )

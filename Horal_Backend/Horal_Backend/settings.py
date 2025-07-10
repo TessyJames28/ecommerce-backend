@@ -37,7 +37,7 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=["127.0.0.1", "localhost"])
 
 
 # Application definition
@@ -51,10 +51,16 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'users',
     'sellers',
-    'notifications',
     'products',
     'carts',
     'orders',
+    'favorites',
+    'categories',
+    'subcategories',
+    'shops',
+    'ratings',
+    'user_profile',
+    'payment',
     'anymail',
     'drf_yasg',
     'corsheaders',
@@ -66,6 +72,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'carts.middleware.SessionFixMiddleware',
@@ -81,34 +88,68 @@ MIDDLEWARE = [
 
 
 # Add Cors settings
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     'https://www.horal.ng',
+    "https://horal.ng",
     "http://localhost:3000",       # React dev server
     "http://127.0.0.1:3000",
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
 
-CORS_ALLOW_CREDENTIALS = True
+SESSION_COOKIE_SAMESITE = "None"
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SAMESITE = "None"
+CSRF_COOKIE_SECURE = True
+
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SWAGGER_DOCS_BASE_URL= env('SWAGGER_DOCS_BASE_URL')
 
 REST_FRAMEWORK = {
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 30,
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
+    'rest_framework.authentication.SessionAuthentication', 
+    'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
-    ]
+        'rest_framework.permissions.AllowAny', # Don't Touch! Override in your view
+    ],    
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 30,
 }
+
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header',
+            'description': 'JWT Authorization header using the Bearer scheme. Example: "Authorization: Bearer <token>"'
+        }
+    },
+    'SECURITY_REQUIREMENTS': [
+        {'Bearer': []}
+    ],
+
+   'USE_SESSION_AUTH': False,
+   'PERSIST_AUTH': True,
+    'REFETCH_SCHEMA_WITH_AUTH': True,
+    'REFETCH_SCHEMA_ON_LOGOUT': True,
+}
+
+REDOC_SETTINGS = {
+    'LAZY_RENDERING': False,
+}
+
+
+# FORCE_SCRIPT_NAME = env('FORCE_SCRIPT_NAME')
+
 
 from datetime import timedelta
 
 #JWT Settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
@@ -127,30 +168,58 @@ GOOGLE_OAUTH = {
 
 
 # Mailgun settings
-# MAILGUN_API_KEY = env('MAILGUN_API_KEY')
-# MAILGUN_DOMAIN = env('MAILGUN_DOMAIN')
-# MAILGUN_API_URL = env('MAILGUN_API_URL').format(MAILGUN_DOMAIN)
+MAILGUN_API_KEY = env('MAILGUN_API_KEY')
+MAILGUN_DOMAIN = env('MAILGUN_DOMAIN')
+MAILGUN_API_URL = env('MAILGUN_API_URL').format(MAILGUN_DOMAIN)
 
-# EMAIL_BACKEND = env('EMAIL_BACKEND')
-# ANYMAIL = {
-#     'MAILGUN_API_KEY': MAILGUN_API_KEY,
-#     'MAILGUN_SENDER_DOMAIN': MAILGUN_DOMAIN,
-# }
+EMAIL_BACKEND = env('EMAIL_BACKEND')
+ANYMAIL = {
+    'MAILGUN_API_KEY': MAILGUN_API_KEY,
+    'MAILGUN_SENDER_DOMAIN': MAILGUN_DOMAIN,
+}
 
-# DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Redis configuration for django
+# CACHES = {
+#     "default": {
+#         "BACKEND": env('BACKEND'),
+#         "LOCATION": env('LOCATION'),
+#         "OPTIONS": {
+#             "CLIENT_CLASS": env('CLIENT_CLASS'),
+#         }
+#     }
+# }
+
+
+# Paystack Payment Setup
+# settings.py
+PAYSTACK_SECRET_KEY = env('PAYSTACK_SECRET_KEY')
+PAYSTACK_PUBLIC_KEY = env('PAYSTACK_PUBLIC_KEY')
+PAYSTACK_INITIALIZE_URL = env('PAYSTACK_INITIALIZE_URL')
+PAYSTACK_VERIFY_URL = env('PAYSTACK_VERIFY_URL')
+
+
+
+import urllib.parse as urlparse
+
+redis_url = env("REDIS_URL")
+url = urlparse.urlparse(redis_url)
+
 CACHES = {
     "default": {
-        "BACKEND": env('BACKEND'),
-        "LOCATION": env('LOCATION'),
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": f"{url.scheme}://{url.hostname}:{url.port}/0",
         "OPTIONS": {
-            "CLIENT_CLASS": env('CLIENT_CLASS'),
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "PASSWORD": url.password,
         }
     }
 }
+
+
 
 
 ROOT_URLCONF = 'Horal_Backend.urls'
@@ -176,11 +245,17 @@ WSGI_APPLICATION = 'Horal_Backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
+
+
+# Postgres DB on render
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': env.db('DATABASE_URL'),
 }
 
 # auth user model
@@ -227,14 +302,20 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 
-LOGIN_URL = '/admin/login/'  # Redirect to admin login instead of /accounts/login/
 CSRF_TRUSTED_ORIGINS = [
-    'https://horal-backend.up.railway.app',
+    'https://ecommerce-backend-a5oq.onrender.com',
 ]
 
-STATIC_URL = 'static/'
-MEDIA_URL = 'media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+STATIC_URL = '/static/'
+# MEDIA_URL = 'media/'
+# MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+# STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # This is where collectstatic puts files
+
+# Optional compression and caching:
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

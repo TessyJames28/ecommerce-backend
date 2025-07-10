@@ -6,45 +6,35 @@ from products.models import (
     ElectronicsProduct, AccessoryProduct, FoodProduct,
     HealthAndBeautyProduct, GadgetProduct, Color, SizeOption
 )
-
-product_models = [
-    ChildrenProduct,
-    VehicleProduct,
-    FashionProduct,
-    GadgetProduct,
-    ElectronicsProduct,
-    AccessoryProduct,
-    FoodProduct,
-    HealthAndBeautyProduct
-]
-
+from products.serializers import MixedProductSerializer
+from products.utility import product_models_list
 
 
 class CartItemSerializer(serializers.ModelSerializer):
     """Serializer for cart item"""
     item_total_price = serializers.SerializerMethodField()
     product = serializers.SerializerMethodField()
-    # variant_detail = serializers.SerializerMethodField()
+    user_selected_variant = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
-        fields = ['id', 'variant', 'quantity', 'item_total_price', 'product']
+        fields = ['id', 'variant', 'quantity', 'item_total_price', 'product', 'user_selected_variant']
         read_only_fields = ['id', 'variant', 'quantity', 'item_total_price', 'product']
     
 
     def get_product(self, obj):
         """Get product"""
         product = obj.variant.product
-        return {
-            'id': str(product.id),
-            'title': product.title,
-            'price': str(product.price),
-            'category': product.category.name,
-            'type': product.__class__.__name__
-        }
-    
+        if not product:
+            return None  # or a fallback serializer/data
+        try:
+            return MixedProductSerializer().to_representation(product)
+        except Exception as e:
+            print(f"Error serializing product: {e}")
+            return None
 
-    def get_variant_detail(self, obj):
+
+    def get_user_selected_variant(self, obj):
         variant = obj.variant
 
         if variant.standard_size:
@@ -90,7 +80,7 @@ class CartSerializer(serializers.ModelSerializer):
 class CartItemCreateSerializer(serializers.Serializer):
     """Handles the creation of cart items based on existing product"""
     product_id = serializers.UUIDField()
-    color = serializers.ChoiceField(choices=Color.choices)
+    color = serializers.ChoiceField(choices=Color.choices, required=False, allow_null=True)
     quantity = serializers.IntegerField(default=1, min_value=1)
     standard_size = serializers.ChoiceField(choices=SizeOption.StandardSize.choices, allow_null=True, required=False)
     custom_size_unit = serializers.ChoiceField(choices=SizeOption.SizeUnit.choices, allow_null=True, required=False)
@@ -100,7 +90,7 @@ class CartItemCreateSerializer(serializers.Serializer):
     def validate(self, data):
         """Validate product in the cart"""
         product = None
-        for model in product_models:
+        for model in product_models_list:
             try:
                 product = model.objects.get(id=data['product_id'])
                 break
@@ -118,14 +108,14 @@ class CartItemCreateSerializer(serializers.Serializer):
         }
 
         # Conditionally include additional fields
-        if data.get('color') is not None:
-            filter_kwargs['color'] = data['color']
         if data.get('standard_size') is not None:
             filter_kwargs['standard_size'] = data['standard_size']
         if data.get('custom_size_unit') is not None:
             filter_kwargs['custom_size_unit'] = data['custom_size_unit']
         if data.get('custom_size_value') is not None:
             filter_kwargs['custom_size_value'] = data['custom_size_value']
+        if data.get('color') is not None:
+            filter_kwargs['color'] = data['color']
        
         variant = ProductVariant.objects.filter(**filter_kwargs).first()
 

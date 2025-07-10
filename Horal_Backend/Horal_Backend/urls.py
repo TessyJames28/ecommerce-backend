@@ -32,37 +32,34 @@ schema_view = get_schema_view(
         license=openapi.License(name="BSD License"),
     ),
     public=True,
-    permission_classes=[permissions.AllowAny],
-    authentication_classes=[], # Explicitly empty to prevent authentication
+    permission_classes=(permissions.AllowAny,),
+    url="https://api.horal.ng/api/v1",
+    # url="https://horal-backend.up.railway.app/api/v1",
 )
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    #swagger
+    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+
+    # Add this for JSON schema (OpenAPI spec)
+    path('swagger.json', schema_view.without_ui(cache_timeout=0), name='schema-json'),
+
+    #App URL
     path('api/v1/user/', include('users.urls')),
     path('api/v1/seller/', include('sellers.urls')),
     path('api/v1/product/', include('products.urls')),
     path('api/v1/cart/', include('carts.urls')),
     path('api/v1/order/', include('orders.urls')),
+    path('api/v1/favorite/', include('favorites.urls')),
+    path('api/v1/category/', include('categories.urls')),
+    path('api/v1/shop/', include('shops.urls')),
+    path('api/v1/subcategory/', include('subcategories.urls')),
+    path('api/v1/rating/', include('ratings.urls')),
+    path('api/v1/profile/', include('user_profile.urls')),
+    path('api/v1/payment/', include('payment.urls')),
     # Optional: Redirect from root to Swagger UI
-    path('', lambda request: redirect('schema-swagger-ui')),
 ]
-
-# Swagger + Redoc Docs
-urlpatterns += [
-    re_path(
-        r'^swagger(?P<format>\.json|\.yaml)$',
-        schema_view.without_ui(cache_timeout=0),
-        name='schema-json'
-    ),
-    path(
-        'swagger/',
-        schema_view.with_ui('swagger', cache_timeout=0),
-        name='schema-swagger-ui'
-    ),
-    path(
-        'redoc/',
-        schema_view.with_ui('redoc', cache_timeout=0),
-        name='schema-redoc'
-    ),
-]
-

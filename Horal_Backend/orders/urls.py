@@ -1,9 +1,21 @@
 from django.urls import path
-from .views import CheckoutView, PaymentCallbackView, OrderDeleteView
+from .views import (
+    CheckoutView, OrderDeleteView,
+    AdminAllOrderView, UserOrderListView, OrderDetailView,
+    OrderReturnRequestView, ApproveReturnView,
+    SendOrderOTPView, ConfirmOrderOTPView
+)
 
 
 urlpatterns = [
+    path('<uuid:pk>/', OrderDeleteView.as_view(), name='order-deletion'),
+    path('<uuid:order_id>/', OrderDetailView.as_view(), name='order-detail'),
     path('checkout/', CheckoutView.as_view(), name='checkout'),
-    path('payment-callback/', PaymentCallbackView.as_view(), name='payment-callback'),
-    path('<uuid:pk>/delete/', OrderDeleteView.as_view(), name='order-deletion'),
+    path('admin/all/', AdminAllOrderView.as_view(), name='admin-all-orders'),
+    path('user-orders/', UserOrderListView.as_view(), name='user-order-list'),
+    path('send-otp/', SendOrderOTPView.as_view(), name='send-order-otp'),
+    path('confirm-otp/', ConfirmOrderOTPView.as_view(), name='confirm-order-otp'),
+    path('cancel/', OrderReturnRequestView.as_view(), name='order-cancellation'),
+    path('cancellation-approval/', ApproveReturnView.as_view(), name='cancellation-approval'),
+    
 ]

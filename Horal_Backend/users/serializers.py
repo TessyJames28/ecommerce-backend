@@ -1,19 +1,23 @@
 import re
 from rest_framework import serializers
-from .models import CustomUser, Location
+from .models import CustomUser, Location, ShippingAddress
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
 from django.utils.timezone import now
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
-from notifications.utility import verify_otp
-from .utility import validate_strong_password
+from notification.utility import verify_otp, verify_registration_otp
+from .utility import validate_strong_password, generate_token_for_user
 
 class CustomUserSerializer(serializers.ModelSerializer):
+    is_seller = serializers.BooleanField(default=False)
+    is_staff = serializers.BooleanField(default=False)
+    is_superuser = serializers.BooleanField(default=False)
+
     class Meta:
         model = CustomUser
         fields = ["id", "full_name", "email", "phone_number", "password", "is_staff", "is_superuser", "is_seller", "is_active", "last_login"]
-        read_only_fields = ["id", "is_active", "last_login"] # WIll add is_seller, is_staff, and is_superuser later
+        read_only_fields = ["id", 'is_seller', 'is_staff', 'is_superuser', "is_active", "last_login"] # WIll add is_seller, is_staff, and is_superuser later
         extra_kwargs = {
             'email': {'required': True},
             'full_name': {'required': True},
@@ -57,22 +61,14 @@ class LoginSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = ['email', 'password', 'access', 'refresh']
-
-    def get_token(self, user):
-        """Generate a token for the user"""
-        refresh = RefreshToken.for_user(user)
-        return {
-            'access': str(refresh.access_token),
-            'refresh': str(refresh)
-        }
     
     def get_access_token(self, obj):
         """Get the access token for the user"""
-        return self.get_token(obj)['access']
+        return generate_token_for_user(obj)['access']
     
     def get_refresh_token(self, obj):
         """Get the refresh token for the user"""
-        return self.get_token(obj)['refresh']
+        return generate_token_for_user(obj)['refresh']
 
     def validate(self, attrs):
         """Validate the login credentials"""
@@ -140,10 +136,15 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         return value
     
 
+class RegistrationOTPVerificationSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    otp = serializers.CharField(required=True, max_length=6, min_length=4)
+
+
 class OTPVerificationSerializer(serializers.Serializer):
     """Serializer for password reset confirmation"""
     email = serializers.EmailField(required=True)
-    otp = serializers.CharField(required=True, max_length=4, min_length=4)
+    otp = serializers.CharField(required=True, max_length=6, min_length=4)
 
 
     def validate(self, attrs):
@@ -208,3 +209,15 @@ class LocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Location
         fields = ['id', 'street_address', 'local_govt', 'landmark', 'state', 'country']
+
+
+class ShippingAddressSerializer(serializers.ModelSerializer):
+    """Location serializer"""
+    class Meta:
+        model = ShippingAddress
+        fields = [
+            'id', 'user', 'order', 'phone_number', 'street_address',
+            'local_govt', 'landmark', 'state', 'country'
+        ]
+        read_only_fields = ['user', 'order']
+
