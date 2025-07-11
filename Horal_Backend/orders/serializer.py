@@ -94,8 +94,10 @@ class OrderSerializer(serializers.ModelSerializer):
 
         # Update shipping address if provided for first timers
         if shipping_address_data:
-            address = ShippingAddress.objects.create(user=user, order=instance, **shipping_address_data)
-            address.save()
+            ShippingAddress.objects.update_or_create(
+                user=user, order=instance,
+                defaults=shipping_address_data
+            )
 
         return instance
     
