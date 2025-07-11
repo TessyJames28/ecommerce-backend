@@ -24,7 +24,6 @@ class Order(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='orders')
     created_at = models.DateTimeField(auto_now_add=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    otp_confirmed = models.BooleanField(default=False)
     status = models.CharField(max_length=50, choices=Status.choices, default=Status.PENDING)
 
     def __str__(self):
