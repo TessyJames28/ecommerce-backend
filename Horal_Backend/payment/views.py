@@ -56,9 +56,6 @@ class InitializeTransaction(APIView):
                 f"Please complete your shipping address information. Missing fields: {', '.join(missing_fields)}"
             )
         
-        if not order.otp_confirmed:
-            raise ValidationError("You must confirm the OTP sent to your email before proceeding to payment.")
-
         
         amount = int(order.total_amount * 100) # convert amount to kobo
         reference = str(uuid.uuid4())
