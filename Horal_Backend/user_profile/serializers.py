@@ -31,7 +31,9 @@ class ProfileSerializer(serializers.ModelSerializer):
         password = validated_data.pop('new_password', None)
         validated_data.pop('confirm_password', None)
         image_url = validated_data.pop("image", None)
-        location = validated_data.pop('user', {}).get('location', None)
+        location = self.initial_data.get("location")
+
+        user = instance.user
 
         if image_url:
             image_obj, _ = ImageLink.objects.get_or_create(
@@ -46,8 +48,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
         # Update location if provided
         if location:
-            location = Location.objects.create(user=user, order=instance, **location)
-            location.save()
+            location = Location.objects.update_or_create(user=user, defaults=location)
 
 
         # Update password on the associated CustomUser
