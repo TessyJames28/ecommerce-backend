@@ -32,7 +32,20 @@ class InitializeTransaction(APIView):
         """Function to handle payment initialization on paystack"""
         email = request.data.get("email")
         order_id = request.data.get('order_id') # passed from frontend
+        platform = request.data.get('platform')
+
+        if platform not in ['web', 'mobile']:
+            return JsonResponse({
+                "status": "error",
+                "status_code": status.HTTP_400_BAD_REQUEST,
+                "message": "Invalid platform specified"
+            }, status=status.HTTP_400_BAD_REQUEST)
         
+        if platform == 'mobile':
+            redirect_url = settings.MOBILE_REDIRECT_URL
+        elif platform == 'web':
+            redirect_url = settings.WEB_REDIRECT_URL
+
         try:
             order = Order.objects.get(id=order_id, user__email=email)
         except Order.DoesNotExist:
@@ -71,6 +84,7 @@ class InitializeTransaction(APIView):
             "email": email,
             "amount": amount,
             "reference": reference,
+            "callback_url": redirect_url,
             "metadata": {
                 "order_id": str(order.id)
             }
@@ -238,38 +252,38 @@ def transaction_webhook(request):
     })
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class PaymentCallbackView(GenericAPIView):
-    """Update order status after payment"""
-    permission_classes = [IsAuthenticated]
+# @method_decorator(csrf_exempt, name='dispatch')
+# class PaymentCallbackView(GenericAPIView):
+#     """Update order status after payment"""
+#     permission_classes = [IsAuthenticated]
 
-    def post(self, request, *args, **kwargs):
-        """Handles order creation after payment"""
-        order_id = request.data.get('order_id')
+#     def post(self, request, *args, **kwargs):
+#         """Handles order creation after payment"""
+#         order_id = request.data.get('order_id')
 
-        if not order_id:
-            JsonResponse({
-                "status": "error",
-                "status_code": status.HTTP_400_BAD_REQUEST,
-                "message": "order_id is required"
-            }, status=status.HTTP_400_BAD_REQUEST)
+#         if not order_id:
+#             JsonResponse({
+#                 "status": "error",
+#                 "status_code": status.HTTP_400_BAD_REQUEST,
+#                 "message": "order_id is required"
+#             }, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            order = Order.objects.get(id=order_id, user=request.user)
-        except Order.DoesNotExist:
-            return JsonResponse({
-                "status": "error",
-                "status_code": status.HTTP_404_NOT_FOUND,
-                "message": "Order not found"
-            }, status=status.HTTP_404_NOT_FOUND)
+#         try:
+#             order = Order.objects.get(id=order_id, user=request.user)
+#         except Order.DoesNotExist:
+#             return JsonResponse({
+#                 "status": "error",
+#                 "status_code": status.HTTP_404_NOT_FOUND,
+#                 "message": "Order not found"
+#             }, status=status.HTTP_404_NOT_FOUND)
 
-        model_data = PaystackTransaction.objects.get(order=order.id)
-        serializer = PaystackTransactionSerializer(model_data)
-        return JsonResponse({
-            "message": f"Order is currently {order.status.lower()}",
-            "status": order.status,
-            "order": serializer.data
-        }, status=status.HTTP_200_OK)
+#         model_data = PaystackTransaction.objects.get(order=order.id)
+#         serializer = PaystackTransactionSerializer(model_data)
+#         return JsonResponse({
+#             "message": f"Order is currently {order.status.lower()}",
+#             "status": order.status,
+#             "order": serializer.data
+#         }, status=status.HTTP_200_OK)
 
 
 class RetryRefundView(APIView):
