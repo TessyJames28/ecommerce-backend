@@ -270,7 +270,13 @@ for buyer in remaining_users:
         order = Order.objects.create(
             user=buyer,
             total_amount=total,
-            status=status
+            status=status,
+            street_address="123 Test St",
+            local_govt=random.choice(states_and_lgas[buyer.location.state]),
+            landmark="Near Market",
+            state=buyer.location.state,
+            country=buyer.location.country,
+            phone_number=buyer.phone_number
         )
         for item in items:
             OrderItem.objects.create(
