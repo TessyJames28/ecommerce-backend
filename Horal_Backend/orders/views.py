@@ -58,9 +58,21 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
 
                 # If no existing order, continue creating one and calculate total
                 total = cart.total_price
-                order = Order.objects.create(user=user, total_amount=total)
-                update_order_status(order, Order.Status.PENDING, user, force=True)
+                address = None
+                if hasattr(user, 'shipping_address'):
+                    address = user.shipping_address
 
+                order, created = Order.objects.update_or_create(
+                    user=user,
+                    total_amount=total,
+                    street_address=address.street_address if address else None,
+                    local_govt=address.local_govt if address else None,
+                    landmark=address.landmark if address else None,
+                    country=address.country if address else None,
+                    state=address.state if address else None,
+                    phone_number=address.phone_number if address else None
+                )
+                update_order_status(order, Order.Status.PENDING, user, force=True)
             
                 for item in cart.cart_item.all():
                     variant = item.variant
@@ -74,8 +86,6 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                     variant.reserved_quantity += item.quantity
                     variant.stock_quantity -= item.quantity  # Deduct immediately upon reservation
                     variant.save()
-                    print(f"Variant: {variant}")
-                    print(variant.product)
                     update_quantity(variant.product)
 
                     OrderItem.objects.create(
@@ -135,6 +145,13 @@ class OrderDeleteView(GenericAPIView):
     def delete(self, request, *args, **kwargs):
         order_id = self.kwargs.get('pk')
         order = get_object_or_404(Order, pk=order_id, user=request.user)
+
+        if order.status != Order.Status.PENDING:
+            return Response({
+                "status": "error",
+                "status code": status.HTTP_400_BAD_REQUEST,
+                "message": "Only pending orders can be deleted"
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
             for item in order.order_items.all():
