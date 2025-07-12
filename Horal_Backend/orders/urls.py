@@ -8,7 +8,7 @@ from .views import (
 
 urlpatterns = [
     path('<uuid:pk>/', OrderDeleteView.as_view(), name='order-deletion'),
-    path('<uuid:order_id>/', OrderDetailView.as_view(), name='order-detail'),
+    path('get/<uuid:order_id>/', OrderDetailView.as_view(), name='order-detail'),
     path('checkout/', CheckoutView.as_view(), name='checkout'),
     path('admin/all/', AdminAllOrderView.as_view(), name='admin-all-orders'),
     path('user-orders/', UserOrderListView.as_view(), name='user-order-list'),
