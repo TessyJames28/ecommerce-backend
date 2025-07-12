@@ -252,40 +252,6 @@ def transaction_webhook(request):
     })
 
 
-# @method_decorator(csrf_exempt, name='dispatch')
-# class PaymentCallbackView(GenericAPIView):
-#     """Update order status after payment"""
-#     permission_classes = [IsAuthenticated]
-
-#     def post(self, request, *args, **kwargs):
-#         """Handles order creation after payment"""
-#         order_id = request.data.get('order_id')
-
-#         if not order_id:
-#             JsonResponse({
-#                 "status": "error",
-#                 "status_code": status.HTTP_400_BAD_REQUEST,
-#                 "message": "order_id is required"
-#             }, status=status.HTTP_400_BAD_REQUEST)
-
-#         try:
-#             order = Order.objects.get(id=order_id, user=request.user)
-#         except Order.DoesNotExist:
-#             return JsonResponse({
-#                 "status": "error",
-#                 "status_code": status.HTTP_404_NOT_FOUND,
-#                 "message": "Order not found"
-#             }, status=status.HTTP_404_NOT_FOUND)
-
-#         model_data = PaystackTransaction.objects.get(order=order.id)
-#         serializer = PaystackTransactionSerializer(model_data)
-#         return JsonResponse({
-#             "message": f"Order is currently {order.status.lower()}",
-#             "status": order.status,
-#             "order": serializer.data
-#         }, status=status.HTTP_200_OK)
-
-
 class RetryRefundView(APIView):
     """
     class to handle refund retry for failed refund cases
