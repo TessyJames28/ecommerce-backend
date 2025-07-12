@@ -216,7 +216,7 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShippingAddress
         fields = [
-            'id', 'user', 'order', 'phone_number', 'street_address',
+            'id', 'user', 'phone_number', 'street_address',
             'local_govt', 'landmark', 'state', 'country'
         ]
         read_only_fields = ['user', 'order']

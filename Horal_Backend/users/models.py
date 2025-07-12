@@ -115,11 +115,6 @@ class ShippingAddress(models.Model):
         on_delete=models.CASCADE,
         related_name='shipping_address'
     )
-    order = models.OneToOneField(
-        'orders.Order',
-        on_delete=models.CASCADE,
-        related_name='shipping_address'
-    )
     phone_number = models.CharField(
         max_length=11,
         unique=True,
