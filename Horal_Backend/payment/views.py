@@ -5,11 +5,9 @@ from rest_framework.permissions import IsAuthenticated
 from django.http import JsonResponse
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.generics import GenericAPIView
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from .models import PaystackTransaction
-from .serializers import PaystackTransactionSerializer
 from orders.models import Order
 from rest_framework.views import APIView
 from carts.models import CartItem
@@ -17,7 +15,7 @@ from .utility import trigger_refund, update_order_status
 from orders.serializer import OrderSerializer
 from products.utility import update_quantity, IsAdminOrSuperuser
 from django.utils.decorators import method_decorator
-from django.core.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError
 import uuid
 
 
@@ -54,15 +52,10 @@ class InitializeTransaction(APIView):
                 "status_code": status.HTTP_404_NOT_FOUND,
                 "message": "Order not found"
             }, status=status.HTTP_404_NOT_FOUND)
-        
-        # Check that shipping address is set
-        if not hasattr(order, 'shipping_address'):
-            raise ValidationError("Please set a shipping address before proceeding to payment")
-        
+                
         # Check for complete location fields
-        shipping = order.shipping_address
         required_fields = ['country', 'state', 'local_govt', 'phone_number', 'street_address', 'landmark']
-        missing_fields = [field for field in required_fields if not getattr(shipping, field)]
+        missing_fields = [field for field in required_fields if not getattr(order, field, None)]
 
         if missing_fields:
             raise ValidationError(
