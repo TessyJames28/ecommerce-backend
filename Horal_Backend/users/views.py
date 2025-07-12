@@ -450,22 +450,21 @@ class CreateLocationView(GenericAPIView):
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # location = serializer.save()
-        location = self.perform_create(serializer)
+        location = serializer.save(user=request.user)
 
         response_data = {
             "status": "success",
             "status code": status.HTTP_201_CREATED,
             "message": "User location registered successfully",
-            "data": self.get(location).data
+            "data": serializer.data
         }
 
         return Response(response_data, status=status.HTTP_201_CREATED)
     
 
-    def perform_create(self, serializer):
-        """Automatically assign request.user to the Location instance"""
-        return serializer.save(user=self.request.user)
+    # def perform_create(self, serializer):
+    #     """Automatically assign request.user to the Location instance"""
+    #     return serializer.save(user=self.request.user)
 
 
 class LocationUpdateDeleteView(GenericAPIView):
