@@ -28,6 +28,29 @@ def create_user_profile(sender, instance, created, **kwargs):
         }
     )
 
+    # CustomUser.objects.update_or_create(
+    #     id="08172aff153044eca7b27f0e68f7bb48",  # lookup field
+    #     defaults={
+    #         "full_name": "John Doe"            # fields to update
+    #     }
+    # )
+
+
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def update_user_profile(sender, instance, created, **kwargs):
+    if created:
+        return  # Only handle updates
+
+    try:
+        profile = instance.user_profile
+        profile.full_name = instance.full_name
+        profile.email = instance.email
+        profile.save(update_fields=["full_name", "email"])
+    except Profile.DoesNotExist:
+        pass  # Profile wasn't created for some reason
+
+
 
 @receiver(post_delete, sender=CustomUser)
 def delete_user_related_data(sender, instance, **kwargs):
