@@ -1,5 +1,7 @@
 from django.apps import AppConfig
+import logging
 
+logger = logging.getLogger(__name__)
 
 class SellersConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
@@ -7,4 +9,10 @@ class SellersConfig(AppConfig):
 
     def ready(self):
         import sellers.signals
+        from . import scheduler
+        try:
+            scheduler.start()
+            logger.info("Scheduler started successfully.")
+        except Exception as e:
+            logger.error(f"Scheduler failed to start: {e}")
 

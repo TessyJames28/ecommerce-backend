@@ -2,6 +2,10 @@ from celery import shared_task
 from django.utils.timezone import now
 from .models import SellerKYC, KYCStatus, SellerKYCCAC, SellerKYCNIN
 from celery import shared_task
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 @shared_task
 def test_celery():
@@ -35,4 +39,7 @@ def verify_seller_kyc(kyc_id):
     
     except SellerKYC.DoesNotExist:
         pass
+
+    print("Scheduled Celery task ran.")  # Render shows stdout in logs
+    logger.info("Scheduled Celery task ran.")
 
