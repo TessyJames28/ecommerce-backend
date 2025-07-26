@@ -3,14 +3,14 @@ from .models import Profile
 from products.models import ImageLink
 from django.contrib.auth.password_validation import validate_password
 from users.serializers import LocationSerializer, ShippingAddressSerializer
-from users.models import Location
+from users.models import Location, CustomUser
 
 
 class ProfileSerializer(serializers.ModelSerializer):
     """Serializer for users profile"""
     image = serializers.CharField(required=False)
     current_password = serializers.CharField(write_only=True, required=False)
-    phone_number = serializers.CharField(source='user.phone_number', read_only=True)
+    phone_number = serializers.CharField(source='user.phone_number')
     new_password = serializers.CharField(write_only=True, required=False)
     confirm_password = serializers.CharField(write_only=True, required=False)
     email = serializers.EmailField(read_only=True)
@@ -28,15 +28,25 @@ class ProfileSerializer(serializers.ModelSerializer):
         }
 
     def update(self, instance, validated_data):
+        print(validated_data)
         password = validated_data.pop('new_password', None)
         validated_data.pop('confirm_password', None)
         image_url = validated_data.pop("image", None)
         location = self.initial_data.get("location")
+        phone_number = validated_data.pop("user", None).get("phone_number")
+
+        print(phone_number)
 
         user = instance.user
 
+        if phone_number:
+            user.phone_number = phone_number
+            user.save(update_fields=["phone_number"])
+        
+
         if image_url:
-            image_obj, _ = ImageLink.objects.get_or_create(
+            image_obj, _ = ImageLink.objects.update_or_create(
+                image_type = ImageLink.ImageType.PROFILE,
                 url=image_url,
             )
             instance.image = image_obj
@@ -58,7 +68,7 @@ class ProfileSerializer(serializers.ModelSerializer):
             user.save()
             user.refresh_from_db()
 
-        return super().update(instance, validated_data)
+        return instance
     
 
     def validate(self, attrs):
