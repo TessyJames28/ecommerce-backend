@@ -28,7 +28,10 @@ def create_product_index(sender, instance, created, **kwargs):
         id=instance.id,
         content_type=ContentType.objects.get_for_model(sender),
         object_id=instance.id,
-        defaults={"category_name": category_name}
+        defaults={
+            "category_name": category_name,
+            "shop": instance.shop
+        }
     )
 
 
