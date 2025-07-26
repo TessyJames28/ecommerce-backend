@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'ratings',
     'user_profile',
     'payment',
+    'sellers_dashboard',
     'anymail',
     'drf_yasg',
     'corsheaders',
@@ -204,6 +205,11 @@ MOBILE_REDIRECT_URL = env('MOBILE_REDIRECT_URL')
 WEB_REDIRECT_URL = env('WEB_REDIRECT_URL')
 
 
+# Dojah API setting
+DOJAH_APP_ID = env('DOJAH_APP_ID')
+DOJAH_SECRET = env('DOJAH_SECRET')
+DOJAH_PUBLIC_KEY = env('DOJAH_PUBLIC_KEY')
+DOJAH_BASE_URL = env('DOJAH_BASE_URL')
 
 import urllib.parse as urlparse
 
@@ -220,6 +226,18 @@ CACHES = {
         }
     }
 }
+
+# Celery setting
+import ssl
+
+# Change to its redis DB on production with custom redis setup
+CELERY_BROKER_URL = env("REDIS_URL")
+
+CELERY_BROKER_USE_SSL = {
+    # Change to SSL.CERT_REQUIRED when using own trusted custom redis
+    'ssl_cert_reqs': None # or ssl.CERT_NONE 
+}
+
 
 
 
