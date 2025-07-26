@@ -190,3 +190,4 @@ def merge_recently_viewed_products(session_key, user):
 
     # Clean up anon views after merge
     anon_views.delete()
+ 

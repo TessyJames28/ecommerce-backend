@@ -8,7 +8,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q, Avg, Count, Sum
 from django.core.exceptions import PermissionDenied
 from sellers.models import SellerKYC
-from sellers.serializers import SellerProfileSerializer
+from sellers_dashboard.serializers import SellerProfileSerializer
 from ratings.serializers import UserRatingSerializer
 from ratings.models import UserRating
 from django.http import Http404
@@ -342,7 +342,8 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
                 query &= (
                     Q(title__icontains=search_query) |
                     Q(description__icontains=search_query) |
-                    Q(brand__icontains=search_query)
+                    Q(brand__icontains=search_query) |
+                    Q(specifications__icontains=search_query)
                 )
 
             if brand:
@@ -372,9 +373,10 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
                 )).filter(avg_rating__gte=rating)
 
             if products.exists():
-                serializer = MixedProductSerializer(product)
-                data = serializer.data
-                products_data.append(data)
+                for matched_product in products:
+                    serializer = MixedProductSerializer(matched_product)
+                    data = serializer.data
+                    products_data.append(data)
 
         page = self.paginate_queryset(products_data)
         if page is not None:
