@@ -1,15 +1,42 @@
 from rest_framework import serializers
-from django.db.models import Q
+from django.db.models import Q, Avg
 from .models import (
     ChildrenProduct, ImageLink,
-    Occasion, ProductVariant, VehicleProduct, GadgetProduct,
+    ProductVariant, VehicleProduct, GadgetProduct,
     FashionProduct, ElectronicsProduct, AccessoryProduct,
-    HealthAndBeautyProduct, FoodProduct,
+    HealthAndBeautyProduct, FoodProduct, ProductIndex
 )
 from categories.serializers import CategorySerializer
 from subcategories.serializers import SubCategoryProductSerializer
 from categories.models import Category
 from subcategories.models import SubCategory
+from django.contrib.contenttypes.models import ContentType
+from ratings.models import UserRating
+
+from .textchoices import (
+    Color, SizeOption, ProductCondition, EngineType, EngineSize,
+    FuelType, Transmission, OperatingSystem, PowerSource,
+    PowerOutput, Type, SkinType, FoodCondition, AgeRecommendation
+)
+
+
+def normalize_choice(value, enum_class):
+    """
+    Normalize a text input (case-insensitive) to match a Django TextChoices value.
+    """
+    if not value:
+        return value
+    
+    normalized = value.lower()
+
+    for choice in enum_class:
+        if choice.value.lower() == normalized:
+            return choice.value
+
+    valid_choices = [choice.value for choice in enum_class]
+    raise ValueError(
+        f"Invalid value '{value}'. Must be one of: {valid_choices}"
+    )
 
 
 class ImageLinkSerializer(serializers.ModelSerializer):
@@ -22,6 +49,10 @@ class ImageLinkSerializer(serializers.ModelSerializer):
 
 class ProductVariantSerializer(serializers.ModelSerializer):
     """Serializer for product variant model which include sizes and colors."""
+    color = serializers.CharField(required=False)
+    standard_size = serializers.CharField(required=False)
+    custom_size_unit = serializers.CharField(required=False)
+
     class Meta:
         model = ProductVariant
         fields = [
@@ -29,6 +60,48 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             'custom_size_value', 'stock_quantity', 'reserved_quantity', 'price_override'
         ]
         read_only_fields = ['id', 'sku']
+
+    def validate_custom_size_unit(self, value):
+        return normalize_choice(value, SizeOption.SizeUnit)
+
+    def validate_standard_size(self, value):
+        return normalize_choice(value, SizeOption.StandardSize)
+
+    def validate_color(self, value):
+        return normalize_choice(value, Color)
+    
+
+    def create(self, validated_data):
+        instance = super().create(validated_data)
+        if instance.product and hasattr(instance.product, "shop"):
+            instance.shop = instance.product.shop
+            instance.save(update_fields=["shop"])
+        return instance
+
+class ProductRatingMixin(serializers.Serializer):
+    average_rating = serializers.SerializerMethodField()
+    total_reviews = serializers.SerializerMethodField()
+
+    def get_average_rating(self, obj):
+        index = self._get_product_index(obj)
+        if index:
+            return UserRating.objects.filter(product=index).aggregate(
+                avg=Avg('rating')
+            )['avg']
+        return None
+
+    def get_total_reviews(self, obj):
+        index = self._get_product_index(obj)
+        if index:
+            return UserRating.objects.filter(product=index).count()
+        return 0
+
+    def _get_product_index(self, obj):
+        content_type = ContentType.objects.get_for_model(obj)
+        return ProductIndex.objects.filter(
+            content_type=content_type,
+            object_id=obj.id
+        ).first()
 
 
 class ProductCreateMixin:
@@ -51,12 +124,12 @@ class ProductCreateMixin:
 
         # Create occasion
         # Dynamic mapping of filtering
-        occasion_query = Q()
-        for name in names:
-            occasion_query |= Q(name__iexact=name)
-        if names:
-            occasions = Occasion.objects.filter(occasion_query)
-            instance.occasion.set(occasions)
+        # occasion_query = Q()
+        # for name in names:
+        #     occasion_query |= Q(name__iexact=name)
+        # if names:
+        #     occasions = Occasion.objects.filter(occasion_query)
+        #     instance.occasion.set(occasions)
 
         # Update product quantity based on stock
         from .utility import update_quantity
@@ -148,10 +221,13 @@ class ProductRepresentationMixin:
 
         fields = ["images", "variants_details"]
 
+        rating_data = ['average_rating', 'total_reviews']
+
         base_data = {}
         spec_data = {}
         category_data ={}
         field_data = {}
+        review_data = {}
 
         for key, value in data.items():
             if key in base_fields:
@@ -160,6 +236,8 @@ class ProductRepresentationMixin:
                 field_data[key] = value
             elif key in cat_data:
                 category_data[key] = value
+            elif key in rating_data:
+                review_data[key] = value
             else:
                 spec_data[key] = value
 
@@ -167,7 +245,8 @@ class ProductRepresentationMixin:
             **base_data,
             **field_data,
             "category_object": category_data,
-            "specification": spec_data
+            "specification": spec_data,
+            "review": review_data
         }
     
 
@@ -196,8 +275,12 @@ class ChildrenProductSerializer(
     UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
-    BaseProductSerializer
+    BaseProductSerializer,
+    ProductRatingMixin
 ):
+    
+    age_recommendation = serializers.CharField(required=False)
+    condition = serializers.CharField(required=False)
 
     """Serializer to handle baby category"""
     category = serializers.PrimaryKeyRelatedField(
@@ -211,13 +294,20 @@ class ChildrenProductSerializer(
         model = ChildrenProduct
         fields = '__all__'
         read_only_fields = ['id']
+
+    def validate_age_recommendation(self, value):
+        return normalize_choice(value, AgeRecommendation)
+    
+    def validate_condition(self, value):
+        return normalize_choice(value, ProductCondition)
     
 
 class VehicleProductSerializer(
     UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
-    BaseProductSerializer
+    BaseProductSerializer,
+    ProductRatingMixin
 ):
     
     """serializer to handle vehicle product category creation"""
@@ -227,18 +317,47 @@ class VehicleProductSerializer(
     sub_category = serializers.PrimaryKeyRelatedField(
         queryset=SubCategory.objects.all()
     )
+    fuel_type = serializers.CharField(required=False)
+    condition = serializers.CharField(required=False)
+    color_interior = serializers.CharField(required=False)
+    color_exterior = serializers.CharField(required=False)
+    engine_size = serializers.CharField(required=False)
+    engine_type = serializers.CharField(required=False)
+    transmission = serializers.CharField(required=False)
 
     class Meta:
         model = VehicleProduct
         fields = '__all__'
         read_only_fields = ['id']
+
+    def validate_color_exterior(self, value):
+        return normalize_choice(value, Color)
+    
+    def validate_color_interior(self, value):
+        return normalize_choice(value, Color)
+    
+    def validate_engine_type(self, value):
+        return normalize_choice(value, EngineType)
+    
+    def validate_engine_size(self, value):
+        return normalize_choice(value, EngineSize)
+    
+    def validate_fuel_type(self, value):
+        return normalize_choice(value, FuelType)
+    
+    def validate_transmission(self, value):
+        return normalize_choice(value, Transmission)
+    
+    def validate_condition(self, value):
+        return normalize_choice(value, ProductCondition)
     
 
 class GadgetProductSerializer(
     UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
-    BaseProductSerializer
+    BaseProductSerializer,
+    ProductRatingMixin
 ):
     
     """serializer for Gadget product model creation"""
@@ -248,25 +367,28 @@ class GadgetProductSerializer(
     sub_category = serializers.PrimaryKeyRelatedField(
         queryset=SubCategory.objects.all()
     )
+    operating_system = serializers.CharField(required=False)
+    condition = serializers.CharField(required=False)
 
     class Meta:
         model = GadgetProduct
         fields = '__all__'
         read_only_fields = ['id']
 
-
-class OccasionSerializer(serializers.ModelSerializer):
-    """Occasion Serializer"""
-    class Meta:
-        model = Occasion 
-        fields = "__all__"
+    
+    def validate_operating_system(self, value):
+        return normalize_choice(value, OperatingSystem)
+    
+    def validate_condition(self, value):
+        return normalize_choice(value, ProductCondition)
 
 
 class FashionProductSerializer(
     UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
-    BaseProductSerializer
+    BaseProductSerializer,
+    ProductRatingMixin
 ):
     """Serializer to handle fashion category product creation"""
     category = serializers.PrimaryKeyRelatedField(
@@ -275,11 +397,7 @@ class FashionProductSerializer(
     sub_category = serializers.PrimaryKeyRelatedField(
         queryset=SubCategory.objects.all()
     )
-    occasion = serializers.SlugRelatedField(
-        queryset=Occasion.objects.all(),
-        many=True,
-        slug_field='name'  # we are matching by the "name" field
-    )
+    condition = serializers.CharField(required=False)
 
     class Meta:
         model = FashionProduct
@@ -287,11 +405,16 @@ class FashionProductSerializer(
         read_only_fields = ['id']
 
 
+    def validate_condition(self, value):
+        return normalize_choice(value, ProductCondition)
+
+
 class ElectronicsProductSerializer(
     UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
-    BaseProductSerializer
+    BaseProductSerializer,
+    ProductRatingMixin
 ):
     """serializer to handle electronics product category creation"""
     category = serializers.PrimaryKeyRelatedField(
@@ -300,18 +423,28 @@ class ElectronicsProductSerializer(
     sub_category = serializers.PrimaryKeyRelatedField(
         queryset=SubCategory.objects.all()
     )
+    power_source = serializers.CharField(required=False)
+    condition = serializers.CharField(required=False)
 
     class Meta:
         model = ElectronicsProduct
         fields = '__all__'
         read_only_fields = ['id']
 
+    
+    def validate_power_source(self, value):
+        return normalize_choice(value, PowerSource)
+    
+    def validate_condition(self, value):
+        return normalize_choice(value, ProductCondition)
+
 
 class AccessoryProductSerializer(
     UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
-    BaseProductSerializer
+    BaseProductSerializer,
+    ProductRatingMixin
 ):
     """Serializer to handle Accesory product category creation"""
     category = serializers.PrimaryKeyRelatedField(
@@ -320,18 +453,28 @@ class AccessoryProductSerializer(
     sub_category = serializers.PrimaryKeyRelatedField(
         queryset=SubCategory.objects.all()
     )
+    type = serializers.CharField(required=False)
+    condition = serializers.CharField(required=False)
 
     class Meta:
         model = AccessoryProduct
         fields = '__all__'
         read_only_fields = ['id']
 
+    
+    def validate_type(self, value):
+        return normalize_choice(value, Type)
+    
+    def validate_condition(self, value):
+        return normalize_choice(value, ProductCondition)
+
 
 class HealthAndBeautyProductSerializer(
     UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
-    BaseProductSerializer
+    BaseProductSerializer,
+    ProductRatingMixin
 ):
     """
     Serializer to handle the creation of health 
@@ -343,18 +486,27 @@ class HealthAndBeautyProductSerializer(
     sub_category = serializers.PrimaryKeyRelatedField(
         queryset=SubCategory.objects.all()
     )
+    skin_type = serializers.CharField(required=False)
+    condition = serializers.CharField(required=False)
 
     class Meta:
         model = HealthAndBeautyProduct
         fields = '__all__'
         read_only_fields = ['id']
 
+    def validate_skin_type(self, value):
+        return normalize_choice(value, SkinType)
+    
+    def validate_condition(self, value):
+        return normalize_choice(value, ProductCondition)
+
 
 class FoodProductSerializer(
     UniqueProductPerShopMixin,
     ProductCreateMixin,
     ProductRepresentationMixin,
-    BaseProductSerializer
+    BaseProductSerializer,
+    ProductRatingMixin
 ):
     """serializer to handle Food product category creation"""
     category = serializers.PrimaryKeyRelatedField(
@@ -363,11 +515,19 @@ class FoodProductSerializer(
     sub_category = serializers.PrimaryKeyRelatedField(
         queryset=SubCategory.objects.all()
     )
+    food_condition = serializers.CharField(required=False)
+    condition = serializers.CharField(required=False)
     
     class Meta:
         model = FoodProduct
         fields = '__all__'
         read_only_fields = ['id']
+
+    def validate_food_condition(self, value):
+        return normalize_choice(value, FoodCondition)
+    
+    def validate_condition(self, value):
+        return normalize_choice(value, ProductCondition)
 
 
 # Dynamic serializer solver (for views)
