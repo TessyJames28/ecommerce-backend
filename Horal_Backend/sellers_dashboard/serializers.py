@@ -103,7 +103,7 @@ class SellerProfileSerializer(serializers.ModelSerializer):
 
     def get_shop(self, obj):
         try:
-            return ShopSerializer(obj.kyc.owner.first()).data
+            return ShopSerializer(obj.user.kyc.owner.first()).data
         except Exception:
             return None
     
