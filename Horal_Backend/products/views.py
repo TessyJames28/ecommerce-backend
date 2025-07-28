@@ -160,7 +160,7 @@ class SingleProductDetailView(GenericAPIView, BaseResponseMixin):
 
         # Serialize seller profile
         seller = product.shop.owner.user
-        seller_profile_serializer = SellerProfileSerializer(seller)
+        seller_profile_serializer = SellerProfileSerializer(seller.user_profile)
         
         # serialize product review
         reviews = UserRating.objects.filter(product=product.id)
