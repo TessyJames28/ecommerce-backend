@@ -108,7 +108,7 @@ class ProductCreateMixin:
     def create(self, validated_data):
         images = validated_data.pop('images', [])
         variants = validated_data.pop('variants', [])
-        names = validated_data.pop("occasion", [])
+        # names = validated_data.pop("occasion", [])
 
         instance = self.Meta.model.objects.create(**validated_data)
 
