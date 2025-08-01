@@ -15,7 +15,7 @@ def send_otp_email(to_email, otp_code):
         subject,
         message,
         # from_email,
-        "noreply@sandbox781b98c0491f446194023f66a9dafcc2.mailgun.org", # from
+        settings.DEFAULT_FROM_EMAIL, # from
         [to_email], # To
         fail_silently=False,
     )
