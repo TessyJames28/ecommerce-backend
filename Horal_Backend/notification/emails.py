@@ -1,6 +1,45 @@
 from django.core.mail import send_mail
 from django.conf import settings
 
+
+def send_otp_email(to_email, otp_code):
+    """Send an OTP email to the user."""
+    subject = 'Your OTP Code'
+    message = (
+        f"Hi there,\n\n"
+        f"Here is your OTP code from Horal: {otp_code}\n"
+        f"This code will expire in 5 minutes.\n\n"
+        f"If you didn't request this code, please ignore this email.\n\n"
+        f"Thanks,\n"
+        f"The Horal Team"
+    )
+
+    # from_email = "noreply@example.com"
+    send_mail(
+        subject,
+        message,
+        # from_email,
+        settings.DEFAULT_FROM_EMAIL, # from
+        [to_email], # To
+        fail_silently=False,
+    )
+
+
+# def send_password_reset_otp(email, otp_code):
+#     """Send a password reset email to the user."""
+#     return requests.post(
+#         f"https://api.mailgun.net/v3/{settings.MAILGUN_DOMAIN}/messages",
+#         auth=("api", settings.MAILGUN_API_KEY),
+#         data={
+#             "from": f"YourApp <mailgun@{settings.MAILGUN_DOMAIN}>",
+#             "to": [email],
+#             "subject": "Your Password Reset OTP",
+#             "text": f"Your OTP is: {otp_code}",  # Replace with your real OTP logic
+#         }
+#     )
+
+
+
 def send_refund_email(user_email, order_id):
     """
     Function to send confirmation for order cancellation
