@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from rest_framework.generics import GenericAPIView
-from products.utility import BaseResponseMixin
+from rest_framework.views import APIView
+from products.utils import BaseResponseMixin
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -11,11 +12,22 @@ from .serializers import (
     SellerProductOrdersSerializer,
     SellerProfileSerializer,
 )
+from .utils import (
+    get_return_order,
+    get_rolling_topselling_products,
+    get_sales_and_order_overview,
+    get_sales_by_category,
+    get_sellers_topselling_products,
+    get_total_order,
+    get_total_revenue,
+    parse_date_safe
+)
 from user_profile.models import Profile
 from shops.models import Shop
+from sellers.models import SellerKYC
 from django.db.models import Q
 from orders.models import OrderItem
-from django.utils.timezone import timezone
+from django.utils import timezone
 import calendar
 
 
@@ -205,3 +217,87 @@ class SellerProfileView(GenericAPIView):
             "message": "Seller profile updated successfully",
             "data": serializer.data
         }, status=status.HTTP_200_OK)
+    
+
+class SellerDashboardAnalyticsAPIView(APIView, BaseResponseMixin):
+    """
+    Class that that displays all data for seller's dashboard
+    analytics
+    """
+    permission_classes = [IsAuthenticated]
+
+
+    def get(self, request, *args, **kwargs):
+        """
+        Get method to retrieve sellers dashboard analytics
+        """
+        user = request.user
+        # Get SelleyKYC instance to pass to shop
+        try:
+            user = SellerKYC.objects.get(user=user)
+        except SellerKYC.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "Seller KYC not found"
+            )
+
+        # Get shop associate with this seller
+        try:
+            shop = Shop.objects.get(owner=user)
+        except Shop.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "Seller shop not found"
+            )
+        
+        # Get query params
+        period = request.query_params.get("period", "monthly").lower()
+        sort = request.query_params.get("sort", None)
+        if sort:
+            sort.lower()
+        
+        allowed_periods = ['daily', 'weekly', 'monthly', 'yearly']
+        if period not in allowed_periods:
+            period = 'monthly'
+
+        # Get core metrics: Revenue and Order Stats
+        total_revenue = get_total_revenue(shop.id)
+        total_orders = get_total_order(shop.id)
+        return_orders = get_return_order(shop.id)
+
+        # Sales summary by category (grouped by daily, weekly, etc)
+        sales_by_category = get_sales_by_category(shop.id)
+
+        # Order and sales overview chart data
+        sales_and_order_overview = get_sales_and_order_overview(shop.id)
+
+        # Rolling top selling products (last 30 days)
+        top_selling_products = get_rolling_topselling_products(shop.id) or []
+        # print(f"top selling product: {top_selling_products}")
+        if sort == "oldest":
+            top_selling_products = sorted(
+                top_selling_products, 
+                key=lambda x: parse_date_safe(x['latest_order_date'])
+            )
+        elif sort == "recent":
+            top_selling_products = sorted(
+                top_selling_products, 
+                key=lambda x: parse_date_safe(x['latest_order_date']), reverse=True
+            )
+            print(f"for latest: {top_selling_products}")
+            
+
+        return Response({
+            "status": "success",
+            "status_code": status.HTTP_200_OK,
+            "message": "Seller dashboard analytics retrieve successfully",
+            "data": {
+                "total_revenue": float(total_revenue),
+                "total_orders": total_orders,
+                "return_orders": return_orders,
+                "sales_by_category": sales_by_category,
+                "sales_and_order_overview": sales_and_order_overview,
+                "top_selling_products": top_selling_products
+            }
+        }, status=status.HTTP_200_OK)
+
