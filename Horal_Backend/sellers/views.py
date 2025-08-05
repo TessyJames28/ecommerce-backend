@@ -11,7 +11,7 @@ from .serializers import (
 from django.utils.timezone import now
 from rest_framework.response import Response
 from rest_framework import status
-from products.utility import (
+from products.utils import (
     IsSuperAdminPermission, BaseResponseMixin,
     StandardResultsSetPagination, product_models
 )
