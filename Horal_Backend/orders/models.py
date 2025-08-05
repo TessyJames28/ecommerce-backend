@@ -34,7 +34,7 @@ class Order(ShippingSnapshotMixin, models.Model):
     """Model to represents a user's placed order"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='orders')
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField()
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(max_length=50, choices=Status.choices, default=Status.PENDING)
 
@@ -70,7 +70,7 @@ class OrderReturnRequest(models.Model):
     Users request for order refund
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    order = models.ForeignKey(Order, on_delete=models.CASCADE)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="order_return_request")
     reason = models.TextField()
     approved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

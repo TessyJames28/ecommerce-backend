@@ -6,20 +6,15 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
-from products.utility import IsSuperAdminPermission
+from products.utils import IsSuperAdminPermission
 from payment.views import trigger_refund
 from payment.models import PaystackTransaction
-from payment.utility import update_order_status
-from notification.utility import (
-    store_order_otp, verify_order_otp, generate_otp,
-    send_otp_email
-)
-
-from .utility import approve_return
+from payment.utils import update_order_status
+from .utils import approve_return
 from .models import Order, OrderItem
 from .serializer import OrderReturnRequest, OrderSerializer, OrderReturnRequestSerializer
 from carts.models import Cart
-from products.utility import BaseResponseMixin, update_quantity
+from products.utils import BaseResponseMixin, update_quantity
 
 # Create your views here.
 
