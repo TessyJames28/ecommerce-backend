@@ -6,7 +6,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import Category
 from categories.models import Category
 from .serializers import CategorySerializer
-from products.utility import (
+from products.utils import (
     IsAdminOrSuperuser, BaseResponseMixin,
     StandardResultsSetPagination
 )
