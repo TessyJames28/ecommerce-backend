@@ -15,6 +15,7 @@ from .models import Order, OrderItem
 from .serializer import OrderReturnRequest, OrderSerializer, OrderReturnRequestSerializer
 from carts.models import Cart
 from products.utils import BaseResponseMixin, update_quantity
+from django.utils.timezone import now
 
 # Create your views here.
 
@@ -65,7 +66,8 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                     landmark=address.landmark if address else None,
                     country=address.country if address else None,
                     state=address.state if address else None,
-                    phone_number=address.phone_number if address else None
+                    phone_number=address.phone_number if address else None,
+                    created_at=now()  # Ensure created_at is set
                 )
                 update_order_status(order, Order.Status.PENDING, user, force=True)
             
