@@ -11,9 +11,9 @@ from .models import PaystackTransaction
 from orders.models import Order
 from rest_framework.views import APIView
 from carts.models import CartItem
-from .utility import trigger_refund, update_order_status
+from .utils import trigger_refund, update_order_status
 from orders.serializer import OrderSerializer
-from products.utility import update_quantity, IsAdminOrSuperuser
+from products.utils import update_quantity, IsAdminOrSuperuser
 from django.utils.decorators import method_decorator
 from rest_framework.exceptions import ValidationError
 import uuid
