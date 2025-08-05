@@ -132,7 +132,7 @@ class ProductCreateMixin:
         #     instance.occasion.set(occasions)
 
         # Update product quantity based on stock
-        from .utility import update_quantity
+        from .utils import update_quantity
         update_quantity(instance)
 
         return instance
@@ -161,7 +161,7 @@ class ProductCreateMixin:
                 ProductVariant.objects.create(product=instance, **data)
 
         # Update product quantity based on stock
-        from .utility import update_quantity
+        from .utils import update_quantity
         update_quantity(instance)
 
         return instance 
@@ -203,7 +203,7 @@ class UniqueProductPerShopMixin:
 class ProductRepresentationMixin:
     def to_representation(self, instance):
         """Centralize the to_representation logic"""
-        from .utility import update_quantity
+        from .utils import update_quantity
         update_quantity(instance)
         data = super().to_representation(instance)
         data['category'] = CategorySerializer(instance.category).data
@@ -425,6 +425,7 @@ class ElectronicsProductSerializer(
     )
     power_source = serializers.CharField(required=False)
     condition = serializers.CharField(required=False)
+    power_output = serializers.CharField(required=False)
 
     class Meta:
         model = ElectronicsProduct
@@ -434,6 +435,9 @@ class ElectronicsProductSerializer(
     
     def validate_power_source(self, value):
         return normalize_choice(value, PowerSource)
+    
+    def validate_power_output(self, value):
+        return normalize_choice(value, PowerOutput)
     
     def validate_condition(self, value):
         return normalize_choice(value, ProductCondition)
