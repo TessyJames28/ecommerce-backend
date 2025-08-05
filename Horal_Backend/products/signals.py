@@ -3,10 +3,10 @@ from django.contrib.auth.signals import user_logged_in
 from django.dispatch import receiver
 from django.contrib.contenttypes.models import ContentType
 from .models import ProductIndex
-from .utility import CATEGORY_MODEL_MAP
-from carts.utility import merge_user_cart
-from products.utility import merge_recently_viewed_products
-from favorites.utility import merge_favorites_from_session_to_user
+from .utils import CATEGORY_MODEL_MAP
+from carts.utils import merge_user_cart
+from products.utils import merge_recently_viewed_products
+from favorites.utils import merge_favorites_from_session_to_user
 
 
 MODEL_CATEGORY_MAP = {v: k for k, v in CATEGORY_MODEL_MAP.items()}
@@ -14,7 +14,13 @@ MODEL_CATEGORY_MAP = {v: k for k, v in CATEGORY_MODEL_MAP.items()}
 # Automatically index new product
 @receiver(post_save)
 def create_product_index(sender, instance, created, **kwargs):
-    """Automatically create product index once a product is created"""
+    """
+    Automatically create product index once a product is created
+    
+    NOTE:
+    For ProductIndex, content_type_id is intentionally set to the UUID of the product itself
+    to simplify joins with ProductVariant and avoid Django ContentType joins.
+    """
     if not created:
         return
     
