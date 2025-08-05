@@ -5,7 +5,7 @@ from rest_framework.generics import GenericAPIView
 from .models import Profile
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from products.views import BaseResponseMixin
-from products.utility import IsAdminOrSuperuser
+from products.utils import IsAdminOrSuperuser
 
 # Create your views here.
 
