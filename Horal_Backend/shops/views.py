@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import Shop
 from .serializers import ShopSerializer
-from products.utility import (
+from products.utils import (
     IsSuperAdminPermission, BaseResponseMixin,
     product_models, StandardResultsSetPagination,
     get_product_queryset
