@@ -348,7 +348,8 @@ for buyer in remaining_users:
             landmark="Near Market",
             state=buyer.location.state,
             country=buyer.location.country,
-            phone_number=buyer.phone_number
+            phone_number=buyer.phone_number,
+            created_at=timezone.now()
         )
         for item in items:
             OrderItem.objects.create(
