@@ -7,7 +7,7 @@ from rest_framework.exceptions import ValidationError, PermissionDenied
 from django.db.models import Avg
 from .models import UserRating
 from .serializers import UserRatingSerializer
-from products.utility import BaseResponseMixin, IsAdminOrSuperuser
+from products.utils import BaseResponseMixin, IsAdminOrSuperuser
 from orders.models import Order, OrderItem
 from products.models import ProductIndex, ProductVariant
 
