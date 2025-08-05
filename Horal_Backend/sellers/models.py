@@ -38,7 +38,7 @@ class SellerKYCAddress(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     first_name = models.CharField(max_length=225)
     last_name = models.CharField(max_length=225)
-    middle_name = models.CharField(max_length=225, default=None)
+    middle_name = models.CharField(max_length=225, default=None, null=True, blank=True)
     dob = models.DateField()
     gender = models.CharField(max_length=20)
     mobile = models.CharField(
