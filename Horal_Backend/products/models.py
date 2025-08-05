@@ -302,7 +302,7 @@ class FashionProduct(BaseProduct, ProductLocationMixin):
         blank=False,
         related_name='fashion_products'
     )
-    occasion = models.CharField(max_length=250, null=True, blank=True)
+    # occasion = models.CharField(max_length=250, null=True, blank=True)
     material = models.CharField(max_length=250, null=True, blank=True)
     style = models.CharField(max_length=250, null=True, blank=True)
     sleeve_length = models.CharField(max_length=250, null=True, blank=True)
@@ -487,6 +487,13 @@ class ProductIndex(models.Model):
             models.Index(fields=['category_name']),
             models.Index(fields=['object_id']),
         ]
+
+    
+    def get_real_product(self):
+        """Method to retrieve the real product"""
+        from .utils import CATEGORY_MODEL_MAP
+        model_class = CATEGORY_MODEL_MAP.get(self.category_name)
+        return model_class.objects.get(id=self.id)
 
 
     def __str__(self):

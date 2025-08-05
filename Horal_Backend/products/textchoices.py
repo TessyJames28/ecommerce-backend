@@ -47,6 +47,10 @@ class SizeOption:
         G = "G", "Gram"
         ML = "ML", "Milliliter"
         L = "L", "Liter"
+        OZ = "OZ", "Ounces"
+        LB = "LB", "Pounds"
+        M = "M", "Meters"
+        FT = "FT", "Feet"
 
     class StandardSize(models.TextChoices):
         XS = "XS", "Extra Small"
