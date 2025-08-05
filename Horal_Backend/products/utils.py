@@ -12,6 +12,8 @@ from .serializers import (
     FashionProductSerializer, ElectronicsProductSerializer, FoodProductSerializer,
     HealthAndBeautyProductSerializer, AccessoryProductSerializer
 ) 
+from django.db import connection
+from django.utils.timezone import now
 
 
 # List of all product models and their serializers
@@ -190,4 +192,41 @@ def merge_recently_viewed_products(session_key, user):
 
     # Clean up anon views after merge
     anon_views.delete()
- 
+
+
+
+def topselling_product_sql(from_date):
+    """Raw sql to get top selling product per seller"""
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT
+                pi.id AS product_index_id,
+                SUM(oi.quantity) AS total_quantity_sold,
+                MAX(o.created_at) AS latest_order_date
+            FROM
+                orders_orderitem oi
+            JOIN
+                "orders_order" o ON oi.order_id = o.id
+            JOIN
+                products_productvariant pv ON oi.variant_id = pv.id
+            JOIN
+                products_productindex pi ON pi.id = pv.object_id
+                       
+            WHERE
+                o.status IN ('paid', 'shipped', 'delivered')
+                AND o.created_at >= %s
+            GROUP BY
+                pi.id
+            ORDER BY
+                total_quantity_sold DESC
+            LIMIT 90;
+
+        """, [from_date])
+        
+        # Get column names for dictionary output
+        # print(f"db data: {cursor.fetchall()}")
+        rows = cursor.fetchall()  # ✅ fetch once
+        columns = [col[0] for col in cursor.description]
+        raw_data = [dict(zip(columns, row)) for row in rows]
+
+    return raw_data
