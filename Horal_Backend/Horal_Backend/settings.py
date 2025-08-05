@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
+    'django_celery_beat',
 ]
 
 MIDDLEWARE = [
@@ -96,6 +97,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",       # React dev server
     "http://127.0.0.1:3000",
 ]
+
+# Set trailing slash automatically
+APPEND_SlASH = True
 
 
 SESSION_COOKIE_SAMESITE = "None"
@@ -238,8 +242,7 @@ CELERY_BROKER_USE_SSL = {
     'ssl_cert_reqs': None # or ssl.CERT_NONE 
 }
 
-
-
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 
 ROOT_URLCONF = 'Horal_Backend.urls'
