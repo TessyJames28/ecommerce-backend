@@ -7,7 +7,7 @@ from products.models import (
     HealthAndBeautyProduct, GadgetProduct, Color, SizeOption
 )
 from products.serializers import MixedProductSerializer
-from products.utility import product_models_list
+from products.utils import product_models_list
 
 
 class CartItemSerializer(serializers.ModelSerializer):

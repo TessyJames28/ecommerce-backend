@@ -5,19 +5,17 @@ from rest_framework.permissions import IsAuthenticated
 from django.http import JsonResponse
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.generics import GenericAPIView
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from .models import PaystackTransaction
-from .serializers import PaystackTransactionSerializer
 from orders.models import Order
 from rest_framework.views import APIView
 from carts.models import CartItem
-from .utility import trigger_refund, update_order_status
+from .utils import trigger_refund, update_order_status
 from orders.serializer import OrderSerializer
-from products.utility import update_quantity, IsAdminOrSuperuser
+from products.utils import update_quantity, IsAdminOrSuperuser
 from django.utils.decorators import method_decorator
-from django.core.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError
 import uuid
 
 
@@ -32,7 +30,20 @@ class InitializeTransaction(APIView):
         """Function to handle payment initialization on paystack"""
         email = request.data.get("email")
         order_id = request.data.get('order_id') # passed from frontend
+        platform = request.data.get('platform')
+
+        if platform not in ['web', 'mobile']:
+            return JsonResponse({
+                "status": "error",
+                "status_code": status.HTTP_400_BAD_REQUEST,
+                "message": "Invalid platform specified"
+            }, status=status.HTTP_400_BAD_REQUEST)
         
+        if platform == 'mobile':
+            redirect_url = settings.MOBILE_REDIRECT_URL
+        elif platform == 'web':
+            redirect_url = settings.WEB_REDIRECT_URL
+
         try:
             order = Order.objects.get(id=order_id, user__email=email)
         except Order.DoesNotExist:
@@ -41,24 +52,16 @@ class InitializeTransaction(APIView):
                 "status_code": status.HTTP_404_NOT_FOUND,
                 "message": "Order not found"
             }, status=status.HTTP_404_NOT_FOUND)
-        
-        # Check that shipping address is set
-        if not hasattr(order, 'shipping_address'):
-            raise ValidationError("Please set a shipping address before proceeding to payment")
-        
+                
         # Check for complete location fields
-        shipping = order.shipping_address
         required_fields = ['country', 'state', 'local_govt', 'phone_number', 'street_address', 'landmark']
-        missing_fields = [field for field in required_fields if not getattr(shipping, field)]
+        missing_fields = [field for field in required_fields if not getattr(order, field, None)]
 
         if missing_fields:
             raise ValidationError(
                 f"Please complete your shipping address information. Missing fields: {', '.join(missing_fields)}"
             )
         
-        if not order.otp_confirmed:
-            raise ValidationError("You must confirm the OTP sent to your email before proceeding to payment.")
-
         
         amount = int(order.total_amount * 100) # convert amount to kobo
         reference = str(uuid.uuid4())
@@ -74,6 +77,7 @@ class InitializeTransaction(APIView):
             "email": email,
             "amount": amount,
             "reference": reference,
+            "callback_url": redirect_url,
             "metadata": {
                 "order_id": str(order.id)
             }
@@ -239,40 +243,6 @@ def transaction_webhook(request):
         "status": "success",
         "status_code": status.HTTP_200_OK
     })
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class PaymentCallbackView(GenericAPIView):
-    """Update order status after payment"""
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, *args, **kwargs):
-        """Handles order creation after payment"""
-        order_id = request.data.get('order_id')
-
-        if not order_id:
-            JsonResponse({
-                "status": "error",
-                "status_code": status.HTTP_400_BAD_REQUEST,
-                "message": "order_id is required"
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            order = Order.objects.get(id=order_id, user=request.user)
-        except Order.DoesNotExist:
-            return JsonResponse({
-                "status": "error",
-                "status_code": status.HTTP_404_NOT_FOUND,
-                "message": "Order not found"
-            }, status=status.HTTP_404_NOT_FOUND)
-
-        model_data = PaystackTransaction.objects.get(order=order.id)
-        serializer = PaystackTransactionSerializer(model_data)
-        return JsonResponse({
-            "message": f"Order is currently {order.status.lower()}",
-            "status": order.status,
-            "order": serializer.data
-        }, status=status.HTTP_200_OK)
 
 
 class RetryRefundView(APIView):

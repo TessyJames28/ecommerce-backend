@@ -1,12 +1,24 @@
 from django.db import models
-from users.models import CustomUser
+from users.models import CustomUser, phone_number_validator
 from products.models import ProductVariant
 from carts.models import Cart
 import uuid
 
 
 # Create your models here.
-class Order(models.Model):
+class ShippingSnapshotMixin(models.Model):
+    street_address = models.CharField(max_length=500, blank=True, null=True)
+    local_govt = models.CharField(max_length=150, blank=True, null=True)
+    landmark = models.CharField(max_length=150, blank=True, null=True)
+    country = models.CharField(max_length=50, blank=True, null=True, default="Nigeria")
+    state = models.CharField(max_length=50, default="Lagos", blank=True, null=True  )
+    phone_number = models.CharField(max_length=11, validators=[phone_number_validator], blank=True, null=True)
+
+    class Meta:
+        abstract = True
+
+
+class Order(ShippingSnapshotMixin, models.Model):
     class Status(models.TextChoices):
         """Enum for order status"""
         PENDING = "pending", "Pending"
@@ -24,7 +36,6 @@ class Order(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='orders')
     created_at = models.DateTimeField(auto_now_add=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    otp_confirmed = models.BooleanField(default=False)
     status = models.CharField(max_length=50, choices=Status.choices, default=Status.PENDING)
 
     def __str__(self):
@@ -59,7 +70,7 @@ class OrderReturnRequest(models.Model):
     Users request for order refund
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    order = models.ForeignKey(Order, on_delete=models.CASCADE)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="order_return_request")
     reason = models.TextField()
     approved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

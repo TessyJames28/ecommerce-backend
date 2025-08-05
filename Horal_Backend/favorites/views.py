@@ -3,7 +3,7 @@ from rest_framework.generics import GenericAPIView
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from products.utility import BaseResponseMixin
+from products.utils import BaseResponseMixin
 from carts.authentication import SessionOrAnonymousAuthentication
 from products.models import ProductIndex
 

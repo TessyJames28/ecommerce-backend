@@ -1,16 +1,13 @@
-from datetime import timezone
 import json
 from django.utils.timezone import now
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404
 from rest_framework.generics import GenericAPIView
-from django_redis import get_redis_connection
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import PermissionDenied
-from .utility import generate_token_for_user, verify_google_token
+from .utils import generate_token_for_user, verify_google_token, exchange_code_for_token
 from users.models import CustomUser, Location
 from django.contrib.auth.signals import user_logged_in
 from rest_framework.exceptions import ValidationError
-from redis.exceptions import ConnectionError as RedisConnectionError
 from users.serializers import (
     CustomUserSerializer,
     LoginSerializer,
@@ -26,27 +23,13 @@ from rest_framework import status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from django.conf import settings
-from rest_framework_simplejwt.tokens import RefreshToken
-from notification.utility import (
-    send_otp_email, generate_otp, store_otp,
+from notification.utils import (
+    generate_otp, store_otp,
     verify_registration_otp,
+    safe_cache_set,
 )
-from django.core.cache import cache
-import requests
+from notification.emails import send_otp_email
 
-
-def exchange_code_for_token(code):
-    token_url = 'https://oauth2.googleapis.com/token'
-    data = {
-        'code': code,
-        'client_id': settings.GOOGLE_OAUTH['WEB_CLIENT_ID'],
-        'client_secret': settings.GOOGLE_OAUTH['CLIENT_SECRET'],
-        'redirect_uri': settings.GOOGLE_OAUTH['REDIRECT_URI'],
-        'grant_type': 'authorization_code'
-    }
-
-    response = requests.post(token_url, data=data)
-    return response.json()
 
 class RegisterUserView(GenericAPIView):
     """API endpoint to register users"""
@@ -65,13 +48,8 @@ class RegisterUserView(GenericAPIView):
         otp = generate_otp()
 
         # Store registration data temporarily
-        try:
-            cache.set(f"reg_data:{email}", json.dumps(serializer.validated_data), timeout=300) #5 mins expiry
-            cache.set(f"otp:{email}", otp, timeout=300) # OTP valid for 5 mins too
-        except RedisConnectionError:
-            return Response({
-                "error": "Temporary issue accessing verification service. Try again shortly."
-            }, status=503)
+        safe_cache_set(f"reg_data:{email}", json.dumps(serializer.validated_data), timeout=300) #5 mins expiry
+        safe_cache_set(f"otp:{email}", otp, timeout=300) # OTP valid for 5 mins too
 
         # Send OTP
         send_otp_email(email, otp)
@@ -385,13 +363,6 @@ class PasswordResetRequestView(GenericAPIView):
             }
         }, status=status.HTTP_200_OK)
     
-        # if settings.DEBUG:
-        #     stored.otp = get_stored_otp_for_testing(user.id)
-        #     if stored_otp:
-        #         response_data['debug'] = {"otp": stored_otp}
-
-        # return Response(response_data, status=status.HTTP_200_OK)
-    
 
 class VerifyOTPView(GenericAPIView):
     """API endpoint for verifying OTP"""
@@ -450,23 +421,17 @@ class CreateLocationView(GenericAPIView):
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # location = serializer.save()
-        location = self.perform_create(serializer)
+        location = serializer.save(user=request.user)
 
         response_data = {
             "status": "success",
             "status code": status.HTTP_201_CREATED,
             "message": "User location registered successfully",
-            "data": self.get(location).data
+            "data": serializer.data
         }
 
         return Response(response_data, status=status.HTTP_201_CREATED)
     
-
-    def perform_create(self, serializer):
-        """Automatically assign request.user to the Location instance"""
-        return serializer.save(user=self.request.user)
-
 
 class LocationUpdateDeleteView(GenericAPIView):
     """View endpoint to handle user location update and deletion"""

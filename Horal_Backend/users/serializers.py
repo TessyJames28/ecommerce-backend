@@ -6,8 +6,8 @@ from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
 from django.utils.timezone import now
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
-from notification.utility import verify_otp, verify_registration_otp
-from .utility import validate_strong_password, generate_token_for_user
+from notification.utils import verify_otp, verify_registration_otp
+from .utils import validate_strong_password, generate_token_for_user
 
 class CustomUserSerializer(serializers.ModelSerializer):
     is_seller = serializers.BooleanField(default=False)
@@ -216,7 +216,7 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShippingAddress
         fields = [
-            'id', 'user', 'order', 'phone_number', 'street_address',
+            'id', 'user', 'phone_number', 'street_address',
             'local_govt', 'landmark', 'state', 'country'
         ]
         read_only_fields = ['user', 'order']

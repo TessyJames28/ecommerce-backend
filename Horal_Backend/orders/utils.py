@@ -1,8 +1,8 @@
 from django.utils import timezone
 from django.db import transaction
-from products.utility import update_quantity
+from products.utils import update_quantity
 from .models import Order
-from payment.utility import update_order_status
+from payment.utils import update_order_status
 
 def approve_return(order_return_request, user):
     """

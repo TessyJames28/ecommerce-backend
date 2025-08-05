@@ -1,30 +1,28 @@
 from django.utils.timezone import now
-from rest_framework import status, permissions
+from rest_framework import status
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from collections import defaultdict
-from django.contrib.contenttypes.models import ContentType
-from django.db.models import Q, Avg, Count, Sum
+from django.db.models import Q, Avg
 from django.core.exceptions import PermissionDenied
 from sellers.models import SellerKYC
-from sellers.serializers import SellerProfileSerializer
+from sellers_dashboard.serializers import SellerProfileSerializer
 from ratings.serializers import UserRatingSerializer
 from ratings.models import UserRating
 from django.http import Http404
+from datetime import timedelta
 from rest_framework.exceptions import NotFound
 from shops.models import Shop
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from itertools import chain
-from .utility import (
+from .utils import (
     BaseResponseMixin, product_models, IsAuthenticated,
     IsSellerAdminOrSuperuser, StandardResultsSetPagination,
-    product_models_list, track_recently_viewed_product
+    product_models_list, track_recently_viewed_product,
+    topselling_product_sql
 )
 from .models import ProductIndex, RecentlyViewedProduct
 from categories.models import Category
 from subcategories.models import SubCategory
-from orders.models import OrderItem
 from .models import ProductVariant
 from .serializers import get_product_serializer, MixedProductSerializer
 from carts.authentication import SessionOrAnonymousAuthentication
@@ -160,7 +158,7 @@ class SingleProductDetailView(GenericAPIView, BaseResponseMixin):
 
         # Serialize seller profile
         seller = product.shop.owner.user
-        seller_profile_serializer = SellerProfileSerializer(seller)
+        seller_profile_serializer = SellerProfileSerializer(seller.user_profile)
         
         # serialize product review
         reviews = UserRating.objects.filter(product=product.id)
@@ -342,7 +340,8 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
                 query &= (
                     Q(title__icontains=search_query) |
                     Q(description__icontains=search_query) |
-                    Q(brand__icontains=search_query)
+                    Q(brand__icontains=search_query) |
+                    Q(specifications__icontains=search_query)
                 )
 
             if brand:
@@ -372,9 +371,10 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
                 )).filter(avg_rating__gte=rating)
 
             if products.exists():
-                serializer = MixedProductSerializer(product)
-                data = serializer.data
-                products_data.append(data)
+                for matched_product in products:
+                    serializer = MixedProductSerializer(matched_product)
+                    data = serializer.data
+                    products_data.append(data)
 
         page = self.paginate_queryset(products_data)
         if page is not None:
@@ -389,6 +389,118 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
             "Products retrieved successfully",
             products_data
         )
+    
+
+
+class TopSellingProductListView(GenericAPIView, BaseResponseMixin):
+    """
+    API endpoint to list topselling products with optional filtering
+    """
+    authentication_classes = []  # Disable all authentication backends
+    pagination_class = StandardResultsSetPagination
+    serializer_class = MixedProductSerializer
+
+
+    def get_queryset(self):
+        from_date = now() - timedelta(days=30)
+        raw_data = topselling_product_sql(from_date)
+
+        product_ids = [row['product_index_id'] for row in raw_data]
+
+        # Get ProductIndex entries with their actual linked product
+        indices = ProductIndex.objects.filter(id__in=product_ids).select_related('content_type')
+
+        # Extract real product instances (GenericForeignKey)
+        linked_products = []
+        for index in indices:
+            product = index.linked_product
+            if product is not None:
+                linked_products.append(product)
+
+        return linked_products
+
+
+    def get(self, request, *args, **kwargs):
+        category = request.query_params.get('category')
+        shop_id = request.query_params.get('shop')
+        search_query = request.query_params.get('search')
+        brand = request.query_params.get('brand')
+        state = request.query_params.get('state')
+        local_govt = request.query_params.get('local_govt')
+        price_min = request.query_params.get('price_min')
+        price_max = request.query_params.get('price_max')
+        rating = request.query_params.get('rating')
+        sub_category = request.query_params.get('sub_category')
+
+        products_data = []
+
+        linked_products = self.get_queryset()
+
+        for product in linked_products:
+            model = product.__class__
+            try:
+                query = Q(id=product.id)
+
+                if shop_id:
+                    query &= Q(shop__id=shop_id)
+
+                if category:
+                    query &= Q(category_name__iexact=category)
+
+                if search_query:
+                    query &= (
+                        Q(title__icontains=search_query) |
+                        Q(description__icontains=search_query) |
+                        Q(brand__icontains=search_query) |
+                        Q(specifications__icontains=search_query)
+                    )
+
+                if brand:
+                    query &= Q(brand__icontains=brand)
+
+                if state:
+                    query &= Q(state__iexact=state)
+
+                if local_govt:
+                    query &= Q(local_govt__icontains=local_govt)
+
+                if price_min:
+                    query &= Q(price__gte=price_min)
+
+                if price_max:
+                    query &= Q(price__lte=price_max)
+
+                if sub_category:
+                    query &= Q(sub_category__iexact=sub_category)
+
+                products = model.published.filter(query)
+
+                if rating:
+                    products = products.annotate(
+                        avg_rating=Avg('reviews__rating')
+                    ).filter(avg_rating__gte=rating)
+
+                for p in products:
+                    serializer = MixedProductSerializer(p)
+                    products_data.append(serializer.data)
+
+            except Exception:
+                continue  # In case model manager is missing, etc.
+
+        page = self.paginate_queryset(products_data)
+        if page is not None:
+            paginated_response = self.get_paginated_response(page)
+            paginated_response.data["status"] = "success"
+            paginated_response.data["status_code"] = status.HTTP_200_OK
+            paginated_response.data["message"] = "Top selling products retrieved successfully"
+            return paginated_response
+
+        return self.get_response(
+            status.HTTP_200_OK,
+            "top selling products retrieved successfully",
+            products_data
+        )
+
     
 
 
@@ -524,55 +636,5 @@ class RecentlyViewedProductView(GenericAPIView, BaseResponseMixin):
         return self.get_response(
             status.HTTP_200_OK,
             "Recently viewd products retrieved successfully",
-            serializer.data
-        )
-
-
-class TopSellingProductView(GenericAPIView, BaseResponseMixin):
-    """
-    Class to handle the the retrieve top selling products
-    """
-    serializer_class = MixedProductSerializer
-    permission_classes = [AllowAny]
-
-    def get(self, request, *args, **kwargs):
-        """
-        Retrieve top selling products
-        Count most sold variants and map back to products
-        """
-        top_items = (
-            OrderItem.objects
-            .values('variant__content_type', 'variant__object_id')
-            .annotate(total_sold=Sum('quantity'))
-            .order_by('-total_sold')[:30] # top 30
-        )
-
-        # Groip by content_type to fetch products from each model
-        product_map = defaultdict(list)
-        for item in top_items:
-            product_map[item['variant__content_type']].append(item['variant__object_id'])
-        
-        products = []
-        for ct_id, obj_ids in product_map.items():
-            model = ContentType.objects.get_for_id(ct_id).model_class()
-            products.extend(
-                model.objects.filter(id__in=obj_ids)
-            )
-
-        # Get product ids to preserve order
-        def sort_key(product):
-            for i, item in enumerate(top_items):
-                if product.id == item['variant__object_id'] and \
-                    ContentType.objects.get_for_model(product).id == item['variant__content_type']:
-                    return i
-            return len(top_items)  # If not found, place at the end
-
-        # preserve the order of product_ids
-        products_sorted = sorted(products, key=sort_key)
-        serializer = self.get_serializer(products_sorted, many=True)
-
-        return self.get_response(
-            status.HTTP_200_OK,
-            "Top selling products retrieved successfully",
             serializer.data
         )

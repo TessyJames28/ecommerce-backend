@@ -1,97 +1,261 @@
 from django.shortcuts import get_object_or_404
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from .models import SellerKYC, SellerSocials
+from .models import SellerKYC, SellerSocials, KYCStatus
 from .serializers import (
-    SellerKYCFirstScreenSerializer,
-    SellerKYCProofOfAddressSerializer,
     SellerSocialsSerializer,
-    SellerProfileSerializer
+    SellerKYCAddressSerializer,
+    SellerKYCCACSerializer,
+    SellerKYCNINSerializer
 )
+from django.utils.timezone import now
 from rest_framework.response import Response
 from rest_framework import status
-from products.utility import (
+from products.utils import (
     IsSuperAdminPermission, BaseResponseMixin,
     StandardResultsSetPagination, product_models
 )
 from shops.models import Shop
 from shops.serializers import ShopSerializer
+from users.models import CustomUser
 
 
 # Create your views here.
-class SellerKYCIDVerificationView(GenericAPIView):
-    """API endpoint for the first screen of KYC"""
-    serializer_class = SellerKYCFirstScreenSerializer
+class KYCIDVerificationWebhook(GenericAPIView, BaseResponseMixin):
+    """Webhook that receives users NIN verification with slefie"""
+    serializer_class = SellerKYCNINSerializer
+
+
+    def post(self, request, *args, **kwargs):
+        """Handle NIN and Selfie image KYC verification"""
+        # Extract data from request
+        payload = request.data
+
+        # Basic validation
+        if payload.get("verification_type") != "NIN":
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Invalid verification type"
+            )
+
+        # Extract relevant fields        
+        nin_number = payload.get("value")
+        selfie_url = payload.get("selfie_url")
+        user_id = payload.get("metadata", {}).get("user_id")
+        verification_status = payload.get("verification_status")
+        success_status = payload.get("status")
+        entity = payload.get("data", {}) \
+            .get("government_data", {}) \
+            .get("data", {}) \
+            .get("nin", {}) \
+            .get("entity", {})
+
+        if not (nin_number and selfie_url and user_id):
+            print(f"nin: {nin_number}\nselfie_url: {selfie_url}\nuser_id: {user_id}")
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Missing required fields: 'nin', 'selfie_url', or 'user_id'"
+            )
+
+        # Create and update NIN entry
+        data = {
+            "nin": nin_number,
+            "selfie": selfie_url
+        }
+
+        try:
+            user = CustomUser.objects.get(id=user_id)
+        except CustomUser.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "User not found"
+            )
+
+
+        serializer = self.get_serializer(data=data, context={"user": user})
+        serializer.is_valid(raise_exception=True)
+        kyc_nin = serializer.save()
+
+        if success_status is True and verification_status == "Completed":
+            kyc_nin.status = KYCStatus.VERIFIED
+            kyc_nin.nin_verified = True
+            kyc_nin.save(update_fields=['status', 'nin_verified'])
+        
+        elif success_status is False and verification_status == "Completed":
+            kyc_nin.status = KYCStatus.FAILED
+            kyc_nin.save(update_fields=["status"])
+
+        # Cross-check seller name with kyc data
+        try:
+            seller = SellerKYC.objects.get(user__id=user_id)
+            address = seller.address
+            nin = seller.nin
+
+            # Normalize name to facilitate loose match
+            first_name_match = address.first_name.lower() == entity.get("first_name", "").lower()
+            last_name_match = address.last_name.lower() == entity.get("last_name", "").lower()
+
+            if not (first_name_match and last_name_match):
+                nin.status = KYCStatus.FAILED
+                nin.nin_verified = False
+                nin.save(update_fields=['status', 'nin_verified'])
+                seller.status = KYCStatus.FAILED
+                seller.save(update_fields=["status"])
+
+                return Response({
+                    "status": "failed",
+                    "status_code": status.HTTP_400_BAD_REQUEST,
+                    "message": "KYC verification failed. Provided name does not match",
+                    "data": SellerKYCNINSerializer(kyc_nin).data,
+                    "dojah_response": payload
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except SellerKYC.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "Seller KYC record not found"
+            )
+
+        return Response({
+            "status": "success",
+            "status_code": status.HTTP_201_CREATED,
+            "message": "KYC verification completed",
+            "data": SellerKYCNINSerializer(kyc_nin).data,
+            "dojah_response": payload
+        }, status=status.HTTP_201_CREATED)
+        
+
+
+class SellerAddressCreateView(GenericAPIView, BaseResponseMixin):
+    """
+    Class to handle the creation of seller address
+    """
+    serializer_class = SellerKYCAddressSerializer
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        """Handle the KYC submission"""
-        serializer = self.get_serializer(data=request.data)
-        serializer.context['request'] = request
+        """Method to create seller address"""
+        serializer = self.get_serializer(
+            data=request.data,
+            context={'request': request}
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        
-        response_data = {
-            "status": "success",
-            "status_code": 201,
-            "message": "KYC submitted successfully",
-            "data": serializer.data
-        }
-        return Response(response_data, status=status.HTTP_201_CREATED)
-    
+
+        return self.get_response(
+            status.HTTP_201_CREATED,
+            "Seller address created successfully",
+            serializer.data
+        )
+
 
     def patch(self, request, *args, **kwargs):
-        """Handle the KYC update"""
-        try:
-            kyc_instance = SellerKYC.objects.get(user=request.user)
-        except SellerKYC.DoesNotExist:
-            return Response({
-                "status": "failed",
-                "message": "KYC instance does not exist."
-            }, status=status.HTTP_404_NOT_FOUND)
-        
-        serializer = self.get_serializer(kyc_instance, data=request.data, partial=True)
-        serializer.context['request'] = request #Set the request context for the serializer
+        """Method to partially update seller address"""
+        serializer = self.get_serializer(
+            user=request.user,
+            data=request.data,
+            partial=True
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save()
+
+        return self.get_response(
+            status.HTTP_200_OK,
+            "User address updated successfully"
+        )
+
+class DojahCACWebhook(GenericAPIView, BaseResponseMixin):
+    """
+    Webhook to handle CAC verification and update from dojah
+    """
+    serializer_class = SellerKYCCACSerializer
+
+
+    def post(self, request, *args, **kwargs):
+        """Post method to handle cac verification webhook"""
+        payload = request.data
+
+        # Basic verification
+        verification_type = payload.get("metadata", {}).get("verification_type")
+        if verification_type != "cac":
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Invalid verification type"
+            )
         
-        response_data = {
-            "status": "success",
-            "status_code": 200,
-            "message": "KYC updated successfully",
-            "data": serializer.data
+        # Extract relevant values
+        rc_number = payload.get("verification_value")
+        verification_status = payload.get("verification_status")
+        user_id = payload.get("metadata", {}).get("user_id")
+        success_status = payload.get("status")
+        company_type = payload.get("data", {}) \
+            .get("business_data", {}).get("business_type")
+        business_name = payload.get("data", {}).get("business_data", {}).get("business_name")
+
+        
+        if not (rc_number and company_type):
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "The payload must include 'rc_number and 'business_type"
+            )
+        
+        data = {
+            "rc_number": rc_number,
+            "company_type": company_type
         }
-        return Response(response_data, status=status.HTTP_200_OK)
-    
 
-class SellerKYCProofOfAddressView(GenericAPIView):
-    """API endpoint for the proof of address screen of KYC"""
-    serializer_class = SellerKYCProofOfAddressSerializer
-    permission_classes = [IsAuthenticated]
-
-    def patch(self, request, *args, **kwargs):
-        """Handle the proof of address update"""
         try:
-            kyc_instance = SellerKYC.objects.get(user=request.user)
-        except SellerKYC.DoesNotExist:
-            return Response({
-                "status": "failed",
-                "message": "KYC instance does not exist."
-            }, status=status.HTTP_404_NOT_FOUND)
-        
-        serializer = self.get_serializer(kyc_instance, data=request.data, partial=True)
-        serializer.context['request'] = request #Set the request context for the serializer
+            user = CustomUser.objects.get(id=user_id)
+        except CustomUser.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "User not found"
+            )
+
+        serializer = self.get_serializer(data=data, context={"user": user})
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        
-        response_data = {
+        kyc_cac = serializer.save()
+
+        if success_status is True and verification_status == "Completed":
+            kyc_cac.status = KYCStatus.VERIFIED
+            kyc_cac.company_name = business_name
+            kyc_cac.cac_verified = True
+            kyc_cac.save(update_fields=['status', 'cac_verified', 'company_name'])
+        elif success_status is False and verification_status == "Completed":
+            kyc_cac.status = KYCStatus.FAILED
+            kyc_cac.save(update_fields=['status'])
+
+        # update seller profile and create shop
+        user.is_seller = True
+        user.save(update_fields=['is_seller'])
+
+        try:
+            kyc = SellerKYC.objects.get(user=user)
+            address = kyc.address
+        except SellerKYC.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "SellerKYC not found for this user"
+            )
+        print(address.business_name)
+        shop, _ = Shop.objects.get_or_create(
+            owner=kyc,
+            defaults= {
+                "name": f"{address.business_name}" if address.business_name else \
+                    f"{user.full_name}'s shop",
+                "location": f"{address.street}, {address.lga}, {address.landmark}, {address.state}"
+            }
+        )
+
+        return Response({
             "status": "success",
-            "status_code": 200,
-            "message": "Proof of address updated successfully",
-            "data": serializer.data
-        }
-        return Response(response_data, status=status.HTTP_200_OK)
-    
+            "status_code": status.HTTP_200_OK,
+            "message": "KYC verification completed",
+            "data": SellerKYCCACSerializer(kyc_cac).data,
+            "dojah_response": payload
+        })
+
+
 
 class SellerSocialsView(GenericAPIView):
     """API endpoint for the seller's social media links"""
@@ -134,46 +298,6 @@ class SellerSocialsView(GenericAPIView):
             "message": "Social media links updated successfully",
             "data": serializer.data
         }, status=status.HTTP_200_OK)
-    
-
-class VerifiedSeller(GenericAPIView):
-    """API endpoint that handles seller verification once KYC is passed"""
-    permission_classes = [IsAuthenticated]
-    serializer_class = ShopSerializer
-
-    def post(self, request, *args, **kwargs):
-        user = request.user
-
-        # user = CustomUser.objects.get(id=user)
-
-        if user.is_seller:
-            return Response(
-                {"detail": "Already a seller."}
-            )
-        
-        # Get or create SellerKYC record
-        kyc, _ = SellerKYC.objects.get_or_create(user=user)
-        kyc.is_verified = True
-        kyc.save()
-
-        # Update user
-        user.is_seller = True
-        user.save()
-
-        # Create default shop
-        shop = Shop.objects.create(
-            owner = kyc,
-            name = f"{user.full_name}'s Shop",
-            location=kyc.country
-        )
-
-        return Response(
-            {
-                "message": "Seller account activated and shop created successfully",
-                "shop": self.get_serializer(shop).data
-            },
-            status=status.HTTP_201_CREATED
-        )
     
 
 class CreateShop(GenericAPIView):
@@ -272,47 +396,3 @@ class ShopProductListView(GenericAPIView, BaseResponseMixin):
             paginated_response.data["message"] = "Shop products retrieved successfully"
         
         return paginated_response
-
-
-class SellerProfileView(GenericAPIView):
-    """
-    View to retrieve the complete seller profile
-    """
-    permission_classes = [IsAuthenticated]
-    serializer_class = SellerProfileSerializer
-
-    def get(self, request, *args, **kwargs):
-        user = request.user
-
-        if not user.is_seller:
-            return Response({
-                "status": "error",
-                "message": "Only sellers can access this endpoint."
-            }, status=status.HTTP_403_FORBIDDEN)
-
-        serializer = self.get_serializer(user)
-        return Response({
-            "status": "success",
-            "message": "Seller profile retrieved successfully",
-            "data": serializer.data
-        }, status=status.HTTP_200_OK)
-
-
-class SellerProfileUpdateView(GenericAPIView):
-    permission_classes = [IsAuthenticated]
-    serializer_class = SellerProfileSerializer
-
-    def patch(self, request, *args, **kwargs):
-        serializer = self.get_serializer(
-            request.user,
-            data=request.data,
-            partial=True  # Allow partial updates
-        )
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response({
-            "status": "success",
-            "message": "Seller profile updated successfully",
-            "data": serializer.data
-        }, status=status.HTTP_200_OK)
-

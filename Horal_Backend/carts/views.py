@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from .models import Cart, CartItem
 from .serializers import CartItemSerializer, CartSerializer, CartItemCreateSerializer
-from products.utility import BaseResponseMixin
+from products.utils import BaseResponseMixin
 from .authentication import SessionOrAnonymousAuthentication
 
 # Create your views here.

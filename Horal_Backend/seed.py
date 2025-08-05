@@ -12,7 +12,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Horal_Backend.settings')
 django.setup()
 import random
 import uuid
-from datetime import datetime, timedelta
+from datetime import date, timedelta
 from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
 
@@ -20,14 +20,14 @@ from django.contrib.contenttypes.models import ContentType
 # django.setup()
 
 from users.models import CustomUser, Location
-from sellers.models import SellerKYC, SellerSocials
+from sellers.models import SellerKYC, SellerSocials, SellerKYCAddress, SellerKYCCAC, SellerKYCNIN
 from shops.models import Shop
 from categories.models import Category
 from subcategories.models import SubCategory
 from products.models import (
     ChildrenProduct, FashionProduct, GadgetProduct, ElectronicsProduct,
     VehicleProduct, AccessoryProduct, HealthAndBeautyProduct, FoodProduct,
-    ProductVariant, ImageLink, Occasion, ProductIndex, Color
+    ProductVariant, ImageLink, ProductIndex, Color
 )
 from carts.models import Cart, CartItem
 from orders.models import Order, OrderItem
@@ -124,10 +124,81 @@ for i in range(30):
     state = random.choice(list(states_and_lgas.keys()))
     lga = random.choice(states_and_lgas[state])
     Location.objects.create(user=user, street_address="123 Test St", local_govt=lga, landmark="Near Market", state=state)
+    
+    used_nins = set()
+    used_rc_numbers = set()
+    used_mobiles = set()
+    used_social_links = set()
+
     if i < 10:
-        kyc = SellerKYC.objects.create(user=user, nin=f"https://example.com/nin-{i}.jpg", utility_bill=f"https://example.com/bill-{i}.jpg", is_verified=True)
-        SellerSocials.objects.create(user=user, instagram="https://instagram.com/demo")
-        shop = Shop.objects.create(owner=kyc, owner_type="seller", name=f"Shop {i}", location=f"{lga}, {state}")
+        # Unique safe dummy values
+        nin_val = f"{10000000000 + i}"
+        rc_number_val = f"RC{100000 + i}"
+        mobile_val = f"081{1000000 + i}"
+        fb_link = f"https://facebook.com/seller{i}"
+        ig_link = f"https://instagram.com/seller{i}"
+
+        # Ensure uniqueness across runs
+        if nin_val in used_nins or rc_number_val in used_rc_numbers or mobile_val in used_mobiles:
+            continue
+
+        used_nins.add(nin_val)
+        used_rc_numbers.add(rc_number_val)
+        used_mobiles.add(mobile_val)
+        used_social_links.update([fb_link, ig_link])
+
+        # Create KYC submodels
+        nin_obj = SellerKYCNIN.objects.create(
+            nin=nin_val,
+            selfie=f"https://example.com/selfie-{i}.jpg",
+            status="verified",
+            nin_verified=True
+        )
+
+        cac_obj = SellerKYCCAC.objects.create(
+            rc_number=rc_number_val,
+            company_type="Limited Liability",
+            company_name=f"Demo Company {i}",
+            status="verified",
+            cac_verified=True
+        )
+
+        address_obj = SellerKYCAddress.objects.create(
+            first_name=f"User{i}",
+            last_name="Seller",
+            middle_name="A.",
+            dob=date.today() - timedelta(days=30 * 365),
+            gender="male" if i % 2 == 0 else "female",
+            mobile=mobile_val,
+            street="123 Market Rd",
+            landmark="Beside Mall",
+            lga=lga,
+            state=state,
+            business_name=f"Biz {i}"
+        )
+
+        socials_obj = SellerSocials.objects.create(
+            facebook=fb_link,
+            instagram=ig_link
+        )
+
+        kyc = SellerKYC.objects.create(
+            user=user,
+            nin=nin_obj,
+            cac=cac_obj,
+            address=address_obj,
+            socials=socials_obj,
+            is_verified=True,
+            status="verified"
+        )
+
+        shop = Shop.objects.create(
+            owner=kyc,
+            owner_type="seller",
+            name=f"Shop {i}",
+            location=f"{lga}, {state}"
+        )
+
         sellers.append((user, shop))
     else:
         buyers.append(user)
@@ -149,7 +220,8 @@ def create_variants(product, count=2):
             standard_size=random.choice(["S", "M", "L"]),
             color=random.choice([c[0] for c in Color.choices]),
             stock_quantity=random.randint(10, 50),
-            price_override=product.price + random.uniform(1.0, 10.0)
+            price_override=product.price + random.uniform(1.0, 10.0),
+            shop=product.shop
         )
         variants.append(variant)
     return variants
@@ -192,7 +264,7 @@ for user, shop in sellers:
                 p = VehicleProduct.objects.create(
                     **common_kwargs,
                     make="Toyota", model="Camry", year=2021, mileage=15000,
-                    engine_type="petrol", engine_size="medium", fule_type="petrol",
+                    engine_type="petrol", engine_size="medium", fuel_type="petrol",
                     transmission="automatic", num_doors=4, num_seats=5,
                     vin=str(uuid.uuid4())[:17], color_exterior="black", color_interior="gray",
                     seating_capacity=5
@@ -270,7 +342,14 @@ for buyer in remaining_users:
         order = Order.objects.create(
             user=buyer,
             total_amount=total,
-            status=status
+            status=status,
+            street_address="123 Test St",
+            local_govt=random.choice(states_and_lgas[buyer.location.state]),
+            landmark="Near Market",
+            state=buyer.location.state,
+            country=buyer.location.country,
+            phone_number=buyer.phone_number,
+            created_at=timezone.now()
         )
         for item in items:
             OrderItem.objects.create(

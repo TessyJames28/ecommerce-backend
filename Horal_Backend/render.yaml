@@ -2,11 +2,19 @@ services:
   - type: web
     name: horal
     env: python
+    rootDir: Horal_Backend
     plan: free  # or 'starter' or other paid plan
-    buildCommand: >
+    buildCommand: |
       pip install -r requirements.txt &&
       python manage.py makemigrations &&
       python manage.py migrate &&
       python manage.py collectstatic --noinput &&
-      python seed.py
-    startCommand: gunicorn gathrify_backend.wsgi:application
+      python generate_jul_orders
+      python manage.py update_seller_data
+      python manage.py verify_seller_data
+      python manage.py setup_periodic_tasks
+
+    startCommand: gunicorn Horal_Backend.wsgi:application
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3

@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
-from .utility import validate_strong_password
+from .utils import validate_strong_password
 
 
 # Create your models here.
@@ -110,13 +110,8 @@ class Location(models.Model):
 class ShippingAddress(models.Model):
     """Model for users location"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
+    user = models.OneToOneField(
         CustomUser,
-        on_delete=models.CASCADE,
-        related_name='shipping_addresses'
-    )
-    order = models.OneToOneField(
-        'orders.Order',
         on_delete=models.CASCADE,
         related_name='shipping_address'
     )

@@ -61,12 +61,14 @@ INSTALLED_APPS = [
     'ratings',
     'user_profile',
     'payment',
+    'sellers_dashboard',
     'anymail',
     'drf_yasg',
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
+    'django_celery_beat',
 ]
 
 MIDDLEWARE = [
@@ -95,6 +97,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",       # React dev server
     "http://127.0.0.1:3000",
 ]
+
+# Set trailing slash automatically
+APPEND_SlASH = True
 
 
 SESSION_COOKIE_SAMESITE = "None"
@@ -200,8 +205,15 @@ PAYSTACK_SECRET_KEY = env('PAYSTACK_SECRET_KEY')
 PAYSTACK_PUBLIC_KEY = env('PAYSTACK_PUBLIC_KEY')
 PAYSTACK_INITIALIZE_URL = env('PAYSTACK_INITIALIZE_URL')
 PAYSTACK_VERIFY_URL = env('PAYSTACK_VERIFY_URL')
+MOBILE_REDIRECT_URL = env('MOBILE_REDIRECT_URL')
+WEB_REDIRECT_URL = env('WEB_REDIRECT_URL')
 
 
+# Dojah API setting
+DOJAH_APP_ID = env('DOJAH_APP_ID')
+DOJAH_SECRET = env('DOJAH_SECRET')
+DOJAH_PUBLIC_KEY = env('DOJAH_PUBLIC_KEY')
+DOJAH_BASE_URL = env('DOJAH_BASE_URL')
 
 import urllib.parse as urlparse
 
@@ -219,7 +231,18 @@ CACHES = {
     }
 }
 
+# Celery setting
+import ssl
 
+# Change to its redis DB on production with custom redis setup
+CELERY_BROKER_URL = env("REDIS_URL")
+
+CELERY_BROKER_USE_SSL = {
+    # Change to SSL.CERT_REQUIRED when using own trusted custom redis
+    'ssl_cert_reqs': None # or ssl.CERT_NONE 
+}
+
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 
 ROOT_URLCONF = 'Horal_Backend.urls'

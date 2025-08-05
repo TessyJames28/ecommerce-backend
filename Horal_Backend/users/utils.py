@@ -102,3 +102,17 @@ def generate_token_for_user(user):
         'access': str(refresh.access_token),
         'refresh': str(refresh)
     }
+
+
+def exchange_code_for_token(code):
+    token_url = 'https://oauth2.googleapis.com/token'
+    data = {
+        'code': code,
+        'client_id': settings.GOOGLE_OAUTH['WEB_CLIENT_ID'],
+        'client_secret': settings.GOOGLE_OAUTH['CLIENT_SECRET'],
+        'redirect_uri': settings.GOOGLE_OAUTH['REDIRECT_URI'],
+        'grant_type': 'authorization_code'
+    }
+
+    response = requests.post(token_url, data=data)
+    return response.json()
