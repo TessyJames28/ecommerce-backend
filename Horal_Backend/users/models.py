@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
-from .utility import validate_strong_password
+from .utils import validate_strong_password
 
 
 # Create your models here.
