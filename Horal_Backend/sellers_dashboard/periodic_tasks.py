@@ -9,9 +9,11 @@ order_location = 'orders.tasks.'
 
 def setup_hourly_task():
     """Run every hour: populate shop sales"""
-    schedule, _ = IntervalSchedule.objects.get_or_create(
-        every=15,
-        period=IntervalSchedule.MINUTES
+    schedule, _ = CrontabSchedule.objects.get_or_create(
+        minute='*/15',
+        hour='*',
+        day_of_month='*',
+        month_of_year='*',
     )
 
     # Register the periodic task
@@ -19,7 +21,7 @@ def setup_hourly_task():
         name="Populate daily shop sales and daily time series",
         defaults={
             "task": f'{location}populate_daily_shop_sales',
-            'interval': schedule,
+            'crontab': schedule,
             'enabled': True
         },
     )
@@ -36,9 +38,11 @@ def setup_hourly_task():
 
 def setup_order_expiration_task():
     """Run every hour: populate shop sales"""
-    schedule, _ = IntervalSchedule.objects.get_or_create(
-        every=30,
-        period=IntervalSchedule.MINUTES
+    schedule, _ = CrontabSchedule.objects.get_or_create(
+        minute='*/30',
+        hour='*',
+        day_of_month='*',
+        month_of_year='*',
     )
 
     # Register the periodic task
@@ -46,7 +50,7 @@ def setup_order_expiration_task():
         name="Expire Pending Orders",
         defaults={
             "task": f'{order_location}expire_pending_orders_task',
-            'interval': schedule,
+            'crontab': schedule,
             'enabled': True
         },
     )
@@ -57,9 +61,11 @@ def setup_simulation_task():
     Run every 1 hour:
         simulate hourly orders purchased by buyers
     """
-    schedule, _ = IntervalSchedule.objects.get_or_create(
-        every=1,
-        period=IntervalSchedule.HOURS
+    schedule, _ = CrontabSchedule.objects.get_or_create(
+        hour='1-23',
+        minute='0',
+        day_of_month='*',
+        month_of_year='*',
     )
 
     PeriodicTask.objects.update_or_create(
@@ -78,9 +84,11 @@ def setup_weekly_task():
         populate time series
         poulate shop sales
     """
-    schedule, _ = IntervalSchedule.objects.get_or_create(
-        every=2,
-        period=IntervalSchedule.HOURS
+    schedule, _ = CrontabSchedule.objects.get_or_create(
+        hour='2,4,6,8,10,12,14,16,18,20,22',
+        minute='0',
+        day_of_month='*',
+        month_of_year='*',
     )
 
     PeriodicTask.objects.update_or_create(
@@ -108,9 +116,11 @@ def setup_monthly_task():
         populate time series
         aggregate shop sales
     """
-    schedule, _ = IntervalSchedule.objects.get_or_create(
-        every=4,
-        period=IntervalSchedule.HOURS
+    schedule, _ = CrontabSchedule.objects.get_or_create(
+        hour='4,8,12,16,20',
+        minute='0',
+        day_of_month='*',
+        month_of_year='*',
     )
 
     PeriodicTask.objects.update_or_create(
@@ -138,9 +148,11 @@ def setup_yearly_task():
         populate time series
         aggregate shop sales
     """
-    schedule, _ = IntervalSchedule.objects.get_or_create(
-        every=7,
-        period=IntervalSchedule.HOURS
+    schedule, _ = CrontabSchedule.objects.get_or_create(
+        hour='7,14,21',
+        minute='0',
+        day_of_month='*',
+        month_of_year='*',
     )
 
     PeriodicTask.objects.update_or_create(
