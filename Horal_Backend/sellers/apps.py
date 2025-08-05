@@ -9,10 +9,3 @@ class SellersConfig(AppConfig):
 
     def ready(self):
         import sellers.signals
-        from . import scheduler
-        try:
-            scheduler.start()
-            logger.info("Scheduler started successfully.")
-        except Exception as e:
-            logger.error(f"Scheduler failed to start: {e}")
-
