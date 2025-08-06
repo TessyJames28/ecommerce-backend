@@ -419,7 +419,7 @@ def get_clean_shop_id(shop):
     """
     if settings.DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
         return str(shop).replace('-', '')
-    return str(shop.id)
+    return str(shop)
 
 
 def get_rolling_topselling_products(shop):
