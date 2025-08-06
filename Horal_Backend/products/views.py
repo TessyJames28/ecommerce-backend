@@ -378,7 +378,7 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
 
         page = self.paginate_queryset(products_data)
         if page is not None:
-            paginated_response = self.get_paginated_response(products_data)
+            paginated_response = self.get_paginated_response(page)
             paginated_response.data["status"] = "success"
             paginated_response.data["status_code"] = status.HTTP_200_OK
             paginated_response.data["message"] = "Products retrieved successfully"

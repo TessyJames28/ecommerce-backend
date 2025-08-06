@@ -135,7 +135,7 @@ def update_quantity(product):
 class StandardResultsSetPagination(PageNumberPagination):
     """Class for product page pagination"""
     page_size = 30 # default per page
-    page_size_query_param = 'page_size'
+    page_size_query_param = 'limit'
     max_page_size = 100
 
 
