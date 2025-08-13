@@ -12,7 +12,11 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'variant', 'quantity', 'unit_price', 'total_price', 'product', 'variant_detail']
+        fields = [
+            'id', 'variant', 'quantity', 'unit_price', 'total_price',
+            'product', 'delivered_at', 'is_completed', 'is_returned',
+             'is_return_requested', 'variant_detail'
+        ]
 
 
     def get_product(self, obj):
@@ -69,7 +73,7 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            'id', 'user', 'user_email', 'created_at', 'status',
+            'id', 'user', 'user_email', 'created_at', 'updated_at', 'status',
             'total_amount', 'items', 'shipping_address'
         ]
         read_only_fields = ['user', 'total_amount', 'status', 'created_at', 'items', 'user_email']
