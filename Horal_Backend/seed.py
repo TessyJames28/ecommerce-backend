@@ -30,10 +30,15 @@ from products.models import (
     ProductVariant, ImageLink, ProductIndex, Color
 )
 from carts.models import Cart, CartItem
-from orders.models import Order, OrderItem
+from orders.models import Order, OrderItem, OrderReturnRequest
 from ratings.models import UserRating
 from favorites.models import Favorites, FavoriteItem
 from images import image_urls
+from sellers_dashboard.models import (
+    RawSale, WeeklySales, WeeklyShopSales, MonthlySales,
+    SalesAdjustment, DailyShopSales, DailySales, MonthlyShopSales,
+    YearlySales, YearlyShopSales
+)
 
 # Sample data
 states_and_lgas = {
@@ -88,6 +93,16 @@ CustomUser.objects.all().delete()
 Category.objects.all().delete()
 SubCategory.objects.all().delete()
 ImageLink.objects.all().delete()
+RawSale.objects.all().delete()
+SalesAdjustment.objects.all().delete()
+DailySales.objects.all().delete()
+DailyShopSales.objects.all().delete()
+WeeklySales.objects.all().delete()
+WeeklyShopSales.objects.all().delete()
+MonthlySales.objects.all().delete()
+MonthlyShopSales.objects.all().delete()
+YearlySales.objects.all().delete()
+YearlyShopSales.objects.all().delete()
 
 # Create categories and subcategories
 category_map = {}
@@ -328,16 +343,16 @@ for buyer in remaining_users:
             if not CartItem.objects.filter(cart=cart, variant=item).exists():
                 CartItem.objects.create(cart=cart, variant=item, quantity=1)
 
-
         total = sum(
             item.price_override or getattr(item.product, 'price', 0)
             for item in items
             if item.product is not None
         )
-        status = random.choices([
-            Order.Status.DELIVERED, Order.Status.CANCELLED,
-            Order.Status.SHIPPED, Order.Status.PAID
-        ], weights=[6, 1, 1, 1])[0]
+
+        status = random.choices(
+            [Order.Status.DELIVERED, Order.Status.CANCELLED, Order.Status.SHIPPED, Order.Status.PAID],
+            weights=[6, 1, 1, 1]
+        )[0]
 
         order = Order.objects.create(
             user=buyer,
@@ -351,16 +366,49 @@ for buyer in remaining_users:
             phone_number=buyer.phone_number,
             created_at=timezone.now()
         )
+
         for item in items:
-            OrderItem.objects.create(
+            delivered_at = None
+            is_completed = False
+
+            if status == Order.Status.DELIVERED:
+                # Randomly choose a delivery date: today or a few days ago
+                days_ago = random.choice([0, 1, 2, 3, 4, 5])
+                delivered_at = timezone.now() - timezone.timedelta(days=days_ago)
+
+                # Mark as completed if more than 3 days ago or simulate review
+                if days_ago > 3 or random.choice([True, False]):
+                    is_completed = True
+
+            order_item = OrderItem.objects.create(
                 order=order,
                 variant=item,
                 quantity=1,
-                unit_price=item.price_override or item.product.price
+                unit_price=item.price_override or item.product.price,
+                delivered_at=delivered_at,
+                is_completed=is_completed
             )
-        if status == Order.Status.DELIVERED:
-            delivered_variants.extend((buyer, item) for item in items)
+
+            # Simulate return request only for delivered orders
+            if status == Order.Status.DELIVERED and random.choice([True, False]):
+                return_status = random.choice([
+                    OrderReturnRequest.Status.REQUESTED,
+                    OrderReturnRequest.Status.REJECTED,
+                    OrderReturnRequest.Status.COMPLETED
+                ])
+                OrderReturnRequest.objects.create(
+                    order_item=order_item,
+                    reason="Item defective or not as described",
+                    status=return_status,
+                    approved=(return_status == OrderReturnRequest.Status.APPROVED or 
+                              return_status == OrderReturnRequest.Status.COMPLETED)
+                )
+
+            if status == Order.Status.DELIVERED:
+                delivered_variants.append((buyer, item))
+
     cart.delete()
+
 
 
 # === RATINGS ===
@@ -379,17 +427,22 @@ for (buyer, item) in random.sample(delivered_variants, min(120, len(delivered_va
     if not order_item:
         continue
 
+    # ❌ Skip returned or return-requested items
+    if order_item.is_return_requested or order_item.is_returned:
+        continue
+
     # ✅ Skip if this user already rated this order_item for this product
     if UserRating.objects.filter(user=buyer, order_item=order_item, product=product_index).exists():
         continue
 
     UserRating.objects.create(
         user=buyer,
-        order_item=OrderItem.objects.filter(variant=item, order__user=buyer).first(),
+        order_item=order_item,
         product=product_index,
         rating=random.randint(3, 5),
         comment="Great product!"
     )
+
 
 
 # === FAVORITES ===
