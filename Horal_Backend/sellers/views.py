@@ -74,7 +74,7 @@ class KYCIDVerificationWebhook(GenericAPIView, BaseResponseMixin):
 
         serializer = self.get_serializer(data=data, context={"user": user})
         serializer.is_valid(raise_exception=True)
-        kyc_nin = serializer.save()
+        kyc_nin = serializer.create_or_update(serializer.validated_data)
 
         if success_status is True and verification_status == "Completed":
             kyc_nin.status = KYCStatus.VERIFIED
@@ -134,17 +134,30 @@ class SellerAddressCreateView(GenericAPIView, BaseResponseMixin):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        """Method to create seller address"""
-        serializer = self.get_serializer(
-            data=request.data,
-            context={'request': request}
-        )
+        """Method to create or update seller address"""
+        # inside your view
+        seller_kyc = SellerKYC.objects.get(user=request.user)
+
+        if seller_kyc.address:
+            serializer = SellerKYCAddressSerializer(
+                seller_kyc.address,  # <-- pass the instance here
+                data=request.data,
+                partial=True,
+                context={'request': request}
+            )
+        else:
+            serializer = SellerKYCAddressSerializer(
+                data=request.data,
+                context={'request': request}
+            )
+
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
         return self.get_response(
             status.HTTP_201_CREATED,
             "Seller address created successfully",
+            # SellerKYCAddressSerializer(address).data
             serializer.data
         )
 
@@ -214,7 +227,7 @@ class DojahCACWebhook(GenericAPIView, BaseResponseMixin):
 
         serializer = self.get_serializer(data=data, context={"user": user})
         serializer.is_valid(raise_exception=True)
-        kyc_cac = serializer.save()
+        kyc_cac = serializer.create_or_update(serializer.validated_data)
 
         if success_status is True and verification_status == "Completed":
             kyc_cac.status = KYCStatus.VERIFIED
@@ -267,13 +280,13 @@ class SellerSocialsView(GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.context['request'] = request #Set the request context for the serializer
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        socials = serializer.create_or_update(serializer.validated_data)
         
         response_data = {
             "status": "success",
             "status_code": 201,
             "message": "Social media links saved",
-            "data": serializer.data
+            "data": SellerSocialsSerializer(socials).data
         }
         return Response(response_data, status=status.HTTP_201_CREATED)
     
