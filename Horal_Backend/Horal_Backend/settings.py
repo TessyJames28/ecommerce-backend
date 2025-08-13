@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'user_profile',
     'payment',
     'sellers_dashboard',
+    'wallet',
     'anymail',
     'drf_yasg',
     'corsheaders',
@@ -136,8 +137,8 @@ SWAGGER_SETTINGS = {
         {'Bearer': []}
     ],
 
-   'USE_SESSION_AUTH': False,
-   'PERSIST_AUTH': True,
+    'USE_SESSION_AUTH': False,
+    'PERSIST_AUTH': True,
     'REFETCH_SCHEMA_WITH_AUTH': True,
     'REFETCH_SCHEMA_ON_LOGOUT': True,
 }
@@ -199,6 +200,9 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
 # }
 
 
+# Maximum retries
+MAX_RETRIES = 3
+
 # Paystack Payment Setup
 # settings.py
 PAYSTACK_SECRET_KEY = env('PAYSTACK_SECRET_KEY')
@@ -207,6 +211,8 @@ PAYSTACK_INITIALIZE_URL = env('PAYSTACK_INITIALIZE_URL')
 PAYSTACK_VERIFY_URL = env('PAYSTACK_VERIFY_URL')
 MOBILE_REDIRECT_URL = env('MOBILE_REDIRECT_URL')
 WEB_REDIRECT_URL = env('WEB_REDIRECT_URL')
+PAYSTACK_BASE_URL=env('PAYSTACK_BASE_URL')
+PAYSTACK_TEST_MODE=env('PAYSTACK_TEST_MODE')
 
 
 # Dojah API setting
