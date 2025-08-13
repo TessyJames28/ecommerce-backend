@@ -32,7 +32,7 @@ class Order(ShippingSnapshotMixin, models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='orders')
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(max_length=50, choices=Status.choices, default=Status.PENDING)
