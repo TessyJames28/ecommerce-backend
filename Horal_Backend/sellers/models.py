@@ -26,7 +26,7 @@ class SellerKYCCAC(models.Model):
 class SellerKYCNIN(models.Model):
     """Model to store sellers NIN for kyc verification"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    nin = models.CharField(max_length=11, unique=True)
+    nin = models.CharField(max_length=11)
     selfie = models.URLField()
     status = models.CharField(max_length=20, choices=KYCStatus, default=KYCStatus.PENDING)
     nin_verified = models.BooleanField(default=False)
@@ -43,7 +43,6 @@ class SellerKYCAddress(models.Model):
     gender = models.CharField(max_length=20)
     mobile = models.CharField(
         max_length=11,
-        unique=True,
         validators=[phone_number_validator],
     )
     street = models.CharField(max_length=500)
@@ -55,14 +54,27 @@ class SellerKYCAddress(models.Model):
     # address_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def clean(self):
+        # Exclude current instance from uniqueness check
+        qs = SellerKYCAddress.objects.filter(mobile=self.mobile)
+        if self.pk:
+            qs = qs.exclude(pk=self.pk)
+        if qs.exists():
+            raise ValidationError({"mobile": "Phone number already exists."})
+
+    def save(self, *args, **kwargs):
+        self.clean()  # Ensure validation runs on save
+        super().save(*args, **kwargs)
+
 
 
 class SellerSocials(models.Model):
     """Model to store social media links for sellers"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    facebook = models.URLField(max_length=255, blank=True, null=True, unique=True)
-    instagram = models.URLField(max_length=255, blank=True, null=True, unique=True)
-    tiktok = models.URLField(max_length=255, blank=True, null=True, unique=True)
+    facebook = models.URLField(max_length=255, blank=True, null=True)
+    instagram = models.URLField(max_length=255, blank=True, null=True)
+    tiktok = models.URLField(max_length=255, blank=True, null=True)
+    linkedin = models.URLField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 
