@@ -16,7 +16,8 @@ class Command(BaseCommand):
         )
 
         order_items = OrderItem.objects.filter(
-            order__status__in=["paid", "shipped", "delivered"]
+            order__status__in=["paid", "shipped", "at_pick_up", "delivered"],
+            is_returned=False,
         )
 
         order_total = order_items.annotate(
