@@ -210,7 +210,7 @@ def transaction_webhook(request):
                 "message": "Transaction not found"
             })
     else:
-        pass
+        reference = data.get('reference')
 
     if event_type == 'charge.success':
         tx.status = PaystackTransaction.StatusChoices.SUCCESS
@@ -249,8 +249,7 @@ def transaction_webhook(request):
                 pass
 
     elif event_type in ["transfer.success", "transfer.failed"]:
-        transfer_code = event["data"]["transfer_code"]
-        payout = Payout.objects.filter(paystack_transfer_code=transfer_code).first()
+        payout = Payout.objects.filter(reference_id=reference).first()
 
         if payout:
             if event_type == "transfer.success":
