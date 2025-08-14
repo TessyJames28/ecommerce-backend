@@ -76,7 +76,7 @@ def get_withdrawable_revenue(shop_id):
             Payout.StatusChoices.SUCCESS,
             Payout.StatusChoices.PROCESSING
         ]
-    ).aggregate(withdrawn_amount=Sum("amount_naira"))
+    ).aggregate(withdrawn_amount=Sum("total_withdrawable")) # correct code for prod
 
     withdrawn_amount = wr.get("withdrawn_amount") or 0
 
