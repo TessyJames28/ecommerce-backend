@@ -89,5 +89,5 @@ class SellerTransactionHistory(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.message} for {self.amount}"
+        return f"{self.message}"
     

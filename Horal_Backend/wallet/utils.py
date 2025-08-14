@@ -9,7 +9,7 @@ import uuid
 from sellers_dashboard.utils import get_withdrawable_revenue
 from django.utils.timezone import now
 from decimal import Decimal
-import os
+import os, random
 
 
 mock_data ={
@@ -18,10 +18,11 @@ mock_data ={
             "data": {
                 "integration": 123456,
                 "domain": "test",
-                "amount": 24500000,
+                "amount": 10000,
                 "currency": "NGN",
                 "source": "balance",
                 "reason": "payout",
+                "reference": "reference",
                 "recipient": {
                     "id": 987654,
                     "name": "John Doe",
@@ -104,16 +105,21 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
 
     if amount_kobo is not None:
         # Use the provided amount for retries
-        amount_naira = Decimal(amount_kobo) / Decimal(100)
-        withdrawable = amount_naira / Decimal("0.95") # reverse commission calc
-        commission = withdrawable - amount_naira
+        amount_naira = (Decimal(amount_kobo) / Decimal(100)).quantize(Decimal("0.01"))
+        if payout and isinstance(payout, Payout):
+            withdrawable = payout.total_withdrawable
+            commission = payout.commission
+        else:
+            withdrawable = None
+            commission = None
     else:
         user = CustomUser.objects.get(id=seller.id)
         shop = Shop.objects.get(owner=user.kyc)
         withdrawable = get_withdrawable_revenue(shop.id)
 
-        if withdrawable <= 0:
-            raise ValidationError("No withdrawable balance available.")
+        # =================Commented out for testing purpose=============
+        # if withdrawable <= 0:
+        #     raise ValidationError("No withdrawable balance available.")
 
         withdrawable = Decimal(str(withdrawable))
         commission = (withdrawable * Decimal("0.05")).quantize(Decimal("0.01"))
@@ -123,7 +129,8 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
         "source": "balance",
         "amount": int(amount_naira * 100),
         "recipient": recipient_code,
-        "reason": reason
+        "reason": reason,
+        "reference": payout.reference_id if payout else str(uuid.uuid4())  # custom reference
     }
 
     try:
@@ -137,6 +144,12 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
 
     amount = data.get("data", {}).get("amount")
     if data.get("status") is True:
+        # =========================Generate random transfer code (Will remove before launch)======================
+        value = random.randint(11111, 99999)
+        data["data"]["transfer_code"] = f"TRF_mock{value}"
+        data["data"]["reference"] = payload["reference"]
+        data["data"]["createdAt"] = now()
+        # =======================Will remove the above logic for production================================
         transfer_code = data["data"]["transfer_code"]
 
         # Check if its a retry
@@ -151,7 +164,7 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
             # Save payout record
             Payout.objects.get_or_create(
                 seller=seller,
-                reference_id=str(uuid.uuid4()),
+                reference_id=data["data"]["reference"],
                 amount_naira=amount / 100,
                 paystack_transfer_code=transfer_code,
                 total_withdrawable=withdrawable,
@@ -159,6 +172,7 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
                 status=Payout.StatusChoices.PROCESSING,
                 reason=reason
             )
+        print(f"data: {data}")
 
         return transfer_code
     else:
