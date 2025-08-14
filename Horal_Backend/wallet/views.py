@@ -64,24 +64,24 @@ class VerifySellerBankDetailsView(APIView, BaseResponseMixin):
         
         account_name = verify_bank_account(account_number, bank_code)
 
-        # Get Seller name to compare to bank name
-        seller_kyc = SellerKYC.objects.get(user=user)
-        first_name = seller_kyc.address.first_name or ""
-        middle_name = seller_kyc.address.middle_name or ""
-        last_name = seller_kyc.address.last_name or ""
-        business_name = seller_kyc.address.business_name or ""
+        # # Get Seller name to compare to bank name
+        # seller_kyc = SellerKYC.objects.get(user=user)
+        # first_name = seller_kyc.address.first_name or ""
+        # middle_name = seller_kyc.address.middle_name or ""
+        # last_name = seller_kyc.address.last_name or ""
+        # business_name = seller_kyc.address.business_name or ""
 
-        # Normalize to lowercase and remove extra spaces
-        full_name = " ".join([first_name, middle_name, last_name]).strip().lower()
-        business_name = business_name.strip().lower()
-        account_name_clean = account_name.strip().lower()
+        # # Normalize to lowercase and remove extra spaces
+        # full_name = " ".join([first_name, middle_name, last_name]).strip().lower()
+        # business_name = business_name.strip().lower()
+        # account_name_clean = account_name.strip().lower()
 
-        # Fail only if it doesn't match either personal name or business name
-        if account_name_clean not in full_name and account_name_clean not in business_name:
-            return self.get_response(
-                status.HTTP_400_BAD_REQUEST,
-                "The bank account name does not match your registered name or business name."
-            )
+        # # Fail only if it doesn't match either personal name or business name
+        # if account_name_clean not in full_name and account_name_clean not in business_name:
+        #     return self.get_response(
+        #         status.HTTP_400_BAD_REQUEST,
+        #         "The bank account name does not match your registered name or business name."
+        #     )
 
 
         if not account_name:
@@ -121,17 +121,18 @@ class ConfirmWithdrawalView(APIView, BaseResponseMixin):
         seller_id = CustomUser.objects.get(id=user.id)
         seller_bank = SellersBankDetails.objects.get(seller=seller_id)
 
+        # ===============Commented out for testing===================
         # Check for existing payout
-        exists = Payout.objects.filter(
-            seller=seller_id,
-            status=Payout.StatusChoices.PROCESSING
-        ).exists()
+        # exists = Payout.objects.filter(
+        #     seller=seller_id,
+        #     status=Payout.StatusChoices.PROCESSING
+        # ).exists()
 
-        if exists:
-            return self.get_response(
-                status.HTTP_400_BAD_REQUEST,
-                "You have an already processing withdrawal"
-            )
+        # if exists:
+        #     return self.get_response(
+        #         status.HTTP_400_BAD_REQUEST,
+        #         "You have an already processing withdrawal"
+        #     )
         
         if not seller_bank.recipient_code:
             return self.get_response(
