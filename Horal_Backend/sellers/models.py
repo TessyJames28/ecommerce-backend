@@ -54,19 +54,6 @@ class SellerKYCAddress(models.Model):
     # address_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def clean(self):
-        # Exclude current instance from uniqueness check
-        qs = SellerKYCAddress.objects.filter(mobile=self.mobile)
-        if self.pk:
-            qs = qs.exclude(pk=self.pk)
-        if qs.exists():
-            raise ValidationError({"mobile": "Phone number already exists."})
-
-    def save(self, *args, **kwargs):
-        self.clean()  # Ensure validation runs on save
-        super().save(*args, **kwargs)
-
-
 
 class SellerSocials(models.Model):
     """Model to store social media links for sellers"""
