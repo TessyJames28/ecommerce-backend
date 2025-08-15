@@ -31,6 +31,7 @@ class SellerKYCCACSerializer(serializers.ModelSerializer):
         if seller_kyc.cac:
             for attr, value in validated_data.items():
                 setattr(seller_kyc.cac, attr, value)
+            seller_kyc.cac.save()
             seller_kyc.save(update_fields=['cac'])
             return seller_kyc.cac
         
@@ -70,6 +71,7 @@ class SellerKYCAddressSerializer(serializers.ModelSerializer):
         if seller_kyc.address:
             for attr, value in validated_data.items():
                 setattr(seller_kyc.address, attr, value)
+            seller_kyc.address.save()
             seller_kyc.save(update_fields=['address'])
             return seller_kyc.address
             
@@ -79,17 +81,7 @@ class SellerKYCAddressSerializer(serializers.ModelSerializer):
         seller_kyc.save(update_fields=['address'])
 
         return address
-    
-
-    def validate_mobile(self, value):
-        instance = getattr(self, 'instance', None)
-        qs = self.Meta.model.objects.filter(mobile=value)
-        if instance:
-            qs = qs.exclude(pk=instance.pk)  # Ignore current record
-        if qs.exists():
-            raise serializers.ValidationError("Phone number already exists.")
-        return value
-    
+     
 
 
 class SellerKYCNINSerializer(serializers.ModelSerializer):
@@ -114,6 +106,7 @@ class SellerKYCNINSerializer(serializers.ModelSerializer):
         if seller_kyc.nin:
             for attr, value in validated_data.items():
                 setattr(seller_kyc.nin, attr, value)
+            seller_kyc.nin.save()
             seller_kyc.save(update_fields=['nin'])
             return seller_kyc.nin
         
@@ -141,7 +134,9 @@ class SellerSocialsSerializer(serializers.ModelSerializer):
         if seller_kyc.socials:
             for attr, value in validated_data.items():
                 setattr(seller_kyc.socials, attr, value)
+            seller_kyc.socials.save()
             seller_kyc.save(update_fields=['socials'])
+            return seller_kyc.socials
 
         # create new social link if None
         socials = SellerSocials.objects.create(**validated_data)
