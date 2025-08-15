@@ -135,30 +135,19 @@ class SellerAddressCreateView(GenericAPIView, BaseResponseMixin):
 
     def post(self, request, *args, **kwargs):
         """Method to create or update seller address"""
-        # inside your view
-        seller_kyc = SellerKYC.objects.get(user=request.user)
 
-        if seller_kyc.address:
-            serializer = SellerKYCAddressSerializer(
-                seller_kyc.address,  # <-- pass the instance here
-                data=request.data,
-                partial=True,
-                context={'request': request}
-            )
-        else:
-            serializer = SellerKYCAddressSerializer(
-                data=request.data,
-                context={'request': request}
-            )
+        serializer = SellerKYCAddressSerializer(
+            data=request.data,
+            context={'request': request}
+        )
 
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        address = serializer.create_or_update(serializer.validated_data)
 
         return self.get_response(
             status.HTTP_201_CREATED,
             "Seller address created successfully",
-            # SellerKYCAddressSerializer(address).data
-            serializer.data
+            SellerKYCAddressSerializer(address).data
         )
 
 
