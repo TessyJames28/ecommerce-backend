@@ -5,6 +5,7 @@ from django.db import connection
 from django.utils.timezone import now
 from datetime import timedelta
 from django.conf import settings
+from orders.models import Order, OrderItem
 from .models import (
     TopSellingProduct, RawSale,
     DailySales, WeeklySales,
@@ -19,7 +20,8 @@ from .helper import (
     get_day_start, get_month_start,
     get_week_start, get_year_start
 )
-
+from shops.models import Shop
+from users.models import CustomUser
 
 
 def get_total_revenue(shop):
@@ -30,7 +32,8 @@ def get_total_revenue(shop):
 
     qs = OrderItem.objects.filter(
         variant__shop=shop,
-        order__status__in=["paid", "shipped", "delivered"]
+        order__status__in=["paid", "shipped", "at_pick_up", "delivered"],
+        is_returned=False
     ).annotate(
         line_total=ExpressionWrapper(
             F("quantity") * F("unit_price"), output_field=DecimalField()
@@ -38,6 +41,47 @@ def get_total_revenue(shop):
     )
 
     return qs.aggregate(total=Sum("line_total"))["total"] or 0
+
+
+def get_withdrawable_revenue(shop_id):
+    """
+    Function to retrieve each seller total revenue on Horal
+    This is calculated by total completed order revenue
+    minus total successful withdrawal
+    """
+    from wallet.models import Payout
+
+    try:
+        shop = Shop.objects.get(id=shop_id)
+        user = shop.owner.user
+        if not user.is_seller:
+            raise Exception("User is not a seller")
+    except (Shop.DoesNotExist, AttributeError):
+        raise Exception(f"seller does not exists")
+
+    cr = OrderItem.objects.filter(
+        variant__shop=shop_id,
+        is_completed=True
+    ).annotate(
+        line_total=ExpressionWrapper(
+            F("quantity") * F("unit_price"), output_field=DecimalField()
+        )
+    )
+
+    completed_revenue = cr.aggregate(total=Sum("line_total"))["total"] or 0
+
+    wr = Payout.objects.filter(
+        seller=user,
+        status__in=[
+            Payout.StatusChoices.SUCCESS,
+            Payout.StatusChoices.PROCESSING
+        ]
+    ).aggregate(withdrawn_amount=Sum("total_withdrawable")) # correct code for prod
+
+    withdrawn_amount = wr.get("withdrawn_amount") or 0
+
+    return completed_revenue - withdrawn_amount
+
 
 
 def get_total_order(shop):
@@ -48,10 +92,13 @@ def get_total_order(shop):
 
     total = OrderItem.objects.filter(
         variant__shop=shop,
-        order__status__in=["paid", "shipped", "delivered"]
+        order__status__in=["paid", "shipped", "at_pick_up", "delivered"],
+        is_returned=False,
+        # is_return_requested=False
     ).aggregate(total=Sum("quantity"))
 
     for val in total.values():
+        print(val)
         return val
 
 
@@ -64,7 +111,21 @@ def get_return_order(shop):
 
     return OrderItem.objects.filter(
         variant__shop=shop,
-        order__status__in=["cancelled", "returned", "return_requested"]
+        is_returned=True,
+        is_return_requested=True
+    ).aggregate(total=Sum("quantity"))["total"] or 0
+
+
+def get_order_in_dispute(shop):
+    """
+    Function that compute the total returned order of a specific seller
+    Per the provided seller shop
+    """
+
+    return OrderItem.objects.filter(
+        variant__shop=shop,
+        is_returned=False,
+        is_return_requested=True
     ).aggregate(total=Sum("quantity"))["total"] or 0
 
 
@@ -300,7 +361,9 @@ def get_topselling_product_sql(shop, from_date):
                        
             WHERE
                 pv.shop_id = %s
-                AND o.status IN ('paid', 'shipped', 'delivered')
+                AND o.status IN ('paid', 'shipped', 'at_pick_up', 'delivered')
+                AND oi.is_returned = false
+                AND oi.is_return_requested = false
                 AND o.created_at >= %s
             GROUP BY
                 pi.id
@@ -447,4 +510,13 @@ def parse_date_safe(date_str):
         return datetime.fromisoformat(date_str)
     except Exception:
         return datetime.min
+
+
+def reconcile_raw_sales():
+    """Function to reconcile rawsale"""
+    RawSale.objects.filter(
+        Q(order__status=Order.Status.CANCELLED) |
+        Q(order__order_items__is_returned=True),
+        is_valid=True
+    ).update(is_valid=False, invalidated_at=now(), processed_flags={})
 

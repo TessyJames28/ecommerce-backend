@@ -10,13 +10,15 @@ from rest_framework import status
 from .models import PaystackTransaction
 from orders.models import Order
 from rest_framework.views import APIView
+from django.utils.timezone import now
 from carts.models import CartItem
 from .utils import trigger_refund, update_order_status
 from orders.serializer import OrderSerializer
 from products.utils import update_quantity, IsAdminOrSuperuser
 from django.utils.decorators import method_decorator
 from rest_framework.exceptions import ValidationError
-import uuid
+import uuid, os
+from wallet.models import Payout
 
 
 # Create your views here.
@@ -173,35 +175,43 @@ def transaction_webhook(request):
     body = request.body
     expected_signature = hmac.new(secret, body, hashlib.sha512).hexdigest()
 
-    if signature != expected_signature:
-        return JsonResponse({
-            "status": "error",
-            "status_code": status.HTTP_400_BAD_REQUEST,
-            "message": "Invalid signature"
-        })
+    if not settings.PAYSTACK_TEST_MODE:
+        print(settings.PAYSTACK_TEST_MODE)
+        if signature != expected_signature:
+            return JsonResponse({
+                "status": "error",
+                "status_code": status.HTTP_400_BAD_REQUEST,
+                "message": "Invalid signature"
+            })
+    else:
+        pass
     
     event = json.loads(body)
     data = event.get('data', {})
     event_type = event['event']
-    reference = data.get('reference') or data.get("transaction_reference")
-    if not reference:
-        print(f"[Webhook] Missing reference in payload: {json.dumps(event, indent=2)}")
-        return JsonResponse({
-            "status": "error",
-            "status_code": 400,
-            "message": "Missing transaction reference"
-        }, status=400)
 
-    try:
-        tx = PaystackTransaction.objects.get(reference=reference)
-        order = tx.order
-    except PaystackTransaction.DoesNotExist:
-        return JsonResponse({
-            "status": "error",
-            "status_code": status.HTTP_404_NOT_FOUND,
-            "message": "Transaction not found"
-        })
-    
+    if not "transfer" in event_type:
+        reference = data.get('reference') or data.get("transaction_reference")
+        if not reference:
+            print(f"[Webhook] Missing reference in payload: {json.dumps(event, indent=2)}")
+            return JsonResponse({
+                "status": "error",
+                "status_code": 400,
+                "message": "Missing transaction reference"
+            }, status=400)
+
+        try:
+            tx = PaystackTransaction.objects.get(reference=reference)
+            order = tx.order
+        except PaystackTransaction.DoesNotExist:
+            return JsonResponse({
+                "status": "error",
+                "status_code": status.HTTP_404_NOT_FOUND,
+                "message": "Transaction not found"
+            })
+    else:
+        reference = data.get('reference')
+
     if event_type == 'charge.success':
         tx.status = PaystackTransaction.StatusChoices.SUCCESS
         tx.paid_at = data.get('paid_at')
@@ -221,24 +231,35 @@ def transaction_webhook(request):
                     update_order_status(order, Order.Status.PAID)
             except Exception:
                 pass
+    elif event_type == "charge.failed":
+        tx.status = PaystackTransaction.StatusChoices.FAILED
+        tx.save()
 
-        elif event_type == "charge.failed":
-            tx.status = PaystackTransaction.StatusChoices.FAILED
-            tx.save()
+        if order:
+            try:
+                with transaction.atomic():
+                    for item in order.order_items.all():
+                        variant = item.variant
+                        variant.reserved_squantity -= item.quantity
+                        variant.stock_quantity += item.quantity
+                        variant.save()
+                        update_quantity(variant.product)
+                    update_order_status(order, Order.Status.FAILED)
+            except Exception:
+                pass
 
-            if order:
-                try:
-                    with transaction.atomic():
-                        for item in order.order_items.all():
-                            variant = item.variant
-                            variant.reserved_squantity -= item.quantity
-                            variant.stock_quantity += item.quantity
-                            variant.save()
-                            update_quantity(variant.product)
-                        update_order_status(order, Order.Status.FAILED)
-                except Exception:
-                    pass
+    elif event_type in ["transfer.success", "transfer.failed"]:
+        payout = Payout.objects.filter(reference_id=reference).first()
 
+        if payout:
+            if event_type == "transfer.success":
+                print(f"Event type: {event_type}")
+                payout.status = Payout.StatusChoices.SUCCESS
+                payout.save(update_fields=["status"])
+            elif event_type == "transfer.failed":
+                from .tasks import retry_payout_transfer
+                retry_payout_transfer.apply_async(args=[payout.id], countdown=600)
+                   
     return JsonResponse({
         "status": "success",
         "status_code": status.HTTP_200_OK

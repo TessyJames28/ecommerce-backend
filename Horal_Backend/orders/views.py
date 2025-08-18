@@ -237,41 +237,45 @@ class OrderReturnRequestView(GenericAPIView, BaseResponseMixin):
         Allow users with real and paid purchases to cancel
         Paid orders and request a refund
         """
-        order_id = request.data.get('order_id')
+        order_item_id = request.data.get('order_item_id')
         reason = request.data.get('reason')
 
-        if not order_id or not reason:
+        if not order_item_id or not reason:
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
                 "order_id and reason required"
             )
         
         try:
-            order = Order.objects.get(id=order_id, user=request.user)
-        except Order.DoesNotExist:
+            order_item = OrderItem.objects.get(id=order_item_id, order__user=request.user)
+        except OrderItem.DoesNotExist:
             return self.get_response(
                 status.HTTP_404_NOT_FOUND,
-                "Order not found"
+                "Order item not found"
             )
         
         # Check if the order has been paid for
-        if order.status != Order.Status.PAID:
+        if order_item.order.status != Order.Status.PAID:
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
                 "Only paid orders can be returned"
             )
         
         # Check to prevent duplicate request
-        if OrderReturnRequest.objects.filter(order=order).exists():
+        if OrderReturnRequest.objects.filter(order_item=order_item).exists():
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
                 "Order cancellation and return request already initiated"
             )
         
         # Create request
-        order_return = OrderReturnRequest.objects.create(order=order, reason=reason)
+        order_return = OrderReturnRequest.objects.create(
+            order_item=order_item, reason=reason,
+            status=OrderReturnRequest.Status.REQUESTED
+        )
+        
 
-        update_order_status(order, Order.Status.RETURN_REQUESTED, request.user)
+        # update_order_status(order_item, Order.Status.RETURN_REQUESTED, request.user)
 
         serializer = self.get_serializer(order_return)
 

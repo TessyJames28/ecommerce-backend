@@ -7,12 +7,7 @@ from orders.models import Order, OrderItem
 
 def generate_hourly_orders():
     print("Simulating hourly orders...")
-    """
-    Simulate hourly orders purchased by buyers from sellers.
-    This function randomly selects sellers and buyers, creates orders,
-    and saves them to the database.
-    """
-    # Fetch active sellers and buyers
+
     sellers = CustomUser.objects.filter(is_seller=True)
     buyers = CustomUser.objects.filter(is_seller=False)
     all_variants = ProductVariant.objects.select_related('content_type', 'shop')
@@ -32,27 +27,31 @@ def generate_hourly_orders():
 
         selected_items = random.sample(list(seller_variants), k=min(3, seller_variants.count()))
 
+        status_choice = random.choice([
+            Order.Status.PAID,
+            Order.Status.SHIPPED,
+            Order.Status.AT_PICK_UP,
+            Order.Status.DELIVERED
+        ])
+
         order = Order.objects.create(
             user=buyer,
             total_amount=0,
-            status=random.choice([
-                Order.Status.PAID, Order.Status.SHIPPED,
-                Order.Status.DELIVERED
-            ]),
+            status=status_choice,
             street_address="123 Test St",
             local_govt=location.local_govt,
             landmark="Near Market",
             state=location.state,
             country=location.country,
             phone_number=buyer.phone_number,
-            created_at=now()  # Set the order creation time to now
+            created_at=now()
         )
 
         total = 0
         for variant in selected_items:
             quantity = random.randint(1, 3)
             unit_price = variant.price_override or variant.product.price
-            OrderItem.objects.create(
+            order_item = OrderItem.objects.create(
                 order=order,
                 variant=variant,
                 quantity=quantity,
@@ -60,6 +59,16 @@ def generate_hourly_orders():
             )
             total += unit_price * quantity
 
+            # Mark OrderItem as completed if order is delivered
+            if status_choice == Order.Status.DELIVERED:
+                order_item.is_completed = True
+                order_item.delivered_at = now()
+                order_item.save(update_fields=["is_completed", "delivered_at"])
+
         order.total_amount = total
-        order.save()
-        print(f"✅ Order placed by {buyer.email} with {len(selected_items)} items. Total: ₦{total:.2f}")
+        order.save(update_fields=["total_amount"])
+        print(f"✅ Order placed by {buyer.email} ({status_choice}) with {len(selected_items)} items. Total: ₦{total:.2f}")
+
+if __name__ == "__main__":
+    generate_hourly_orders()
+    print("Hourly orders simulation completed.")

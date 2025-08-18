@@ -10,3 +10,4 @@ class PaystackTransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaystackTransaction
         fields = "__all__"
+        

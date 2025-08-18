@@ -1,10 +1,10 @@
 from django.apps import AppConfig
 
 
-class RatingsConfig(AppConfig):
+class WalletConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'ratings'
+    name = 'wallet'
+
 
     def ready(self):
-        import ratings.signals
-        
+        import wallet.signals

@@ -62,5 +62,6 @@ urlpatterns = [
     path('api/v1/profile/', include('user_profile.urls')),
     path('api/v1/payment/', include('payment.urls')),
     path('api/v1/dashboard/seller/', include('sellers_dashboard.urls')),
+    path('api/v1/dashboard/seller/wallet/', include('wallet.urls')),
     # Optional: Redirect from root to Swagger UI
 ]

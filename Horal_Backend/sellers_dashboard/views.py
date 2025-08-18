@@ -20,7 +20,8 @@ from .utils import (
     get_sellers_topselling_products,
     get_total_order,
     get_total_revenue,
-    parse_date_safe
+    parse_date_safe,
+    get_order_in_dispute
 )
 from user_profile.models import Profile
 from shops.models import Shop
@@ -264,12 +265,64 @@ class SellerDashboardAnalyticsAPIView(APIView, BaseResponseMixin):
         total_revenue = get_total_revenue(shop.id)
         total_orders = get_total_order(shop.id)
         return_orders = get_return_order(shop.id)
+        orders_in_dispute = get_order_in_dispute(shop.id)
 
         # Sales summary by category (grouped by daily, weekly, etc)
         sales_by_category = get_sales_by_category(shop.id)
 
         # Order and sales overview chart data
         sales_and_order_overview = get_sales_and_order_overview(shop.id)
+
+        return Response({
+            "status": "success",
+            "status_code": status.HTTP_200_OK,
+            "message": "Seller dashboard analytics retrieve successfully",
+            "data": {
+                "total_revenue": float(total_revenue),
+                "total_orders": total_orders,
+                "return_orders": return_orders,
+                "orders_in_dispute": orders_in_dispute,
+                "sales_by_category": sales_by_category,
+                "sales_and_order_overview": sales_and_order_overview
+            }
+        }, status=status.HTTP_200_OK)
+    
+
+class TopSellingProductsAPIView(APIView, BaseResponseMixin):
+    """
+    Class that that retrieves all sellers top selling products
+    Can be filtered by recent and oldest
+    """
+    permission_classes = [IsAuthenticated]
+
+
+    def get(self, request, *args, **kwargs):
+        """
+        Get method to retrieve sellers dashboard analytics
+        """
+        user = request.user
+        # Get SelleyKYC instance to pass to shop
+        try:
+            user = SellerKYC.objects.get(user=user)
+        except SellerKYC.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "Seller KYC not found"
+            )
+
+        # Get shop associate with this seller
+        try:
+            shop = Shop.objects.get(owner=user)
+        except Shop.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "Seller shop not found"
+            )
+        
+        # Get query param
+        sort = request.query_params.get("sort", None)
+        if sort:
+            sort.lower()
 
         # Rolling top selling products (last 30 days)
         top_selling_products = get_rolling_topselling_products(shop.id) or []
@@ -284,20 +337,11 @@ class SellerDashboardAnalyticsAPIView(APIView, BaseResponseMixin):
                 top_selling_products, 
                 key=lambda x: parse_date_safe(x['latest_order_date']), reverse=True
             )
-            print(f"for latest: {top_selling_products}")
             
 
-        return Response({
-            "status": "success",
-            "status_code": status.HTTP_200_OK,
-            "message": "Seller dashboard analytics retrieve successfully",
-            "data": {
-                "total_revenue": float(total_revenue),
-                "total_orders": total_orders,
-                "return_orders": return_orders,
-                "sales_by_category": sales_by_category,
-                "sales_and_order_overview": sales_and_order_overview,
-                "top_selling_products": top_selling_products
-            }
-        }, status=status.HTTP_200_OK)
+        return self.get_response(
+            status.HTTP_200_OK,
+            "Seller top selling products retrieved successfully",
+            top_selling_products
+        )
 

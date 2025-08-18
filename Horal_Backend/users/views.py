@@ -18,6 +18,7 @@ from users.serializers import (
     LocationSerializer,
     RegistrationOTPVerificationSerializer,
 )
+from django.core.cache import cache
 from rest_framework.response import Response
 from rest_framework import status
 from google.auth.transport import requests as google_requests
@@ -26,7 +27,7 @@ from django.conf import settings
 from notification.utils import (
     generate_otp, store_otp,
     verify_registration_otp,
-    safe_cache_set,
+    safe_cache_set, safe_cache_get
 )
 from notification.emails import send_otp_email
 
@@ -88,7 +89,8 @@ class ConfirmRegistrationOTPView(GenericAPIView):
                 "message": "Invalid or expired OTP",
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        user_data_json = cache.get(f"reg_data:{email}")
+        reg_key = f"reg_data:{email}"
+        user_data_json = safe_cache_get(reg_key)
         if not user_data_json:
             return Response({
                 "status": "error",
