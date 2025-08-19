@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     'payment',
     'sellers_dashboard',
     'wallet',
+    'media', 
     'anymail',
     'drf_yasg',
     'corsheaders',
@@ -70,6 +71,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'django_celery_beat',
+    'storages',
+
 ]
 
 MIDDLEWARE = [
@@ -204,6 +207,7 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
 MAX_RETRIES = 3
 
 # Paystack Payment Setup
+
 # settings.py
 PAYSTACK_SECRET_KEY = env('PAYSTACK_SECRET_KEY')
 PAYSTACK_PUBLIC_KEY = env('PAYSTACK_PUBLIC_KEY')
@@ -331,22 +335,44 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://ecommerce-backend-a5oq.onrender.com',
-]
+# --------------------------------------------------
+# Static / Media
+# --------------------------------------------------
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=["https://ecommerce-backend-a5oq.onrender.com"],
+)
 
-STATIC_URL = '/static/'
-# MEDIA_URL = 'media/'
-# MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-# STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # This is where collectstatic puts files
 
-# Optional compression and caching:
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# ---- DigitalOcean Spaces ----
+AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY")
+AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME")
+AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="ams3")
+AWS_S3_ENDPOINT_URL = env(
+    "AWS_S3_ENDPOINT_URL", default="https://ams3.digitaloceanspaces.com"
+)
+AWS_DEFAULT_ACL = "public-read"
+
+AWS_S3_OBJECT_PARAMETERS = {
+    "CacheControl": "max-age=86400",
+}
+
+DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+
+MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.{AWS_S3_REGION_NAME}.digitaloceanspaces.com/"
+# -------------------------------------------------------------------
+# Default PK
+# -------------------------------------------------------------------
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
 
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
