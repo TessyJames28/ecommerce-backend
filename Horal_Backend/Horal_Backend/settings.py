@@ -61,6 +61,8 @@ INSTALLED_APPS = [
     'ratings',
     'user_profile',
     'payment',
+    'support',
+    'notifications',
     'sellers_dashboard',
     'wallet',
     'media', 
@@ -227,6 +229,22 @@ DOJAH_BASE_URL = env('DOJAH_BASE_URL')
 
 import urllib.parse as urlparse
 
+# redis_url = env("REDIS_URL")
+# url = urlparse.urlparse(redis_url)
+
+# CACHES = {
+#     "default": {
+#         "BACKEND": "django_redis.cache.RedisCache",
+#         "LOCATION": f"{url.scheme}://{url.hostname}:{url.port}/0",
+#         "OPTIONS": {
+#             "CLIENT_CLASS": "django_redis.client.DefaultClient",
+#             "PASSWORD": url.password,
+#         }
+#     }
+# }
+
+import urllib.parse as urlparse
+
 redis_url = env("REDIS_URL")
 url = urlparse.urlparse(redis_url)
 
@@ -237,9 +255,11 @@ CACHES = {
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             "PASSWORD": url.password,
+            "SSL": url.scheme == "rediss",
         }
     }
 }
+
 
 # Celery setting
 import ssl
@@ -278,18 +298,18 @@ WSGI_APPLICATION = 'Horal_Backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
 
 
 # Postgres DB on render
-DATABASES = {
-    'default': env.db('DATABASE_URL'),
-}
+# DATABASES = {
+#     'default': env.db('DATABASE_URL'),
+# }
 
 # auth user model
 AUTH_USER_MODEL = 'users.CustomUser'
