@@ -17,8 +17,8 @@ def create_user_profile(sender, instance, created, **kwargs):
     if not created:
         return
 
-    if instance.is_staff or instance.is_superuser:
-        return
+    # if instance.is_staff or instance.is_superuser:
+    #     return
 
     Profile.objects.get_or_create(
         user=instance,
