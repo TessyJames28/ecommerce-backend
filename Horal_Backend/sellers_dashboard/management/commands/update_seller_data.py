@@ -40,11 +40,11 @@ class Command(BaseCommand):
         order_items = OrderItem.objects.all()
         for item in order_items:
             order = item.order
-            if order.status not in ["paid", "shipped", "delivered"]:
+            if order.status not in ["paid", "shipped", "at_pick_up", "delivered"]:
                 pass
         
             # Avoid duplicating entries if already populated
-            if RawSale.objects.filter(order=order, variant=item.variant).exists():
+            if RawSale.objects.filter(order_item=item, variant=item.variant).exists():
                 return
             
             variant = item.variant
@@ -54,7 +54,7 @@ class Command(BaseCommand):
             if item.order.status in ["paid", "shipped", "delivered"]:
                 RawSale.objects.create(
                     shop=variant.shop,
-                    order=order,
+                    order_item=item,
                     category=product.category,
                     product=product_index,
                     variant=variant,
