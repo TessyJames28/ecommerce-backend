@@ -1,7 +1,6 @@
 from django.db import models
 from django.utils import timezone
 from users.models import CustomUser
-from orders.models import OrderItem
 from dateutil.relativedelta import relativedelta
 from products.models import ProductIndex
 import uuid
@@ -15,7 +14,7 @@ class UserRating(models.Model):
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="user_review")
-    order_item = models.OneToOneField(OrderItem, on_delete=models.CASCADE, related_name="order_item")
+    order_item = models.OneToOneField("orders.OrderItem", on_delete=models.CASCADE, related_name="order_item")
     product = models.ForeignKey(ProductIndex, on_delete=models.CASCADE, related_name="product")
     rating = models.PositiveIntegerField(choices=[(i, str(i)) for i in range(1, 6)])
     comment = models.TextField(blank=True, null=True)
