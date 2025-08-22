@@ -1,6 +1,6 @@
 from django.shortcuts import get_object_or_404
 from rest_framework.generics import GenericAPIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -8,14 +8,21 @@ from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from products.utils import IsSuperAdminPermission
 from payment.views import trigger_refund
-from payment.models import PaystackTransaction
+from payment.models import PaystackTransaction, OrderStatusLog
 from payment.utils import update_order_status
+from users.models import CustomUser
 from .utils import approve_return
 from .models import Order, OrderItem
-from .serializer import OrderReturnRequest, OrderSerializer, OrderReturnRequestSerializer
+from .serializers import OrderReturnRequest, OrderSerializer, OrderReturnRequestSerializer
 from carts.models import Cart
 from products.utils import BaseResponseMixin, update_quantity
 from django.utils.timezone import now
+from support.serializers import MessageSerializer
+from support.utils import handle_mailgun_attachments, create_message_for_instance
+from support.models import Message, SupportAttachment, Tickets
+from django.contrib.contenttypes.models import ContentType
+from notifications.models import Notification
+import re
 
 # Create your views here.
 
@@ -237,8 +244,12 @@ class OrderReturnRequestView(GenericAPIView, BaseResponseMixin):
         Allow users with real and paid purchases to cancel
         Paid orders and request a refund
         """
+        from payment.models import OrderStatusLog
+
         order_item_id = request.data.get('order_item_id')
         reason = request.data.get('reason')
+        attachments = request.data.get("attachments")
+        print(f"Attachment order view: {attachments}")
 
         if not order_item_id or not reason:
             return self.get_response(
@@ -255,10 +266,10 @@ class OrderReturnRequestView(GenericAPIView, BaseResponseMixin):
             )
         
         # Check if the order has been paid for
-        if order_item.order.status != Order.Status.PAID:
+        if order_item.order.status != Order.Status.DELIVERED:
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
-                "Only paid orders can be returned"
+                "Only delivered orders can be returned"
             )
         
         # Check to prevent duplicate request
@@ -272,12 +283,19 @@ class OrderReturnRequestView(GenericAPIView, BaseResponseMixin):
         order_return = OrderReturnRequest.objects.create(
             order_item=order_item, reason=reason,
             status=OrderReturnRequest.Status.REQUESTED
-        )
-        
+        )        
 
-        # update_order_status(order_item, Order.Status.RETURN_REQUESTED, request.user)
+        update_order_status(
+            order_return, OrderReturnRequest.Status.REQUESTED,
+            request.user, OrderStatusLog.OrderType.ORDERRETURNREQUEST,
+            force=True
+        )
 
         serializer = self.get_serializer(order_return)
+
+        #Pass attachments to signal via context
+        order_return._attachments_data = attachments
+        transaction.on_commit(lambda: create_message_for_instance(order_return))
 
         return self.get_response(
             status.HTTP_201_CREATED,
@@ -290,10 +308,10 @@ class ApproveReturnView(APIView, BaseResponseMixin):
     """
     Class to allow admin or superuser to approve return request
     """
-    permission_classes = [IsSuperAdminPermission]
+    permission_classes = [IsAdminUser]
 
 
-    def post(self, request):
+    def patch(self, request):
         """Allows admin to approve cancellation request"""
         return_id = request.data.get('return_id')
 
@@ -304,34 +322,38 @@ class ApproveReturnView(APIView, BaseResponseMixin):
             )
         
         try:
-            req = OrderReturnRequest.objects.select_related('order').get(id=return_id)
+            req = OrderReturnRequest.objects.select_related('order_item').get(id=return_id)
         except OrderReturnRequest.DoesNotExist:
             return self.get_response(
                 status.HTTP_404_NOT_FOUND,
-                "Return or cancellation request not found"
+                "Return request not found"
             )
         
         # Check if the request is already approved
-        if req.approved:
+        if req.status == OrderReturnRequest.Status.APPROVED:
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
-                "Cancellation request already approved"
+                "Order return request already approved"
             )
-        
-        # Approve and restock
-        approve_return(req, request.user)
 
         # Find the transaction for this order
         try:
-            tx = PaystackTransaction.objects.get(order=req.order)
+            tx = PaystackTransaction.objects.get(order=req.order_item.order, status="success")
         except PaystackTransaction.DoesNotExist:
             return self.get_response(
                 status.HTTP_404_NOT_FOUND,
                 "Associated payment transaction not found"
             )
         
+        # Approve and restock
+        approve_return(req, request.user)
+
+        # Get the order item amount for refund
+        order_item = req.order_item
+        amount = order_item.total_price
+
         # Trigger refund
-        refund_result = trigger_refund(tx.reference)
+        refund_result = trigger_refund(tx.reference, amount=amount)
 
         if not refund_result.get("status"):
             return self.get_response(
@@ -339,6 +361,15 @@ class ApproveReturnView(APIView, BaseResponseMixin):
                 "Return approved but refund failed",
                 refund_result
             )
+        elif refund_result.get("status"):
+            req.status = OrderReturnRequest.Status.COMPLETED
+            req.processed_at = now()
+            req.save(update_fields=["status", "processed_at"])
+
+        update_order_status(
+            req, OrderReturnRequest.Status.COMPLETED,
+            request.user, OrderStatusLog.OrderType.ORDERRETURNREQUEST
+        )        
     
         return self.get_response(
             status.HTTP_200_OK,
@@ -346,3 +377,160 @@ class ApproveReturnView(APIView, BaseResponseMixin):
             refund_result
         )
     
+
+class RejectReturnView(APIView, BaseResponseMixin):
+    """
+    Class to allow admin or superuser to reject return request
+    """
+    permission_classes = [IsAdminUser]
+
+
+    def patch(self, request):
+        """Allows admin to approve cancellation request"""
+        return_id = request.data.get('return_id')
+
+        if not return_id:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "return_id is required"
+            )
+        
+        try:
+            req = OrderReturnRequest.objects.select_related('order_item').get(id=return_id)
+        except OrderReturnRequest.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "Return or cancellation request not found"
+            )
+        
+        # Check if the request is already approved or rejected
+        if req.status == OrderReturnRequest.Status.APPROVED:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Cancellation request already approved"
+            )
+        
+        if req.status == OrderReturnRequest.Status.REJECTED:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Cancellation request already rejected"
+            )
+        
+        # Reject return request
+        req.status = OrderReturnRequest.Status.REJECTED
+        req.processed_at = now()
+        req.save(update_fields=["status", "processed_at"])
+
+        update_order_status(
+            req, OrderReturnRequest.Status.REJECTED,
+            request.user, OrderStatusLog.OrderType.ORDERRETURNREQUEST
+        )
+
+        return self.get_response(
+            status.HTTP_200_OK,
+            "Return rejected"
+        )
+    
+
+class ReturnsEmailWebhookView(APIView, BaseResponseMixin):
+    """Webhook to retrieve and ingest customers messages"""
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        """
+        Mailgun webhook to handle the extraction and saving
+        of customers return messages/emails
+        """
+        from support.utils import extract_reply_body
+
+        sender = request.data.get("sender") # customer's email
+        recipient = request.data.get("recipient") # support email
+        subject = request.data.get("subject", "")
+        body_plain = request.data.get("body-plain")
+        clean_body = extract_reply_body(body_plain)
+        attachments = request.FILES 
+
+        # Find the return request by email
+        # get user by email
+        try:
+            user = CustomUser.objects.get(email=sender)
+        except CustomUser.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "Customer not found"
+            )
+
+        match = re.search(r"\[(SUP|RET)-[A-Z0-9]{8}\]", subject)
+        print(f"Match: {match}")
+        print(f"Subject: {subject}")
+        if not match:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Reference code not found in subject"
+            )
+        reference = match.group(0).strip("[]")
+        returns = OrderReturnRequest.objects.filter(
+            order_item__order__user=user,
+            reference=reference
+        ).first()
+
+        if not returns:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "Return request not found"
+            )
+
+        # Create message
+        msg = Message.objects.create(
+            # content_type=ContentType.objects.get_for_model(OrderReturnRequest),
+            # object_id=returns.id,
+            parent=returns,
+            sender=user,
+            subject=subject,
+            team_email=recipient,
+            body=clean_body,
+            sent_at=now()
+        )
+
+        # Handle attachments
+        if attachments:
+            handle_mailgun_attachments(attachments, msg, type="returns")
+
+
+        try:
+            ticket = Tickets.objects.get(
+                content_type=ContentType.objects.get_for_model(OrderReturnRequest),
+                object_id=returns.id,
+            )
+            # Notifications only if ticket already exists and is assigned
+            if ticket.ticket_state == Tickets.State.ASSIGNED:
+                if ticket.re_assigned:
+                    Notification.objects.create(
+                        user=ticket.re_assigned_to.team,
+                        type=Notification.Type.ORDER_RETURN,
+                        channel=Notification.ChannelChoices.INAPP,
+                        subject=subject,
+                        message=body_plain,
+                        content_type=ContentType.objects.get_for_model(Message),
+                        parent=msg,
+                        object_id=msg.id,
+                    )
+                else:
+                    Notification.objects.create(
+                        user=ticket.assigned_to.team,
+                        type=Notification.Type.ORDER_RETURN,
+                        channel=Notification.ChannelChoices.INAPP,
+                        subject=subject,
+                        message=body_plain,
+                        content_type=ContentType.objects.get_for_model(Message),
+                        object_id=msg.id,
+                    )
+        except Tickets.DoesNotExist:
+            pass
+
+        return Response({
+            "status": "ok",
+            "message_id": msg.id,
+        }, status=status.HTTP_201_CREATED)
+
