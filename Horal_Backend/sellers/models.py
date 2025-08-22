@@ -49,7 +49,7 @@ class SellerKYCAddress(models.Model):
     landmark = models.CharField(max_length=250)
     lga = models.CharField(max_length=50)
     state = models.CharField(max_length=50)
-    business_name = models.CharField(max_length=200)
+    business_name = models.CharField(max_length=200, null=True, blank=True)
     # status = models.CharField(max_length=20, choices=KYCStatus, default=KYCStatus.PENDING)
     # address_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

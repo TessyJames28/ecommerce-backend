@@ -4,7 +4,7 @@ from users.models import CustomUser
 from .models import SellerKYC, SellerKYCCAC, SellerKYCNIN, SellerKYCAddress, SellerSocials
 from .tasks import verify_seller_kyc  # Celery task
 from django.core.cache import cache
-from notification.emails import (
+from notifications.emails import (
     send_kyc_final_status_email,
     send_kyc_info_completed_email,
 )
