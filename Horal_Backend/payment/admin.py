@@ -3,7 +3,7 @@ from .models import OrderStatusLog, PaystackTransaction
 
 @admin.register(OrderStatusLog)
 class OrderStatusLogAdmin(admin.ModelAdmin):
-    list_display = ('order', 'old_status', 'new_status', 'changed_by', 'timestamp')
+    list_display = ('object_id', 'content_type', 'parent', 'old_status', 'new_status', 'changed_by', 'timestamp')
     list_filter = ('old_status', 'new_status', 'changed_by')
     search_fields = ('order__id',)
 

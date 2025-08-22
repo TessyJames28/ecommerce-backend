@@ -8,12 +8,12 @@ from rest_framework.permissions import IsAuthenticated
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from .models import PaystackTransaction
-from orders.models import Order
+from orders.models import Order, OrderItem
 from rest_framework.views import APIView
 from django.utils.timezone import now
 from carts.models import CartItem
 from .utils import trigger_refund, update_order_status
-from orders.serializer import OrderSerializer
+from orders.serializers import OrderSerializer
 from products.utils import update_quantity, IsAdminOrSuperuser
 from django.utils.decorators import method_decorator
 from rest_framework.exceptions import ValidationError
@@ -278,12 +278,22 @@ class RetryRefundView(APIView):
         When refund failed from paystack end
         """
         reference = request.data.get("reference")
+        order_item = request.data.get("order_item")
+
         if not reference:
             return Response({
                 "status": "error",
                 "status_code": status.HTTP_400_BAD_REQUEST,
                 "message": "reference is required"
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not order_item:
+            return Response({
+                "status": "error",
+                "status_code": status.HTTP_400_BAD_REQUEST,
+                "message": "order item is required to process partial refund"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         
         try:
             tx = PaystackTransaction.objects.get(reference=reference)
@@ -301,7 +311,20 @@ class RetryRefundView(APIView):
                 "message": "Refund already successful"
             }, status=status.HTTP_200_OK)
         
-        result = trigger_refund(reference, retry=True)
+        # Get order item for amount
+        try:
+            order_item = OrderItem.objects.get(id=order_item, order=tx.order.id)
+        except OrderItem.DoesNotExist:
+            return Response({
+                "status": "error",
+                "status_code": status.HTTP_400_BAD_REQUEST,
+                "message": "Order with this item not found"
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get amount
+        amount = order_item.total_price
+        
+        result = trigger_refund(reference, amount=amount, retry=True)
         # Add just before or after calling trigger_refund
 
         if result.get("status"):
@@ -316,4 +339,12 @@ class RetryRefundView(APIView):
                 "status_code": status.HTTP_400_BAD_REQUEST,
                 "message": result.get("message", "Refund retry failed")  # extract Paystack error if present
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+
+# class Callback(APIView):
+#     def post(self, request):
+#         return Response({
+#             "status": "ok",
+#         })
+
 
