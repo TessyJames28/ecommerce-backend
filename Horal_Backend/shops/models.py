@@ -26,7 +26,7 @@ class Shop(models.Model):
     )
     name = models.CharField(max_length=100, unique=True, blank=True, null=True)
     created_by_admin = models.BooleanField(default=False)
-    location = models.CharField(max_length=255)
+    # location = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
 
 
