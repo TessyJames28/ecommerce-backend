@@ -8,6 +8,7 @@ from django.conf import settings
 import requests
 from rest_framework_simplejwt.tokens import RefreshToken
 
+
 def refresh_google_token(refresh_token, client_id):
     """Refresh the Google access token using the refresh token."""
     print("Refreshing Google token...")
@@ -116,3 +117,22 @@ def exchange_code_for_token(code):
 
     response = requests.post(token_url, data=data)
     return response.json()
+
+
+def get_or_create_temp_user(email, full_name=None):
+    import time
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    """
+    Returns an existing user if email exists, else creates a temporary user.
+    """
+    user, created = User.objects.get_or_create(
+        email=email,
+        defaults={
+            "full_name": f"{email.split('@')[0]}",
+            "is_active": True,
+            "is_temporary": True,
+        }
+    )
+    return user
+

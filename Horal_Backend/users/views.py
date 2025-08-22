@@ -24,12 +24,12 @@ from rest_framework import status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from django.conf import settings
-from notification.utils import (
+from notifications.utils import (
     generate_otp, store_otp,
     verify_registration_otp,
     safe_cache_set, safe_cache_get
 )
-from notification.emails import send_otp_email
+from notifications.emails import send_otp_email
 
 
 class RegisterUserView(GenericAPIView):
