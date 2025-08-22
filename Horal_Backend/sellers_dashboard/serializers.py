@@ -6,8 +6,7 @@ from orders.models import OrderItem
 from sellers.models import SellerKYC
 from sellers.serializers import SellerSerializer
 from users.serializers import ShippingAddressSerializer
-from user_profile.models import Profile
-from products.models import ImageLink
+from user_profile.models import Profile, Image
 
 
 class ProductRatingSummarySerializer(serializers.ModelSerializer):
@@ -139,8 +138,7 @@ class SellerProfileSerializer(serializers.ModelSerializer):
             user.save(update_fields=["phone_number"])
 
         if image_url:
-            image_obj, _ = ImageLink.objects.update_or_create(
-                image_type = ImageLink.ImageType.PROFILE,
+            image_obj, _ = Image.objects.update_or_create(
                 url=image_url,
             )
             instance.image = image_obj

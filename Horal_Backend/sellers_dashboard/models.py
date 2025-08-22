@@ -50,7 +50,7 @@ class RawSale(models.Model):
     is_valid = models.BooleanField(default=True)
     invalidated_at = models.DateTimeField(null=True, blank=True)
 
-    order = models.ForeignKey('orders.Order', on_delete=models.CASCADE)
+    order_item = models.OneToOneField('orders.OrderItem', on_delete=models.CASCADE, related_name="sale")
     created_at = models.DateTimeField()
     
     processed_flags = models.JSONField(default=dict, blank=True)
