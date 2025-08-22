@@ -28,7 +28,7 @@ def create_july_orders():
     all_variants = ProductVariant.objects.select_related('content_type', 'shop').all()
 
     start_date = date(2025, 6, 1)
-    end_date = date(2025, 8, 13)
+    end_date = date(2025, 8, 22)
 
     for single_date in (start_date + timedelta(days=n) for n in range((end_date - start_date).days + 1)):
         print(f"📅 Creating orders for {single_date.strftime('%Y-%m-%d')}...")
