@@ -98,6 +98,7 @@ colors = [c[0] for c in Color.choices]
 
 
 # Clear data first (optional in dev)
+SupportTeam.objects.all().delete()
 CustomUser.objects.all().delete()
 Category.objects.all().delete()
 SubCategory.objects.all().delete()
