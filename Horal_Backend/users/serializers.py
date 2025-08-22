@@ -6,7 +6,7 @@ from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
 from django.utils.timezone import now
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
-from notification.utils import verify_otp, verify_registration_otp
+from notifications.utils import verify_otp, verify_registration_otp
 from .utils import validate_strong_password, generate_token_for_user
 
 class CustomUserSerializer(serializers.ModelSerializer):
