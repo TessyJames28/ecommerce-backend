@@ -12,29 +12,29 @@ from decimal import Decimal
 import os, random
 
 
-mock_data ={
-            "status": True,
-            "message": "Transfer has been queued",
-            "data": {
-                "integration": 123456,
-                "domain": "test",
-                "amount": 10000,
-                "currency": "NGN",
-                "source": "balance",
-                "reason": "payout",
-                "reference": "reference",
-                "recipient": {
-                    "id": 987654,
-                    "name": "John Doe",
-                    "account_number": 0000000000,
-                    "bank_code": "011",
-                    "bank_name": "Mock Bank",
-                },
-                "status": "pending",
-                "transfer_code": "TRF_mock123456",
-                "createdAt": "2025-08-12T12:30:45.000Z",
-            }
-        }
+# mock_data ={
+#             "status": True,
+#             "message": "Transfer has been queued",
+#             "data": {
+#                 "integration": 123456,
+#                 "domain": "test",
+#                 "amount": 10000,
+#                 "currency": "NGN",
+#                 "source": "balance",
+#                 "reason": "payout",
+#                 "reference": "reference",
+#                 "recipient": {
+#                     "id": 987654,
+#                     "name": "John Doe",
+#                     "account_number": 0000000000,
+#                     "bank_code": "011",
+#                     "bank_name": "Mock Bank",
+#                 },
+#                 "status": "pending",
+#                 "transfer_code": "TRF_mock123456",
+#                 "createdAt": "2025-08-12T12:30:45.000Z",
+#             }
+#         }
 
 def verify_bank_account(account_number, bank_code):
     """
@@ -127,28 +127,29 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
 
     payload = {
         "source": "balance",
-        "amount": int(amount_naira * 100),
+        # "amount": int(amount_naira * 100),
+        "amount": 10000,
         "recipient": recipient_code,
         "reason": reason,
         "reference": payout.reference_id if payout else str(uuid.uuid4())  # custom reference
     }
 
     try:
-        if os.getenv("ENVIRONMENT") != "production":
-            data = mock_data
-        else:
-            response = requests.post(url, headers=headers, json=payload)
-            data = response.json()
+        # if os.getenv("ENVIRONMENT") != "production":
+        #     data = mock_data
+        # else:
+        response = requests.post(url, headers=headers, json=payload)
+        data = response.json()
     except Exception as e:
         raise Exception(f"Error initializing payout: {e}")
 
     amount = data.get("data", {}).get("amount")
     if data.get("status") is True:
         # =========================Generate random transfer code (Will remove before launch)======================
-        value = random.randint(11111, 99999)
-        data["data"]["transfer_code"] = f"TRF_mock{value}"
-        data["data"]["reference"] = payload["reference"]
-        data["data"]["createdAt"] = now()
+        # value = random.randint(11111, 99999)
+        # data["data"]["transfer_code"] = f"TRF_mock{value}"
+        # data["data"]["reference"] = payload["reference"]
+        # data["data"]["createdAt"] = now()
         # =======================Will remove the above logic for production================================
         transfer_code = data["data"]["transfer_code"]
 
@@ -165,7 +166,8 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
             Payout.objects.get_or_create(
                 seller=seller,
                 reference_id=data["data"]["reference"],
-                amount_naira=amount / 100,
+                amount_naira=100,
+                # amount_naira=amount / 100,
                 paystack_transfer_code=transfer_code,
                 total_withdrawable=withdrawable,
                 commission=commission,
