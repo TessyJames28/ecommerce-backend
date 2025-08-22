@@ -61,8 +61,8 @@ INSTALLED_APPS = [
     'ratings',
     'user_profile',
     'payment',
-    # 'support',
-    # 'notifications',
+    'support',
+    'notifications',
     'sellers_dashboard',
     'wallet',
     'media', 
@@ -318,6 +318,13 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
     # Add additional backends if necessary
 ]
+
+# Setting for API Call
+API_BASE_URL = env("API_BASE_URL")
+SUPPORT_EMAIL = env("SUPPORT_EMAIL")
+SUPPORT_PASSWORD = env("SUPPORT_PASSWORD")
+RETURNS_EMAIL = env("RETURNS_EMAIL")
+RETURNS_PASSWORD = env("RETURNS_PASSWORD")
 
 
 # Password validation
