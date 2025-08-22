@@ -1,8 +1,10 @@
 from django.utils import timezone
 from django.db import transaction
 from products.utils import update_quantity
-from .models import Order
 from payment.utils import update_order_status
+from payment.models import OrderStatusLog
+import uuid
+
 
 def approve_return(order_return_request, user):
     """
@@ -10,18 +12,25 @@ def approve_return(order_return_request, user):
     quantity upon cancellation and return approval
     after assessment of returned product and reason
     """
+    from .models import OrderReturnRequest
     with transaction.atomic():
         req = order_return_request
-        order = req.order
+        order_item = req.order_item
 
-        for item in order.order_items.all():
-            variant = item.variant
-            variant.stock_quantity += item.quantity
-            variant.save()
-            update_quantity(variant.product)
+        variant = order_item.variant
+        variant.stock_quantity += order_item.quantity
+        variant.save()
+        update_quantity(variant.product)
 
-        update_order_status(order, Order.Status.CANCELLED, user)
-        req.approved = True
+        update_order_status(
+            req, OrderReturnRequest.Status.APPROVED,
+            user, OrderStatusLog.OrderType.ORDERRETURNREQUEST
+        )
+
+        req.status = OrderReturnRequest.Status.APPROVED
         req.processed_at = timezone.now()
-        req.save()
+        req.save(update_fields=["status", "processed_at"])
 
+
+def generate_reference():
+    return f"RET-{uuid.uuid4().hex[:8].upper()}"
