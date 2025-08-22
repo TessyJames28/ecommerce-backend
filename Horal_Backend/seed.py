@@ -460,15 +460,15 @@ for buyer in remaining_users:
 
             # Simulate return request only for delivered orders
             if status == Order.Status.DELIVERED and random.choice([True, False]):
-                return_status = random.choice([
-                    OrderReturnRequest.Status.REQUESTED,
-                    OrderReturnRequest.Status.REJECTED,
-                    OrderReturnRequest.Status.COMPLETED
-                ])
+                # return_status = random.choice([
+                #     OrderReturnRequest.Status.REQUESTED,
+                #     # OrderReturnRequest.Status.REJECTED,
+                #     # OrderReturnRequest.Status.COMPLETED
+                # ])
                 OrderReturnRequest.objects.create(
                     order_item=order_item,
                     reason="Item defective or not as described",
-                    status=return_status
+                    status=OrderReturnRequest.Status.REQUESTED
                 )
 
             if status == Order.Status.DELIVERED:

@@ -96,16 +96,15 @@ def create_july_orders():
 
                 # Randomly simulate return requests for some delivered items (small %)
                 if status == Order.Status.DELIVERED and random.random() < 0.1:  # 10% chance
-                    return_status = random.choice([
-                        OrderReturnRequest.Status.REQUESTED,
-                        OrderReturnRequest.Status.REJECTED,
-                        OrderReturnRequest.Status.COMPLETED
-                    ])
+                    # return_status = random.choice([
+                    #     OrderReturnRequest.Status.REQUESTED,
+                    #     OrderReturnRequest.Status.REJECTED,
+                    #     OrderReturnRequest.Status.COMPLETED
+                    # ])
                     OrderReturnRequest.objects.create(
                         order_item=order_item,
                         reason="Item defective or not as described",
-                        status=return_status,
-                        approved=(return_status == OrderReturnRequest.Status.COMPLETED)
+                        status=OrderReturnRequest.Status.REQUESTED
                     )
                     # Ensure returned/requested items are not marked completed
                     order_item.is_completed = False
