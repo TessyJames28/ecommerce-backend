@@ -264,8 +264,7 @@ for i in range(30):
         shop = Shop.objects.create(
             owner=kyc,
             owner_type="seller",
-            name=f"Shop {i}",
-            location=f"{lga}, {state}"
+            name=f"Shop {i}"
         )
 
         sellers.append((user, shop))
