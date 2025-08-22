@@ -27,8 +27,13 @@ from subcategories.models import SubCategory
 from products.models import (
     ChildrenProduct, FashionProduct, GadgetProduct, ElectronicsProduct,
     VehicleProduct, AccessoryProduct, HealthAndBeautyProduct, FoodProduct,
-    ProductVariant, ImageLink, ProductIndex, Color
+    ProductVariant, ProductIndex, Color,
+    VehicleImage, FashionImage, ElectronicsImage, FoodImage,
+    HealthAndBeautyImage, AccessoryImage, ChildrenImage, GadgetImage
 )
+from django.conf import settings
+
+from products.utils import image_model_map
 from carts.models import Cart, CartItem
 from orders.models import Order, OrderItem, OrderReturnRequest
 from ratings.models import UserRating
@@ -39,6 +44,9 @@ from sellers_dashboard.models import (
     SalesAdjustment, DailyShopSales, DailySales, MonthlyShopSales,
     YearlySales, YearlyShopSales
 )
+from wallet.models import SellersBankDetails, SellerTransactionHistory, Payout
+from support.models import SupportTeam
+
 
 # Sample data
 states_and_lgas = {
@@ -86,13 +94,13 @@ categories_data = {
 }
 
 
-colors = [c[0] for c in ImageLink._meta.get_field("url").choices or Color.choices]
+colors = [c[0] for c in Color.choices]
+
 
 # Clear data first (optional in dev)
 CustomUser.objects.all().delete()
 Category.objects.all().delete()
 SubCategory.objects.all().delete()
-ImageLink.objects.all().delete()
 RawSale.objects.all().delete()
 SalesAdjustment.objects.all().delete()
 DailySales.objects.all().delete()
@@ -103,6 +111,9 @@ MonthlySales.objects.all().delete()
 MonthlyShopSales.objects.all().delete()
 YearlySales.objects.all().delete()
 YearlyShopSales.objects.all().delete()
+SellersBankDetails.objects.all().delete()
+SellerTransactionHistory.objects.all().delete()
+Payout.objects.all().delete()
 
 # Create categories and subcategories
 category_map = {}
@@ -126,6 +137,49 @@ admin = CustomUser.objects.create_superuser(
         phone_number=f"08033556677",
         is_active=True
     )
+
+for i in range(5):
+    staff = CustomUser.objects.create_user(
+        email=f"staff{i}@mail.com",
+        password="TestPass123!",
+        full_name=f"Staff {i}",
+        phone_number=f"070{i:08d}",
+        is_active=True,
+        is_staff=True,
+    )
+
+# Create bot staff
+support = CustomUser.objects.create_user(
+    email=settings.SUPPORT_EMAIL,
+    password=settings.SUPPORT_PASSWORD,
+    full_name="support-bot",
+    is_staff=True,
+    is_active=True
+)
+
+returns = CustomUser.objects.create_user(
+    email=settings.RETURNS_EMAIL,
+    password=settings.RETURNS_PASSWORD,
+    full_name="returns-bot",
+    is_staff=True,
+    is_active=True
+)
+print(f"Support and returns bot create:\n\tSupport: {support}\n\tReturns: {returns}")
+
+# Create Support Team
+s_team = SupportTeam.objects.create(
+    team=support,
+    name=support.full_name,
+    email=support.email
+)
+
+r_team = SupportTeam.objects.create(
+    team=returns,
+    name=returns.full_name,
+    email=returns.email
+)
+
+print(f"Support and returns team member created:\n\tSupport: {s_team}\n\tReturns: {r_team}")
 
 for i in range(30):
     user = CustomUser.objects.create_user(
@@ -218,15 +272,29 @@ for i in range(30):
     else:
         buyers.append(user)
 
-def create_images(count):
-    global image_index
+
+def create_images(product, count=3):
+    """Create images dynamically for the correct product image model."""
+    model_name = product.__class__.__name__
+    image_model_class = image_model_map.get(model_name)
+
+    if not image_model_class:
+        return []
+
     imgs = []
     for _ in range(count):
         url = random.choice(image_urls)
-        imgs.append(ImageLink.objects.create(url=url, alt_text="Seeded image"))
+        img = image_model_class.objects.create(
+            product=product,
+            url=url,
+            alt_text="Seeded image"
+        )
+        imgs.append(img)
     return imgs
 
+
 def create_variants(product, count=2):
+    """Create variants tied to a product via ContentType."""
     variants = []
     for _ in range(count):
         variant = ProductVariant.objects.create(
@@ -269,66 +337,67 @@ for user, shop in sellers:
             )
 
             if cat_key == "fashion":
-                p = FashionProduct.objects.create(**common_kwargs)
-                p.material = "Cotton"
-                p.style = "Casual"
-                p.sleeve_length = "short"
-                p.neckline = "round"
-                p.save()
+                p = FashionProduct.objects.create(**common_kwargs,
+                                                  material="Cotton", style="Casual",
+                                                  sleeve_length="short", neckline="round")
             elif cat_key == "vehicles":
-                p = VehicleProduct.objects.create(
-                    **common_kwargs,
-                    make="Toyota", model="Camry", year=2021, mileage=15000,
-                    engine_type="petrol", engine_size="medium", fuel_type="petrol",
-                    transmission="automatic", num_doors=4, num_seats=5,
-                    vin=str(uuid.uuid4())[:17], color_exterior="black", color_interior="gray",
-                    seating_capacity=5
-                )
+                p = VehicleProduct.objects.create(**common_kwargs,
+                                                  make="Toyota", model="Camry", year=2021,
+                                                  mileage=15000, engine_type="petrol",
+                                                  engine_size="medium", fuel_type="petrol",
+                                                  transmission="automatic", num_doors=4,
+                                                  num_seats=5, vin=str(uuid.uuid4())[:17],
+                                                  color_exterior="black", color_interior="gray",
+                                                  seating_capacity=5)
             elif cat_key == "gadget":
-                p = GadgetProduct.objects.create(
-                    **common_kwargs,
-                    model="XPhone 12", processor="A14", ram="6GB", storage="128GB",
-                    screen_size="6.1", operating_system="android", connectivity="WiFi/Bluetooth"
-                )
+                p = GadgetProduct.objects.create(**common_kwargs,
+                                                 model="XPhone 12", processor="A14",
+                                                 ram="6GB", storage="128GB",
+                                                 screen_size="6.1", operating_system="android",
+                                                 connectivity="WiFi/Bluetooth")
             elif cat_key == "electronics":
-                p = ElectronicsProduct.objects.create(
-                    **common_kwargs,
-                    model="ElecX", power_output="medium", features="Smart TV",
-                    connectivity="WiFi", voltage="220V", power_source="electric"
-                )
+                p = ElectronicsProduct.objects.create(**common_kwargs,
+                                                      model="ElecX", power_output="medium",
+                                                      features="Smart TV", connectivity="WiFi",
+                                                      voltage="220V", power_source="electric")
             elif cat_key == "accessories":
-                p = AccessoryProduct.objects.create(
-                    **common_kwargs,
-                    material="Leather", compatibility="Universal", dimensions="10x5", type="case"
-                )
+                p = AccessoryProduct.objects.create(**common_kwargs,
+                                                    material="Leather",
+                                                    compatibility="Universal",
+                                                    dimensions="10x5", type="case")
             elif cat_key == "children":
-                p = ChildrenProduct.objects.create(
-                    **common_kwargs,
-                    material="Plastic", weight_capacity="20kg", safety_certifications="CE"
-                )
+                p = ChildrenProduct.objects.create(**common_kwargs,
+                                                   material="Plastic", weight_capacity="20kg",
+                                                   safety_certifications="CE")
             elif cat_key == "health and beauty":
-                p = HealthAndBeautyProduct.objects.create(
-                    **common_kwargs,
-                    ingredients="Aloe Vera", skin_type="dry", fragrance="Lavender",
-                    usage_instructions="Apply daily", spf="15", shade="Natural",
-                    volume="200ml", benefits="Moisturizes skin"
-                )
+                p = HealthAndBeautyProduct.objects.create(**common_kwargs,
+                                                          ingredients="Aloe Vera",
+                                                          skin_type="dry",
+                                                          fragrance="Lavender",
+                                                          usage_instructions="Apply daily",
+                                                          spf="15", shade="Natural",
+                                                          volume="200ml",
+                                                          benefits="Moisturizes skin")
             elif cat_key == "foods":
-                p = FoodProduct.objects.create(
-                    **common_kwargs,
-                    ingredients="Organic Fruits", dietary_info="Vegan",
-                    origin="Local Farm", weight="2kg", condition="fresh",
-                    shelf_life="7 days", size="Medium"
-                )
-            imgs = create_images(3)
-            p.images.set(imgs)
-            p.save()
-            variants = create_variants(p, count=3)
+                p = FoodProduct.objects.create(**common_kwargs,
+                                               ingredients="Organic Fruits",
+                                               dietary_info="Vegan",
+                                               origin="Local Farm", weight="2kg",
+                                               condition="fresh", shelf_life="7 days",
+                                               size="Medium")
+
+            # ✅ attach images via new model
+            create_images(p, count=3)
+
+            # ✅ attach variants
+            create_variants(p, count=3)
+
+            # Add to ProductIndex
             content_type = ContentType.objects.get_for_model(p)
             pi = ProductIndex.objects.get(object_id=p.id, content_type=content_type)
             product_index_list.append(pi)
 
-print("✅ User, Seller, Shop, Category, Subcategory, Product, Image, Variant, and ProductIndex created successfully.")
+print("✅ Seeded users, shops, categories, subcategories, products, images, variants, and product index successfully.")
 
 # === REMAINING USERS ORDERING ===
 remaining_users = buyers
@@ -399,9 +468,7 @@ for buyer in remaining_users:
                 OrderReturnRequest.objects.create(
                     order_item=order_item,
                     reason="Item defective or not as described",
-                    status=return_status,
-                    approved=(return_status == OrderReturnRequest.Status.APPROVED or 
-                              return_status == OrderReturnRequest.Status.COMPLETED)
+                    status=return_status
                 )
 
             if status == Order.Status.DELIVERED:
