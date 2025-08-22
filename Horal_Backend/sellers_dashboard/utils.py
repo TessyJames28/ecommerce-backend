@@ -13,7 +13,7 @@ from .models import (
     DailyShopSales, WeeklyShopSales,
     MonthlyShopSales, YearlyShopSales,
 )
-from notification.utils import safe_cache_get, safe_cache_set
+from notifications.utils import safe_cache_get, safe_cache_set
 from products.utils import CATEGORY_MODEL_MAP
 from django.core.cache import cache
 from .helper import (
@@ -515,8 +515,7 @@ def parse_date_safe(date_str):
 def reconcile_raw_sales():
     """Function to reconcile rawsale"""
     RawSale.objects.filter(
-        Q(order__status=Order.Status.CANCELLED) |
-        Q(order__order_items__is_returned=True),
+        order_items__is_returned=True,
         is_valid=True
     ).update(is_valid=False, invalidated_at=now(), processed_flags={})
 

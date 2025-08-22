@@ -34,72 +34,75 @@ def update_raw_sales(sender, instance, **kwargs):
     Signal to populate raw order model once an order is paid for
     Will skip if RawSale already exists for that order
     """
-    status_req = ["paid", "shipped", "at_pick_up", "delivered", "cancelled"]
+    status_req = ["paid", "shipped", "at_pick_up", "delivered"]
     order = instance.order
+    
     if order.status not in status_req:
         return
     
     # Avoid duplicating entries if already populated
-    if RawSale.objects.filter(order=order, variant=instance.variant).exists():
-        return
+    # Prepare is_valid flag
+    is_valid = not instance.is_returned
     
     variant = instance.variant
     product_index = ProductIndex.objects.get(id=variant.object_id)
     product = product_index.get_real_product()
 
-    if instance.order.status in status_req and\
-        (not instance.is_return_requested or not instance.is_returned):
-        RawSale.objects.create(
-            shop=variant.shop,
-            order=order,
-            category=product.category,
-            product=product_index,
-            variant=variant,
-            quantity=instance.quantity,
-            unit_price=instance.unit_price,
-            total_price=instance.quantity * float(instance.unit_price),
-            created_at=order.created_at
-        )
+    raw_sale, created = RawSale.objects.get_or_create(
+        order_item=instance,
+        defaults={
+            "shop":variant.shop,
+            "variant": variant,
+            "quantity": instance.quantity,
+            "category": product.category,
+            "product": product_index,
+            "unit_price": instance.unit_price,
+            "is_valid": is_valid,
+            "total_price": instance.quantity * float(instance.unit_price),
+            "created_at": order.created_at
+        }
+    )
+
+    # If it's not newly created, update the fields you need
+    if not created and instance.is_returned and raw_sale.is_valid != is_valid:
+        raw_sale.is_valid = False
+        if raw_sale.processed_flags:
+            reset_flags = {k: False for k in raw_sale.processed_flags.keys()}
+        else:
+            reset_flags = {}
+
+        raw_sale.invalidated_at = now()
+        raw_sale.processed_flags = reset_flags
+        raw_sale.save(update_fields=["is_valid", "invalidated_at", "processed_flags"])
+
+        SalesAdjustment.objects.create(raw_sales=raw_sale)
 
 
-@receiver(post_save, sender=Order)
-@receiver(post_save, sender=OrderItem)
-def handle_order_status_change(sender, instance, **kwargs):
-    """Track cancellations and returns for sales validity."""
 
-    # Handle cancelled orders
-    if isinstance(instance, Order) and instance.status == Order.Status.CANCELLED:
-        raw_sales = RawSale.objects.filter(order=instance, is_valid=True)
-        for sale in raw_sales:
-            sale.is_valid = False
-            sale.invalidated_at = now()
-            sale.save(update_fields=["is_valid", "invalidated_at"])
-            SalesAdjustment.objects.create(raw_sales=sale)
-        return
+# @receiver(post_save, sender=OrderItem)
+# def handle_order_status_change(sender, instance, **kwargs):
+#     """Track cancellations and returns for sales validity."""
 
-    # Handle returned items (only mark invalid when actually returned/completed)
-    if isinstance(instance, OrderItem) and instance.is_returned:
-        raw_sales = RawSale.objects.filter(
-            order=instance.order,
-            variant=instance.variant,
-            is_valid=True
-        )
-        for sale in raw_sales:
-            sale.is_valid = False
-            sale.invalidated_at = now()
-            sale.save(update_fields=["is_valid", "invalidated_at"])
-            SalesAdjustment.objects.create(raw_sales=sale)
+#     # Only proceed if this is a new return (not already invalidated)
+#     if instance.is_returned:
+#         raw_sales = RawSale.objects.filter(
+#             order_item=instance,
+#             variant=instance.variant,
+#             is_valid=True
+#         )
+#         for sale in raw_sales:
+#             # Reset processed_flags to all False
+#             if sale.processed_flags:
+#                 reset_flags = {k: False for k in sale.processed_flags.keys()}
+#             else:
+#                 reset_flags = {}
 
+#             sale.is_valid = False
+#             sale.invalidated_at = now()
+#             sale.processed_flags = reset_flags
+#             sale.save(update_fields=["is_valid", "invalidated_at", "processed_flags"])
 
-@receiver([post_save, post_delete], sender=RawSale)
-def reset_processed_flags(sender, instance, **kwargs):
-    if kwargs.get('raw', False):  # skip during fixture loading
-        return
+#             # Prevent duplicate adjustment records
+#             if not SalesAdjustment.objects.filter(raw_sales=sale).exists():
+#                 SalesAdjustment.objects.create(raw_sales=sale)
 
-    if instance.processed_flags:
-        # Set all existing keys to False
-        reset_flags = {k: False for k in instance.processed_flags.keys()}
-    else:
-        reset_flags = {}
-
-    RawSale.objects.filter(pk=instance.pk).update(processed_flags=reset_flags)
