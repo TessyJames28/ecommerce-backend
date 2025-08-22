@@ -5,8 +5,11 @@ from django.utils.timezone import now
 from .models import (
     ChildrenProduct, VehicleProduct, GadgetProduct,
     FashionProduct, ElectronicsProduct, AccessoryProduct,
-    HealthAndBeautyProduct, FoodProduct, RecentlyViewedProduct
+    HealthAndBeautyProduct, FoodProduct, RecentlyViewedProduct,
+    VehicleImage, FashionImage, ElectronicsImage, FoodImage,
+    HealthAndBeautyImage, AccessoryImage, ChildrenImage, GadgetImage
 )
+
 from .serializers import (
     ChildrenProductSerializer, VehicleProductSerializer, GadgetProductSerializer,
     FashionProductSerializer, ElectronicsProductSerializer, FoodProductSerializer,
@@ -38,6 +41,18 @@ product_models_list = [
     FoodProduct,
     HealthAndBeautyProduct
 ]
+
+# Dynamically determine the right image model based on product model
+image_model_map = {
+    "VehicleProduct": VehicleImage,
+    "FashionProduct": FashionImage,
+    "ElectronicsProduct": ElectronicsImage,
+    "FoodProduct": FoodImage,
+    "HealthAndBeautyProduct": HealthAndBeautyImage,
+    "AccessoryProduct": AccessoryImage,
+    "ChildrenProduct": ChildrenImage,
+    "GadgetProduct": GadgetImage,
+}
 
 class BaseResponseMixin:
     """
