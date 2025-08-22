@@ -3,6 +3,7 @@ from users.models import CustomUser, phone_number_validator
 from products.models import ProductVariant
 from carts.models import Cart
 import uuid
+from .utils import generate_reference
 
 
 # Create your models here.
@@ -76,6 +77,7 @@ class OrderReturnRequest(models.Model):
 
     class Status(models.TextChoices):
         REQUESTED = "requested", "Requested"
+        PROCESSING = "processing", "Processing"
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
         COMPLETED = "completed", "Completed"
@@ -83,14 +85,17 @@ class OrderReturnRequest(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, related_name="order_return_request")
     reason = models.TextField()
+    reference = models.CharField(
+        max_length=12, unique=True, editable=False,
+        default=generate_reference
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.REQUESTED)
-    approved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     processed_at = models.DateTimeField(null=True, blank=True)
 
 
     def __str__(self):
-        return f"Return request for {self.order.id}"
+        return f"Return request for {self.order_item.id}"
 
 
     def save(self, *args, **kwargs):

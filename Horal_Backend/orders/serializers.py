@@ -162,7 +162,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
 class OrderReturnRequestSerializer(serializers.ModelSerializer):
     """Serializer for order return request"""
-    order = OrderSerializer()
+    order_item = OrderItemSerializer()
 
     class Meta:
         model = OrderReturnRequest
