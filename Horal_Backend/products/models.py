@@ -14,21 +14,7 @@ from .textchoices import (
     PowerOutput, Type, SkinType, FoodCondition, AgeRecommendation
 )
 
-# Create your models here.
-class ImageLink(models.Model):
-    class ImageType(models.TextChoices):
-        PROFILE = "profile", "Profile"
-        PRODUCT = "product", "Product"
-         
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    image_type = models.CharField(max_length=50, choices=ImageType, default=ImageType.PRODUCT)
-    url = models.URLField()
-    alt_text = models.CharField(max_length=255, null=True, blank=True)
-    
-    def __str__(self):
-        return self.url or self.alt_text
-
-
+# Create your models here.   
 class PublishedProductManager(models.Manager):
     def get_queryset(self):
         return super().get_queryset().filter(is_published=True)
@@ -179,7 +165,7 @@ class ChildrenProduct(BaseProduct, ProductLocationMixin):
         blank=False,
         related_name='children_products'
     )
-    images = models.ManyToManyField(ImageLink, related_name='baby_products', blank=False)
+    # images = models.ManyToManyField(ImageLink, related_name='baby_products', blank=False)
     material = models.CharField(max_length=250, null=True, blank=True)
     age_recommendations = models.CharField(
         max_length=50, choices=AgeRecommendation.choices,
@@ -232,7 +218,7 @@ class VehicleProduct(BaseProduct, ProductLocationMixin):
     color_exterior = models.CharField(max_length=20, choices=Color.choices, null=True, blank=True)
     color_interior = models.CharField(max_length=20, choices=Color.choices, null=True, blank=True)
     seating_capacity = models.CharField(max_length=2)
-    images = models.ManyToManyField(ImageLink, related_name='vehicle_products', blank=False)
+    # images = models.ManyToManyField(ImageLink, related_name='vehicle_products', blank=False)
 
 
     class Meta(IndexableProductMixin.Meta):
@@ -271,7 +257,7 @@ class GadgetProduct(BaseProduct, ProductLocationMixin):
     screen_size = models.CharField(max_length=50, null=True, blank=True)
     operating_system = models.CharField(max_length=50, choices=OperatingSystem.choices, default=OperatingSystem.ANDROID)
     connectivity = models.CharField(max_length=250, null=True, blank=True)
-    images = models.ManyToManyField(ImageLink, related_name='gadget_products', blank=False)
+    # images = models.ManyToManyField(ImageLink, related_name='gadget_products', blank=False)
 
 
     class Meta(IndexableProductMixin.Meta):
@@ -307,7 +293,7 @@ class FashionProduct(BaseProduct, ProductLocationMixin):
     style = models.CharField(max_length=250, null=True, blank=True)
     sleeve_length = models.CharField(max_length=250, null=True, blank=True)
     neckline = models.CharField(max_length=250, null=True, blank=True)
-    images = models.ManyToManyField(ImageLink, related_name='fashion_products', blank=False)
+    # images = models.ManyToManyField(ImageLink, related_name='fashion_products', blank=False)
 
 
     class Meta(IndexableProductMixin.Meta):
@@ -345,7 +331,7 @@ class ElectronicsProduct(BaseProduct, ProductLocationMixin):
     connectivity = models.CharField(max_length=250)
     voltage = models.CharField(max_length=50)
     power_source = models.CharField(max_length=50, choices=PowerSource.choices, default=PowerSource.ELECTRIC)
-    images = models.ManyToManyField(ImageLink, related_name='electronics_products', blank=False)
+    # images = models.ManyToManyField(ImageLink, related_name='electronics_products', blank=False)
 
     class Meta(IndexableProductMixin.Meta):
         constraints = [
@@ -380,7 +366,7 @@ class AccessoryProduct(BaseProduct, ProductLocationMixin):
     compatibility = models.CharField(max_length=250, null=True, blank=True)
     dimensions = models.CharField(max_length=250, null=True, blank=True)
     type = models.CharField(max_length=50, choices=Type.choices, default=Type.CASE)
-    images = models.ManyToManyField(ImageLink, related_name='accessory_products', blank=False)
+    # images = models.ManyToManyField(ImageLink, related_name='accessory_products', blank=False)
 
     class Meta(IndexableProductMixin.Meta):
         constraints = [
@@ -419,7 +405,7 @@ class HealthAndBeautyProduct(BaseProduct, ProductLocationMixin):
     shade = models.CharField(max_length=50, null=True, blank=True)
     volume = models.CharField(max_length=50, null=True, blank=True)
     benefits = models.TextField(null=True, blank=True)
-    images = models.ManyToManyField(ImageLink, related_name='health_beauty_products', blank=False)
+    # images = models.ManyToManyField(ImageLink, related_name='health_beauty_products', blank=False)
 
     class Meta(IndexableProductMixin.Meta):
         constraints = [
@@ -457,7 +443,7 @@ class FoodProduct(BaseProduct, ProductLocationMixin):
     food_condition = models.CharField(max_length=50, choices=FoodCondition.choices, default=FoodCondition.FRESH)
     shelf_life = models.CharField(max_length=50, null=True, blank=True)
     size = models.CharField(max_length=50, null=True, blank=True)
-    images = models.ManyToManyField(ImageLink, related_name='food_products', blank=False)
+    # images = models.ManyToManyField(ImageLink, related_name='food_products', blank=False)
 
     class Meta(IndexableProductMixin.Meta):
         constraints = [
@@ -525,4 +511,34 @@ class RecentlyViewedProduct(models.Model):
             ),
         ]
 
-    
+class BaseProductImage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    url = models.URLField()
+    alt_text = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        abstract = True
+
+class VehicleImage(BaseProductImage):
+    product = models.ForeignKey(VehicleProduct, related_name="images", on_delete=models.CASCADE)
+
+class FashionImage(BaseProductImage):
+    product = models.ForeignKey(FashionProduct, related_name="images", on_delete=models.CASCADE)
+
+class ElectronicsImage(BaseProductImage):
+    product = models.ForeignKey(ElectronicsProduct, related_name="images", on_delete=models.CASCADE)
+
+class FoodImage(BaseProductImage):
+    product = models.ForeignKey(FoodProduct, related_name="images", on_delete=models.CASCADE)
+
+class HealthAndBeautyImage(BaseProductImage):
+    product = models.ForeignKey(HealthAndBeautyProduct, related_name="images", on_delete=models.CASCADE)
+
+class AccessoryImage(BaseProductImage):
+    product = models.ForeignKey(AccessoryProduct, related_name="images", on_delete=models.CASCADE)
+
+class ChildrenImage(BaseProductImage):
+    product = models.ForeignKey(ChildrenProduct, related_name="images", on_delete=models.CASCADE)
+
+class GadgetImage(BaseProductImage):
+    product = models.ForeignKey(GadgetProduct, related_name="images", on_delete=models.CASCADE)

@@ -1,10 +1,12 @@
 from rest_framework import serializers
 from django.db.models import Q, Avg
 from .models import (
-    ChildrenProduct, ImageLink,
+    ChildrenProduct,
     ProductVariant, VehicleProduct, GadgetProduct,
     FashionProduct, ElectronicsProduct, AccessoryProduct,
-    HealthAndBeautyProduct, FoodProduct, ProductIndex
+    HealthAndBeautyProduct, FoodProduct, ProductIndex,
+    VehicleImage, FashionImage, ElectronicsImage, FoodImage,
+    HealthAndBeautyImage, AccessoryImage, ChildrenImage, GadgetImage
 )
 from categories.serializers import CategorySerializer
 from subcategories.serializers import SubCategoryProductSerializer
@@ -39,12 +41,52 @@ def normalize_choice(value, enum_class):
     )
 
 
-class ImageLinkSerializer(serializers.ModelSerializer):
-    """Image serializer to handle adding image link to the db"""
+# Base serializer for all product images
+class BaseProductImageSerializer(serializers.ModelSerializer):
     class Meta:
-        model = ImageLink
-        fields = ['id', 'url', 'alt_text']
-        read_only_fields = ['id']
+        fields = ["id", "url", "alt_text"]
+        abstract = True
+
+
+# Subclass serializers for each product image type
+class VehicleImageSerializer(BaseProductImageSerializer):
+    class Meta(BaseProductImageSerializer.Meta):
+        model = VehicleImage
+
+
+class FashionImageSerializer(BaseProductImageSerializer):
+    class Meta(BaseProductImageSerializer.Meta):
+        model = FashionImage
+
+
+class ElectronicsImageSerializer(BaseProductImageSerializer):
+    class Meta(BaseProductImageSerializer.Meta):
+        model = ElectronicsImage
+
+
+class FoodImageSerializer(BaseProductImageSerializer):
+    class Meta(BaseProductImageSerializer.Meta):
+        model = FoodImage
+
+
+class HealthAndBeautyImageSerializer(BaseProductImageSerializer):
+    class Meta(BaseProductImageSerializer.Meta):
+        model = HealthAndBeautyImage
+
+
+class AccessoryImageSerializer(BaseProductImageSerializer):
+    class Meta(BaseProductImageSerializer.Meta):
+        model = AccessoryImage
+
+
+class ChildrenImageSerializer(BaseProductImageSerializer):
+    class Meta(BaseProductImageSerializer.Meta):
+        model = ChildrenImage
+
+
+class GadgetImageSerializer(BaseProductImageSerializer):
+    class Meta(BaseProductImageSerializer.Meta):
+        model = GadgetImage
 
 
 class ProductVariantSerializer(serializers.ModelSerializer):
@@ -106,30 +148,26 @@ class ProductRatingMixin(serializers.Serializer):
 
 class ProductCreateMixin:
     def create(self, validated_data):
+        from .utils import image_model_map
+
+        # Pop nested relationships so they don’t go into model.create()
         images = validated_data.pop('images', [])
         variants = validated_data.pop('variants', [])
-        # names = validated_data.pop("occasion", [])
 
+        # Now create the product safely
         instance = self.Meta.model.objects.create(**validated_data)
 
-        # create and save image in image model
-        for img in images:
-            image = ImageLink.objects.create(**img)
-            instance.images.add(image)
+        # Dynamically resolve image model
+        model_name = instance.__class__.__name__
+        image_model_class = image_model_map.get(model_name)
 
+        if image_model_class:
+            for img in images:
+                image_model_class.objects.create(product=instance, **img)
 
         # Create variants
         for data in variants:
             ProductVariant.objects.create(product=instance, **data)
-
-        # Create occasion
-        # Dynamic mapping of filtering
-        # occasion_query = Q()
-        # for name in names:
-        #     occasion_query |= Q(name__iexact=name)
-        # if names:
-        #     occasions = Occasion.objects.filter(occasion_query)
-        #     instance.occasion.set(occasions)
 
         # Update product quantity based on stock
         from .utils import update_quantity
@@ -139,6 +177,7 @@ class ProductCreateMixin:
     
 
     def update(self, instance, validated_data):
+        from .utils import image_model_map
         """
         Product update especially for nested fields like images and variants
         """
@@ -149,11 +188,15 @@ class ProductCreateMixin:
             setattr(instance, attr, value)
         instance.save()
 
-        if images:
-            instance.images.clear()
+        # Dynamically resolve image model
+        model_name = instance.__class__.__name__
+        image_model_class = image_model_map[model_name]
+
+        if image_model_class and images:
+            # Clear old images before adding new ones
+            image_model_class.objects.filter(product=instance).delete()
             for img in images:
-                image = ImageLink.objects.create(**img)
-                instance.images.add(image)
+                image_model_class.objects.create(product=instance, **img)
 
         if variants:
             instance.get_variants().delete()
@@ -252,7 +295,6 @@ class ProductRepresentationMixin:
 
 class BaseProductSerializer(serializers.ModelSerializer):
     """Serializer for the base product model"""
-    images = ImageLinkSerializer(many=True)
     variants = ProductVariantSerializer(many=True, write_only=True, required=False)
     variants_details = serializers.SerializerMethodField(read_only=True)
     quantity = serializers.SerializerMethodField()
@@ -278,7 +320,7 @@ class ChildrenProductSerializer(
     BaseProductSerializer,
     ProductRatingMixin
 ):
-    
+    images = ChildrenImageSerializer(many=True)
     age_recommendation = serializers.CharField(required=False)
     condition = serializers.CharField(required=False)
 
@@ -311,6 +353,7 @@ class VehicleProductSerializer(
 ):
     
     """serializer to handle vehicle product category creation"""
+    images = VehicleImageSerializer(many=True)
     category = serializers.PrimaryKeyRelatedField(
         queryset=Category.objects.all()
     )
@@ -361,6 +404,7 @@ class GadgetProductSerializer(
 ):
     
     """serializer for Gadget product model creation"""
+    images = GadgetImageSerializer(many=True)
     category = serializers.PrimaryKeyRelatedField(
         queryset=Category.objects.all()
     )
@@ -391,6 +435,7 @@ class FashionProductSerializer(
     ProductRatingMixin
 ):
     """Serializer to handle fashion category product creation"""
+    images = FashionImageSerializer(many=True)
     category = serializers.PrimaryKeyRelatedField(
         queryset=Category.objects.all()
     )
@@ -417,6 +462,7 @@ class ElectronicsProductSerializer(
     ProductRatingMixin
 ):
     """serializer to handle electronics product category creation"""
+    images = ElectronicsImageSerializer(many=True)
     category = serializers.PrimaryKeyRelatedField(
         queryset=Category.objects.all()
     )
@@ -451,6 +497,7 @@ class AccessoryProductSerializer(
     ProductRatingMixin
 ):
     """Serializer to handle Accesory product category creation"""
+    images = AccessoryImageSerializer(many=True)
     category = serializers.PrimaryKeyRelatedField(
         queryset=Category.objects.all()
     )
@@ -484,6 +531,7 @@ class HealthAndBeautyProductSerializer(
     Serializer to handle the creation of health 
     and beauty products category
     """
+    images = HealthAndBeautyImageSerializer(many=True)
     category = serializers.PrimaryKeyRelatedField(
         queryset=Category.objects.all()
     )
@@ -513,6 +561,7 @@ class FoodProductSerializer(
     ProductRatingMixin
 ):
     """serializer to handle Food product category creation"""
+    images = FoodImageSerializer(many=True)
     category = serializers.PrimaryKeyRelatedField(
         queryset=Category.objects.all()
     )
