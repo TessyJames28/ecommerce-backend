@@ -1,11 +1,26 @@
 from django.db import models
 from users.models import CustomUser
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.fields import GenericForeignKey
 import uuid
 
 # Create your models here.
 class OrderStatusLog(models.Model):
     """Model to keep track of order log"""
-    order = models.ForeignKey('orders.Order', on_delete=models.CASCADE, related_name='status_logs')
+    class OrderType(models.TextChoices):
+        ORDER = "order", "Order"
+        ORDERRETURNREQUEST = "order_return_request", "Order_Return_Request"
+
+    order_type = models.CharField(
+        max_length=20, choices=OrderType.choices,
+        default=OrderType.ORDER
+    )
+
+    # Generic link to either Support or Return
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.UUIDField()  
+    parent = GenericForeignKey('content_type', 'object_id')
+
     old_status = models.CharField(max_length=50)
     new_status = models.CharField(max_length=50)
     changed_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True)

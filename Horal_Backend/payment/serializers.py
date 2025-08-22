@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import PaystackTransaction
-from orders.serializer import OrderSerializer
+from orders.serializers import OrderSerializer
 
 
 class PaystackTransactionSerializer(serializers.ModelSerializer):
