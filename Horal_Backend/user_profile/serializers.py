@@ -1,9 +1,17 @@
 from rest_framework import serializers
-from .models import Profile
-from products.models import ImageLink
+from .models import Profile, Image
 from django.contrib.auth.password_validation import validate_password
 from users.serializers import LocationSerializer, ShippingAddressSerializer
 from users.models import Location, CustomUser
+
+
+class ImageLinkSerializer(serializers.ModelSerializer):
+    """Image serializer to handle adding image link to the db"""
+    class Meta:
+        model = Image
+        fields = ['id', 'url', 'alt_text']
+        read_only_fields = ['id']
+
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -45,8 +53,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         
 
         if image_url:
-            image_obj, _ = ImageLink.objects.update_or_create(
-                image_type = ImageLink.ImageType.PROFILE,
+            image_obj, _ = Image.objects.update_or_create(
                 url=image_url,
             )
             instance.image = image_obj
