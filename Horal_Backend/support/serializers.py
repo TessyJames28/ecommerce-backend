@@ -241,8 +241,8 @@ class TicketsUpdateSerializer(serializers.ModelSerializer):
             staff = SupportTeam.objects.get(team=request_user)
         except SupportTeam.DoesNotExist:
             raise serializers.ValidationError("The user is not a support team")
-        if not getattr(staff, "is_lead", False):
-            raise serializers.ValidationError("You are not authorized to assign or reassign tickets")
+        # if not getattr(staff, "is_lead", False):
+        #     raise serializers.ValidationError("You are not authorized to assign or reassign tickets")
         return staff
 
     @transaction.atomic
