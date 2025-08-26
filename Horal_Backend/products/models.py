@@ -169,7 +169,7 @@ class ChildrenProduct(BaseProduct, ProductLocationMixin):
     material = models.CharField(max_length=250, null=True, blank=True)
     age_recommendations = models.CharField(
         max_length=50, choices=AgeRecommendation.choices,
-        default=AgeRecommendation.EARLY_CHILDHOOD_5_6Y
+        null=True, blank=True
     )
     weight_capacity = models.CharField(max_length=50, null=True, blank=True)
     safety_certifications = models.TextField(null=True, blank=True)
@@ -206,18 +206,18 @@ class VehicleProduct(BaseProduct, ProductLocationMixin):
     )
     make = models.CharField(max_length=250, null=True, blank=True)
     model = models.CharField(max_length=250, null=True, blank=True)
-    year = models.PositiveIntegerField()
-    mileage = models.PositiveIntegerField()
-    engine_type = models.CharField(max_length=20, choices=EngineType.choices, default=EngineType.PETROL)
-    engine_size = models.CharField(max_length=20, choices=EngineSize.choices, default=EngineSize.SMALL)
-    fuel_type = models.CharField(max_length=20, choices=FuelType.choices, default=FuelType.PETROL)
-    transmission = models.CharField(max_length=50, choices=Transmission.choices, default=Transmission.MANUAL)
-    num_doors = models.CharField(max_length=2)
-    num_seats = models.CharField(max_length=2)
-    vin = models.CharField(max_length=17, unique=True)
+    year = models.PositiveIntegerField(null=True, blank=True)
+    mileage = models.PositiveIntegerField(null=True, blank=True)
+    engine_type = models.CharField(max_length=20, choices=EngineType.choices, null=True, blank=True)
+    engine_size = models.CharField(max_length=20, choices=EngineSize.choices, null=True, blank=True)
+    fuel_type = models.CharField(max_length=20, choices=FuelType.choices, null=True, blank=True)
+    transmission = models.CharField(max_length=50, choices=Transmission.choices, null=True, blank=True)
+    num_doors = models.CharField(max_length=2, null=True, blank=True)
+    num_seats = models.CharField(max_length=2, null=True, blank=True)
+    vin = models.CharField(max_length=17, unique=True, null=True, blank=True)
     color_exterior = models.CharField(max_length=20, choices=Color.choices, null=True, blank=True)
     color_interior = models.CharField(max_length=20, choices=Color.choices, null=True, blank=True)
-    seating_capacity = models.CharField(max_length=2)
+    seating_capacity = models.CharField(max_length=2, null=True, blank=True)
     # images = models.ManyToManyField(ImageLink, related_name='vehicle_products', blank=False)
 
 
@@ -255,7 +255,7 @@ class GadgetProduct(BaseProduct, ProductLocationMixin):
     ram = models.CharField(max_length=50, null=True, blank=True)
     storage = models.CharField(max_length=50, null=True, blank=True)
     screen_size = models.CharField(max_length=50, null=True, blank=True)
-    operating_system = models.CharField(max_length=50, choices=OperatingSystem.choices, default=OperatingSystem.ANDROID)
+    operating_system = models.CharField(max_length=50, choices=OperatingSystem.choices, null=True, blank=True)
     connectivity = models.CharField(max_length=250, null=True, blank=True)
     # images = models.ManyToManyField(ImageLink, related_name='gadget_products', blank=False)
 
@@ -326,11 +326,11 @@ class ElectronicsProduct(BaseProduct, ProductLocationMixin):
         related_name='electronics_products'
     )
     model = models.CharField(max_length=250)
-    power_output = models.CharField(max_length=50, choices=PowerOutput.choices, default=PowerOutput.LOW)
+    power_output = models.CharField(max_length=50, choices=PowerOutput.choices, null=True, blank=True)
     features = models.TextField(null=True, blank=True)
-    connectivity = models.CharField(max_length=250)
-    voltage = models.CharField(max_length=50)
-    power_source = models.CharField(max_length=50, choices=PowerSource.choices, default=PowerSource.ELECTRIC)
+    connectivity = models.CharField(max_length=250, null=True)
+    voltage = models.CharField(max_length=50, blank=True)
+    power_source = models.CharField(max_length=50, choices=PowerSource.choices, null=True, blank=True)
     # images = models.ManyToManyField(ImageLink, related_name='electronics_products', blank=False)
 
     class Meta(IndexableProductMixin.Meta):
@@ -365,7 +365,7 @@ class AccessoryProduct(BaseProduct, ProductLocationMixin):
     material = models.CharField(max_length=250, null=True, blank=True)
     compatibility = models.CharField(max_length=250, null=True, blank=True)
     dimensions = models.CharField(max_length=250, null=True, blank=True)
-    type = models.CharField(max_length=50, choices=Type.choices, default=Type.CASE)
+    type = models.CharField(max_length=50, choices=Type.choices, null=True, blank=True)
     # images = models.ManyToManyField(ImageLink, related_name='accessory_products', blank=False)
 
     class Meta(IndexableProductMixin.Meta):
@@ -398,7 +398,7 @@ class HealthAndBeautyProduct(BaseProduct, ProductLocationMixin):
         related_name='health_beauty_products'
     )
     ingredients = models.TextField(null=True, blank=True)
-    skin_type = models.CharField(max_length=50, choices=SkinType.choices, default=SkinType.DRY)
+    skin_type = models.CharField(max_length=50, choices=SkinType.choices, null=True, blank=True)
     fragrance = models.CharField(max_length=250, null=True, blank=True)
     usage_instructions = models.TextField(null=True, blank=True)
     spf = models.CharField(max_length=50, null=True, blank=True)
@@ -440,7 +440,7 @@ class FoodProduct(BaseProduct, ProductLocationMixin):
     dietary_info = models.CharField(max_length=250, null=True, blank=True)
     origin = models.CharField(max_length=250, null=True, blank=True)
     weight = models.CharField(max_length=50, null=True, blank=True)
-    food_condition = models.CharField(max_length=50, choices=FoodCondition.choices, default=FoodCondition.FRESH)
+    food_condition = models.CharField(max_length=50, choices=FoodCondition.choices, null=True, blank=True)
     shelf_life = models.CharField(max_length=50, null=True, blank=True)
     size = models.CharField(max_length=50, null=True, blank=True)
     # images = models.ManyToManyField(ImageLink, related_name='food_products', blank=False)
