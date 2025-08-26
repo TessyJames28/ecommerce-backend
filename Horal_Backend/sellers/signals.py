@@ -56,7 +56,7 @@ def notify_kyc_status_change(sender, instance, **kwargs):
     Sends signal that notify users on kyc status
     after verirication
     """
-    if instance.status in ['verified', 'failed'] and not instance.status_notified:
+    if instance.status in ['verified', 'failed']:
         send_kyc_final_status_email(instance.user, instance.status)
         instance.status_notified = True
         instance.save(update_fields=['status_notified'])
