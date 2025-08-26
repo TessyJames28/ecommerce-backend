@@ -176,9 +176,12 @@ class DojahCACWebhook(GenericAPIView, BaseResponseMixin):
     def post(self, request, *args, **kwargs):
         """Post method to handle cac verification webhook"""
         payload = request.data
-
+        print(f"Payload: {payload}")
         # Basic verification
+        cac_payload = payload.get("metadata", {})
+        print(f"Cac payload: {cac_payload}")
         verification_type = payload.get("metadata", {}).get("verification_type")
+        print(f"Verification type: {verification_type}")
         if verification_type != "cac":
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
@@ -203,7 +206,8 @@ class DojahCACWebhook(GenericAPIView, BaseResponseMixin):
         
         data = {
             "rc_number": rc_number,
-            "company_type": company_type
+            "company_type": company_type,
+            "company_name": business_name
         }
 
         try:

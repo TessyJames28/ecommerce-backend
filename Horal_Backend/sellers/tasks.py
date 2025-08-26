@@ -24,6 +24,7 @@ def verify_seller_kyc(kyc_id):
 
         if kyc.nin and kyc.nin.status == KYCStatus.FAILED:
             kyc.status = KYCStatus.FAILED
+            kyc.is_verified = False
 
         elif (kyc.cac and kyc.cac.cac_verified) or \
              (kyc.nin and kyc.nin.nin_verified):
