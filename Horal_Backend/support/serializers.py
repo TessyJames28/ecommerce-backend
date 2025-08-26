@@ -123,7 +123,8 @@ class SupportTeamSerializer(serializers.ModelSerializer):
         request = self.context["request"]
         validated_data["email"] = validated_data["team"].email
         validated_data["name"] = validated_data["team"].full_name
-        if validated_data["is_lead"] and not request.user.is_superuser:
+        is_lead = validated_data.get("is_lead", False)
+        if is_lead and not request.user.is_superuser:
             raise serializers.ValidationError(
                 f"YOnly super admin can assign a team lead"
             )
