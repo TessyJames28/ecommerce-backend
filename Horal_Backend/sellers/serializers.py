@@ -3,6 +3,7 @@ from .models import (
     SellerKYC, SellerSocials, SellerKYCNIN,
     SellerKYCCAC, SellerKYCAddress, KYCStatus
 )
+from django.db.models.signals import post_save
 
 
 class SellerKYCCACSerializer(serializers.ModelSerializer):
@@ -93,6 +94,7 @@ class SellerKYCNINSerializer(serializers.ModelSerializer):
     
     def create_or_update(self, validated_data):
         """Create or update nin data based seller kyc status"""
+        from .signals import notify_kyc_info_completed, notify_kyc_status_change, trigger_related_kyc_verification
         user = self.context['user']
         seller_kyc, _ = SellerKYC.objects.get_or_create(user=user)
         
@@ -101,16 +103,25 @@ class SellerKYCNINSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"detail": "KYC is already verified. Address cannot be changed."}
             )
+        elif seller_kyc.status == KYCStatus.FAILED or not seller_kyc.is_verified:
+            post_save.disconnect(receiver=notify_kyc_info_completed, sender=SellerKYC)
+            post_save.disconnect(receiver=notify_kyc_status_change, sender=SellerKYC)
+            seller_kyc.info_completed_notified = False
+            seller_kyc.status_notified = False
+            seller_kyc.save(update_fields=["info_completed_notified", "status_notified"])
         
         # Update existing nin data if any
+        post_save.disconnect(receiver=trigger_related_kyc_verification, sender=SellerKYCNIN)
         if seller_kyc.nin:
             for attr, value in validated_data.items():
                 setattr(seller_kyc.nin, attr, value)
+            seller_kyc.nin.status = KYCStatus.PENDING
             seller_kyc.nin.save()
             seller_kyc.save(update_fields=['nin'])
             return seller_kyc.nin
         
         # Create a new nin if none exists
+        post_save.disconnect(receiver=trigger_related_kyc_verification, sender=SellerKYCNIN)
         nin = SellerKYCNIN.objects.create(**validated_data)
         seller_kyc.nin = nin
         seller_kyc.save(update_fields=['nin'])

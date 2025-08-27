@@ -1,7 +1,7 @@
 from django.shortcuts import get_object_or_404
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from .models import SellerKYC, SellerSocials, KYCStatus
+from .models import SellerKYC, SellerSocials, KYCStatus, SellerKYCNIN
 from .serializers import (
     SellerSocialsSerializer,
     SellerKYCAddressSerializer,
@@ -18,6 +18,8 @@ from products.utils import (
 from shops.models import Shop
 from shops.serializers import ShopSerializer
 from users.models import CustomUser
+from django.db.models.signals import post_save
+from .signals import trigger_related_kyc_verification, notify_kyc_info_completed, notify_kyc_status_change
 
 
 # Create your views here.
@@ -51,7 +53,6 @@ class KYCIDVerificationWebhook(GenericAPIView, BaseResponseMixin):
             .get("entity", {})
 
         if not (nin_number and selfie_url and user_id):
-            print(f"nin: {nin_number}\nselfie_url: {selfie_url}\nuser_id: {user_id}")
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
                 "Missing required fields: 'nin', 'selfie_url', or 'user_id'"
@@ -76,53 +77,52 @@ class KYCIDVerificationWebhook(GenericAPIView, BaseResponseMixin):
         serializer.is_valid(raise_exception=True)
         kyc_nin = serializer.create_or_update(serializer.validated_data)
 
+        post_save.connect(receiver=notify_kyc_info_completed, sender=SellerKYC)
+        post_save.connect(receiver=notify_kyc_status_change, sender=SellerKYC)
+        post_save.connect(receiver=trigger_related_kyc_verification, sender=SellerKYCNIN)
         if success_status is True and verification_status == "Completed":
+            try:
+                seller = SellerKYC.objects.get(user__id=user_id)
+                address = seller.address
+
+                # Normalize name to facilitate loose match
+                first_name_match = address.first_name.lower() == entity.get("first_name", "").lower()
+                last_name_match = address.last_name.lower() == entity.get("last_name", "").lower()
+
+                if not (first_name_match and last_name_match):
+                    kyc_nin.status = KYCStatus.FAILED
+                    kyc_nin.nin_verified = False
+                    kyc_nin.save(update_fields=['status', 'nin_verified'])
+
+                    return Response({
+                        "status": "ok",
+                        "message": "KYC verification failed. Provided name does not match",
+                    }, status=status.HTTP_200_OK)
+                
+            except SellerKYC.DoesNotExist:
+                return Response({
+                    "status": "ok",
+                    "message": "Seller KYC record not found",
+                },status=status.HTTP_200_OK)
+            
             kyc_nin.status = KYCStatus.VERIFIED
             kyc_nin.nin_verified = True
             kyc_nin.save(update_fields=['status', 'nin_verified'])
-        
+            
+            return Response({
+                "status": "success",
+                "message": "KYC verification completed",
+            }, status=status.HTTP_200_OK)
+
         elif success_status is False and verification_status == "Completed":
             kyc_nin.status = KYCStatus.FAILED
-            kyc_nin.save(update_fields=["status"])
+            kyc_nin.nin_verified = False
+            kyc_nin.save(update_fields=["status", "nin_verified"])# Cross-check seller name with kyc data
 
-        # Cross-check seller name with kyc data
-        try:
-            seller = SellerKYC.objects.get(user__id=user_id)
-            address = seller.address
-            nin = seller.nin
-
-            # Normalize name to facilitate loose match
-            first_name_match = address.first_name.lower() == entity.get("first_name", "").lower()
-            last_name_match = address.last_name.lower() == entity.get("last_name", "").lower()
-
-            if not (first_name_match and last_name_match):
-                nin.status = KYCStatus.FAILED
-                nin.nin_verified = False
-                nin.save(update_fields=['status', 'nin_verified'])
-                seller.status = KYCStatus.FAILED
-                seller.save(update_fields=["status"])
-
-                return Response({
-                    "status": "failed",
-                    "status_code": status.HTTP_400_BAD_REQUEST,
-                    "message": "KYC verification failed. Provided name does not match",
-                    "data": SellerKYCNINSerializer(kyc_nin).data,
-                    "dojah_response": payload
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-        except SellerKYC.DoesNotExist:
-            return self.get_response(
-                status.HTTP_404_NOT_FOUND,
-                "Seller KYC record not found"
-            )
-
-        return Response({
-            "status": "success",
-            "status_code": status.HTTP_201_CREATED,
-            "message": "KYC verification completed",
-            "data": SellerKYCNINSerializer(kyc_nin).data,
-            "dojah_response": payload
-        }, status=status.HTTP_201_CREATED)
+            return Response({
+                "status": "ok",
+                "message": "KYC verification failed.",
+            }, status=status.HTTP_200_OK)
         
 
 
@@ -230,28 +230,6 @@ class DojahCACWebhook(GenericAPIView, BaseResponseMixin):
         elif success_status is False and verification_status == "Completed":
             kyc_cac.status = KYCStatus.FAILED
             kyc_cac.save(update_fields=['status'])
-
-        # update seller profile and create shop
-        user.is_seller = True
-        user.save(update_fields=['is_seller'])
-
-        try:
-            kyc = SellerKYC.objects.get(user=user)
-            address = kyc.address
-        except SellerKYC.DoesNotExist:
-            return self.get_response(
-                status.HTTP_404_NOT_FOUND,
-                "SellerKYC not found for this user"
-            )
-        print(address.business_name)
-        shop, _ = Shop.objects.get_or_create(
-            owner=kyc,
-            defaults= {
-                "name": f"{address.business_name}" if address.business_name else \
-                    f"{user.full_name}'s shop",
-                "location": f"{address.street}, {address.lga}, {address.landmark}, {address.state}"
-            }
-        )
 
         return Response({
             "status": "success",
