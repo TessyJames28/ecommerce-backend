@@ -78,8 +78,12 @@ class ProductCreateView(GenericAPIView, BaseResponseMixin):
                 "You do not have permission to create products"
             )
         
+        category_name = self.kwargs.get('category_name')
+        category_name = category_name.replace("-", " ").replace("_", " ").strip().lower()
+        
         # Get the category
         category = get_object_or_404(Category, name__iexact=category_name)
+        print("I haven't gotten here")
 
         # Get seller's shop internally (skip request.data.get('shop'))
         if user.is_seller:

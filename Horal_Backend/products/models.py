@@ -325,7 +325,7 @@ class ElectronicsProduct(BaseProduct, ProductLocationMixin):
         blank=False,
         related_name='electronics_products'
     )
-    model = models.CharField(max_length=250)
+    model = models.CharField(max_length=250, null=True, blank=True)
     power_output = models.CharField(max_length=50, choices=PowerOutput.choices, null=True, blank=True)
     features = models.TextField(null=True, blank=True)
     connectivity = models.CharField(max_length=250, null=True)
