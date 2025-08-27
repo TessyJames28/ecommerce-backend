@@ -31,8 +31,7 @@ def trigger_related_kyc_verification(sender, instance, update_fields=None, **kwa
         if cache.get(cache_key):
             return  # Debounce active; skip triggering task
         cache.set(cache_key, True, timeout=10)  # Debounce for 10 seconds
-
-        verify_seller_kyc.delay(kyc.user.id)
+        verify_seller_kyc(kyc.user.id)
 
     except SellerKYC.DoesNotExist:
         pass
@@ -42,24 +41,25 @@ def trigger_related_kyc_verification(sender, instance, update_fields=None, **kwa
 def notify_kyc_info_completed(sender, instance, created, **kwargs):
     """Signal to send notification on kyc completion"""
     kyc = instance
-
-    if kyc.address and kyc.socials and (kyc.nin or kyc.cac):
+    if (
+        kyc.address
+        and kyc.socials
+        and kyc.nin
+        and (not kyc.cac or kyc.cac)
+    ):
+    # Safe to send confirmation email
         if not kyc.info_completed_notified:
             send_kyc_info_completed_email(kyc.user)
-            kyc.info_completed_notified = True
-            kyc.save(update_fields=['info_completed_notified'])
+            SellerKYC.objects.filter(pk=kyc.pk).update(info_completed_notified=True)
 
 
 @receiver(post_save, sender=SellerKYC)
 def notify_kyc_status_change(sender, instance, **kwargs):
-    """
-    Sends signal that notify users on kyc status
-    after verirication
-    """
-    if instance.status in ['verified', 'failed']:
+    if instance.status in ['verified', 'failed'] and not instance.status_notified:
         send_kyc_final_status_email(instance.user, instance.status)
-        instance.status_notified = True
-        instance.save(update_fields=['status_notified'])
+        SellerKYC.objects.filter(pk=instance.pk).update(status_notified=True)
+
+    
 
 
 @receiver(post_delete, sender=SellerKYC)
