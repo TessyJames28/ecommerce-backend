@@ -31,7 +31,7 @@ def trigger_related_kyc_verification(sender, instance, update_fields=None, **kwa
         if cache.get(cache_key):
             return  # Debounce active; skip triggering task
         cache.set(cache_key, True, timeout=10)  # Debounce for 10 seconds
-        verify_seller_kyc(kyc.user.id)
+        verify_seller_kyc.delay(kyc.user.id)
 
     except SellerKYC.DoesNotExist:
         pass
