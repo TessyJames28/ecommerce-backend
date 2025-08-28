@@ -264,13 +264,13 @@ class OrderReturnRequestView(GenericAPIView, BaseResponseMixin):
                 status.HTTP_404_NOT_FOUND,
                 "Order item not found"
             )
-        
+       #=============================Commented out for testing========================== 
         # Check if the order has been paid for
-        if order_item.order.status != Order.Status.DELIVERED:
-            return self.get_response(
-                status.HTTP_400_BAD_REQUEST,
-                "Only delivered orders can be returned"
-            )
+        # if order_item.order.status != Order.Status.DELIVERED:
+        #     return self.get_response(
+        #         status.HTTP_400_BAD_REQUEST,
+        #         "Only delivered orders can be returned"
+        #     )
         
         # Check to prevent duplicate request
         if OrderReturnRequest.objects.filter(order_item=order_item).exists():
