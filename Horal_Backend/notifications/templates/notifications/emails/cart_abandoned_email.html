@@ -1,0 +1,79 @@
+{% extends "notifications/emails/base_email.html" %} {% block content %}
+
+<h3 style="color: #333">Did You Forget Something?</h3>
+<p>Hi {{ user.first_name }},</p>
+<p>
+  It looks like you left some items in your cart. They're still waiting for you!
+</p>
+
+{% if cart_items %}
+<div
+  style="
+    background: #f2f2f2;
+    padding: 15px;
+    border-radius: 8px;
+    max-width: 600px;
+    margin-top: 15px;
+  "
+>
+  {% for item in cart_items %}
+  <div
+    style="
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #eee;
+      padding: 10px 0;
+    "
+  >
+    <!-- Product image -->
+    <div style="flex: 0 0 60px">
+      <img
+        src="{{ item.image_url|default:'https://via.placeholder.com/60' }}"
+        alt="{{ item.name }}"
+        style="width: 60px; height: 60px; object-fit: cover; border-radius: 5px"
+      />
+    </div>
+
+    <!-- Product name & quantity -->
+    <div style="flex: 1; padding: 0 15px">
+      <p style="margin: 0; font-weight: bold; color: #333">{{ item.name }}</p>
+      <p style="margin: 0; font-size: 13px; color: #777">
+        Quantity: {{ item.quantity }}
+      </p>
+    </div>
+
+    <!-- Product price -->
+    <div
+      style="flex: 0 0 80px; text-align: right; font-weight: bold; color: #333"
+    >
+      ₦{{ item.price }}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<p style="text-align: center; margin: 30px auto">
+  <a
+    href="https://www.horal.ng/cart"
+    style="
+      background: #ff6b00;
+      color: #fff;
+      padding: 7px 15px;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 12px;
+    "
+  >
+    Complete Your Order
+  </a>
+</p>
+<p style="margin-top: 15px; text-align: center">
+  Shopping on Horal is safe and secure with our escrow system.
+</p>
+
+<p style="font-size: 15px; color: #555; margin-top: 40px">Best Regards,</p>
+<p style="font-size: 15px; color: #555">The Horal Team.</p>
+
+{% endblock %}

@@ -1,13 +1,16 @@
 {% extends "notifications/emails/base_email.html" %} {% block content %}
-<h3 style="color: #333">Your One-Time Password</h3>
-<p>Hi {{ user.first_name }}</p>
 
+<h3 style="color: #333; font-weight: 600">Your One-Time Password</h3>
 <p style="font-size: 14px; color: #555; line-height: 1.6">
-  Please use the following code to reset your password. For your security, this
-  code will expire in 5 minutes.
+  Hi {{ user.first_name }},
 </p>
-<!-- order details-->
 
+<p style="font-size: 14px; color: #555; line-height: 1.6; margin-bottom: 25px">
+  Please use the code below to verify your email. This code is valid for 5
+  minutes.
+</p>
+
+<!-- OTP Box -->
 <p
   style="
     text-align: center;
@@ -25,19 +28,23 @@
   {{otp}}
 </p>
 
+<!-- Note -->
 <p
   style="
-    border-left: 2px solid #ff822d;
-    padding-left: 8px;
+    border-left: 3px solid #ff6b00;
+    padding-left: 10px;
     margin-left: 20px;
     font-size: 12px;
     color: #555;
+    line-height: 1.4;
   "
 >
   Didn't request this? No action is required. This is a one-time use code that
   will expire shortly.
 </p>
 
+<!-- Footer -->
 <p style="font-size: 15px; color: #555; margin-top: 30px">Best Regards,</p>
 <p style="font-size: 15px; color: #555">The Horal Team.</p>
+
 {% endblock %}
