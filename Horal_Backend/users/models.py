@@ -64,6 +64,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_superuser = models.BooleanField(default=False)
     is_seller = models.BooleanField(default=False)
     is_temporary = models.BooleanField(default=False)
+    google_refresh_token = models.CharField(max_length=255, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -118,7 +119,6 @@ class ShippingAddress(models.Model):
     )
     phone_number = models.CharField(
         max_length=11,
-        unique=True,
         validators=[phone_number_validator],
         null=True,
         blank=True
