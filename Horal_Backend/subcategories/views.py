@@ -10,7 +10,9 @@ from products.utils import (
     IsAdminOrSuperuser, BaseResponseMixin,
     StandardResultsSetPagination
 )
-from products.serializers import get_product_serializer
+from users.authentication import CookieTokenAuthentication
+from products.serializers import get_product_serializer, ProductIndexSerializer
+from products.models import ProductIndex
 
 # Create your views here.
 
@@ -19,6 +21,7 @@ class SubCategoryCreateView(GenericAPIView, BaseResponseMixin):
     API endpoint to create sub categories
     """
     serializer_class = SubCategorySerializer
+    authentication_classes = [CookieTokenAuthentication]
     queryset = SubCategory.objects.all()
 
     def get_permissions(self):
@@ -64,6 +67,7 @@ class SubCategoryDetailView(GenericAPIView, BaseResponseMixin):
     serializer_class = SubCategorySerializer
     queryset = SubCategory.objects.all()
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def get_permissions(self):
         if self.request.method in ['PUT', 'DELETE']:
@@ -131,17 +135,14 @@ class SingleSubcategoryListView(GenericAPIView, BaseResponseMixin):
 
         # get the category for the subcategory
         category = subcategory.category
-        print(category)
 
         # Get the product model for this subcategory
-        product_model = self.get_product_model_by_category(category.name)
-        products = product_model.published.filter(
-            category=category, sub_category=subcategory) if product_model else []
+        products = ProductIndex.objects.filter(sub_category=subcategory.name)
         
         # paginate response
         page = self.paginate_queryset(products)
         if page is not None:
-            product_serializer = get_product_serializer(category.name)(page, many=True)
+            product_serializer = ProductIndexSerializer(page, many=True)
             paginated_response = self.get_paginated_response(product_serializer.data)
             # paginated_response.data["category"] = category_serializer.data
             paginated_response.data['subcategory'] = subcategory_serializer.data
@@ -151,7 +152,7 @@ class SingleSubcategoryListView(GenericAPIView, BaseResponseMixin):
         
             return paginated_response
     
-        product_serializer = get_product_serializer(category.name)(products, many=True)
+        product_serializer = ProductIndexSerializer(products, many=True)
         
         response_data = {
             # 'category': category_serializer.data,
