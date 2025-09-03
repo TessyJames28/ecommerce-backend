@@ -17,7 +17,6 @@ import re
 
 @receiver(post_save, sender=Support)
 def create_ticket_for_support(sender, instance, created, **kwargs):
-    print("Triggered")
     if created and instance.status == "pending":
         # Only create if no ticket exists
         if not hasattr(instance, "support_ticket"):
@@ -50,7 +49,6 @@ def send_support_email_signal(sender, instance, created, **kwargs):
     
     related_obj = instance.parent
     if not related_obj:
-        print(f"No related object found for message {instance.id}")
         return
 
     # Determine recipient based on related object type
@@ -65,11 +63,9 @@ def send_support_email_signal(sender, instance, created, **kwargs):
         name = user_obj.full_name
         ticket_type = "returns"
     else:
-        print(f"Unsupported GFK type for message {instance.id}")
         return
 
     if not email:
-        print(f"No email found for message {instance.id}")
         return
 
     # Get all messages for the current thread
@@ -85,16 +81,13 @@ def send_support_email_signal(sender, instance, created, **kwargs):
     for msg in reversed(messages_in_thread):
         if msg.subject and re.search(ref_pattern, msg.subject):
             ref_subject = msg.subject
-            print(f"Ref subject from loop: {ref_subject}")
             break
 
     # Fallback to the latest message subject or generic if no ref found
     if not ref_subject:
         ref_subject = messages_in_thread.last().subject if messages_in_thread.exists() else "Support Request"
-        print(f"Ref subject if none from loop: {ref_subject}")
     # Use this subject for the outgoing staff email
     subject_to_use = ref_subject
-    print(f"Subject to use: {subject_to_use}")
 
     # Compose email body (only the new message)
     body = f"Hello {name},\n\n" \
@@ -132,7 +125,6 @@ def send_support_received_email(sender, instance, created, **kwargs):
             body=body,
             from_email=f"Support <{from_email}>"
         )
-        print(f"Final body to send: {body}")
 
         # Get sender horal bot
 
@@ -162,7 +154,6 @@ def update_user_on_processing_status_email(sender, instance, created, **kwargs):
 
     # Access the related object via the GFK
     related_obj = instance.parent
-    print(f"Related_obj: {related_obj}")
     if not related_obj:
         print(f"No related object found for ticket {instance.id}")
         return
@@ -174,14 +165,11 @@ def update_user_on_processing_status_email(sender, instance, created, **kwargs):
         email = user_obj.email
         from_email = f"Returns <returns@{settings.MAILGUN_DOMAIN}>"
     elif instance.ticket_type == "support" and isinstance(related_obj, Support):
-        print(f"Support related obj: {related_obj}")
-        print(f"Support user: {related_obj.customer}")
         user_obj = related_obj.customer if related_obj.customer else None
         name = user_obj.full_name if related_obj.customer else None
         email = related_obj.email
         from_email = f"Support <support@{settings.MAILGUN_DOMAIN}>"
     else:
-        print(f"Unsupported ticket type or GFK mismatch for ticket {instance.id}")
         return
 
     # Send email asynchronously
@@ -189,7 +177,6 @@ def update_user_on_processing_status_email(sender, instance, created, **kwargs):
     body = f"Hello {name if name else ''},\n\n" \
            f"Our team has picked up your ticket and will update you on the progress\n\n" \
            "\n\nNote: All further correspondence should be on this email thread."
-    print(f"from email: {from_email}")
     send_email_task.delay(
         recipient=email,
         subject=subject,
@@ -204,12 +191,6 @@ def create_notification(sender, created, instance, **kwargs):
     if instance.ticket_state != Tickets.State.ASSIGNED:
         return
     
-    # # Optionally: check if this was just assigned
-    # if not created:
-    #     old = sender.objects.get(id=instance.id)
-    #     if old.ticket_state == Tickets.State.ASSIGNED:
-    #         # Already assigned before, skip
-    #         return
     
     user = instance.re_assigned_to.team if instance.re_assigned else instance.assigned_to.team
     
@@ -232,9 +213,6 @@ def create_notification(sender, created, instance, **kwargs):
         status=Notification.Status.SENT,  # mark as sent immediately for in-app
     )
 
-    # Optional: log for debugging
-    print(f"Notification created and marked as sent: {notification.id}")
-
 
 @receiver(post_save, sender=Tickets)
 def update_support_returns_to_processing(sender, instance, **kwargs):
@@ -248,8 +226,7 @@ def update_support_returns_to_processing(sender, instance, **kwargs):
     # if setting ticket to completed, underlying object must be done
     # Access the related object via the GFK
     related_obj = instance.parent
-    print(f"Related_obj: {related_obj}")
-    print(f"Related_obj type: {type(related_obj)}")
+
     # print(f"instance ticket type: {related_obj.ticket_type}")
     if not related_obj:
         print(f"No related object found for ticket {instance.id}")
@@ -257,16 +234,13 @@ def update_support_returns_to_processing(sender, instance, **kwargs):
     # Determine user info based on ticket type
     if instance.ticket_type == "returns" and isinstance(related_obj, OrderReturnRequest):
         returns_obj = related_obj
-        print(f"Returns obj: {returns_obj}")
         returns_obj.status = OrderReturnRequest.Status.PROCESSING
         returns_obj.save(update_fields=["status"])
     elif isinstance(related_obj, Support):
         support_obj = related_obj
-        print(f"Support obj: {support_obj}")
         support_obj.status = Support.Status.PROCESSING
         support_obj.save(update_fields=["status"])
     else:
-        print(f"Unsupported ticket type or GFK mismatch for ticket {instance.id}")
         return
     
 
@@ -366,7 +340,6 @@ def update_support_ticket_status_to_completion(sender, instance, **kwargs):
     )
     
     # Ensure it's the correct ticket
-    print(f"Ticket instance: {ticket}")
     if ticket.ticket_type == "support" and ticket.ticket_state == "assigned":
         # get assigned team and update ticket
         holder = ticket.re_assigned_to or ticket.assigned_to
@@ -415,7 +388,6 @@ def notify_team_lead_of_unresolved_ticket(sender, instance, **kwargs):
     Signal to notify the team lead of unresolved request ticket
     To either reassign the ticket or handle it by their self
     """
-    print("Triggered for unresolved")
     if instance.status != Support.Status.UNRESOLVED:
         return
     
@@ -423,7 +395,6 @@ def notify_team_lead_of_unresolved_ticket(sender, instance, **kwargs):
     lead = SupportTeam.objects.filter(
         is_lead=True
     ).first()
-    print(f"Lead team: {lead}")
 
     # Identify the ticket and team in charge
     ticket = Tickets.objects.get(
@@ -440,7 +411,6 @@ def notify_team_lead_of_unresolved_ticket(sender, instance, **kwargs):
             f"authority or handle it yourself.\n\n" \
             f"Thanks"
     
-    print("About to send notification")
     # Notify team lead:
     Notification.objects.create(
         user=lead.team,
