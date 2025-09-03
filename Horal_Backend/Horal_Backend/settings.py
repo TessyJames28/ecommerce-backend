@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'sellers_dashboard',
     'wallet',
     'media', 
+    'logistics',
     'anymail',
     'drf_yasg',
     'corsheaders',
@@ -73,6 +74,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'django_celery_beat',
+    # Celery result backend
+    'django_celery_results',
     'storages',
 
 ]
@@ -93,6 +96,13 @@ MIDDLEWARE = [
     'carts.middleware.CartMiddleware',
     
 ]
+
+
+if os.getenv('DJANGO_ENV') == 'development':  # or DEBUG
+    MIDDLEWARE = [
+        mw for mw in MIDDLEWARE
+        if mw != 'django.middleware.csrf.CsrfViewMiddleware'
+    ]
 
 
 # Add Cors settings
@@ -167,6 +177,11 @@ SIMPLE_JWT = {
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY, # Use the same secret key as your Django settings
     'AUTH_HEADER_TYPES': ('Bearer',),
+    "AUTH_COOKIE": "access",  # Cookie name
+    "AUTH_COOKIE_SECURE": False, # Set to True in production
+    "AUTH_COOKIE_HTTP_ONLY": True,
+    "AUTH_COOKIE_PATH": "/", 
+    "AUTH_COOKIE_SAMESITE": "None",  # Required for cross-site
 }
 
 # Google OAuth2 settings
@@ -176,6 +191,10 @@ GOOGLE_OAUTH = {
     "CLIENT_SECRET": env('CLIENT_SECRET'),
     "REDIRECT_URI": env('REDIRECT_URI'),
 }
+
+# Google API Key
+GOOGLE_API_KEY = env('GOOGLE_API_KEY')
+MAP_API_KEY = env('MAP_API_KEY')
 
 
 # Mailgun settings
@@ -274,6 +293,20 @@ CELERY_BROKER_USE_SSL = {
 
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC' 
+
+
+# GIGL Setup
+GIGL_BASE_URL = env('GIGL_BASE_URL')
+GIGL_USERNAME = env('GIGL_USERNAME')
+GIGL_PASSWORD = env('GIGL_PASSWORD')
+GIGL_WEBHOOK = env('GIGL_WEBHOOK')
+HORAL_GIGL_WEBHOOK = env('HORAL_GIGL_WEBHOOK')
+
 
 ROOT_URLCONF = 'Horal_Backend.urls'
 
@@ -298,18 +331,18 @@ WSGI_APPLICATION = 'Horal_Backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
 
 
 # Postgres DB on render
-DATABASES = {
-    'default': env.db('DATABASE_URL'),
-}
+# DATABASES = {
+#     'default': env.db('DATABASE_URL'),
+# }
 
 # auth user model
 AUTH_USER_MODEL = 'users.CustomUser'
@@ -402,4 +435,19 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
+
+# LOGGING = {
+#     'version': 1,
+#     'handlers': {
+#         'console': {
+#             'class': 'logging.StreamHandler',
+#         },
+#     },
+#     'loggers': {
+#         'django.db.backends': {
+#             'handlers': ['console'],
+#             'level': 'DEBUG',
+#         },
+#     },
+# }
 
