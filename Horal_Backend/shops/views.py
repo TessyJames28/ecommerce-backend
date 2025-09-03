@@ -10,8 +10,9 @@ from products.utils import (
     product_models, StandardResultsSetPagination,
     get_product_queryset
 )
-from products.serializers import MixedProductSerializer
-
+from users.authentication import CookieTokenAuthentication
+from products.serializers import ProductIndexSerializer
+from products.models import ProductIndex
 # Create your views here.
 
 class CreateShop(GenericAPIView):
@@ -22,6 +23,7 @@ class CreateShop(GenericAPIView):
     serializer_class = ShopSerializer
     queryset = Shop.objects.all()
     permission_classes = [IsSuperAdminPermission]
+    authentication_classes = [CookieTokenAuthentication]
 
     def post(self, request, *args, **kwargs):
         """
@@ -55,6 +57,7 @@ class ShopManagementView(GenericAPIView, BaseResponseMixin):
     serializer_class = ShopSerializer
     queryset = Shop.objects.all()
     permission_classes = [IsSuperAdminPermission]
+    authentication_classes = [CookieTokenAuthentication]
 
 
     def get(self, request, *args, **kwargs):
@@ -75,6 +78,7 @@ class ShopDeleteView(GenericAPIView, BaseResponseMixin):
     serializer_class = ShopSerializer
     queryset = Shop.objects.all()
     permission_classes = [IsSuperAdminPermission]
+    authentication_classes = [CookieTokenAuthentication]
 
     def delete(self, request, pk, *args,**kwargs):
         """Delete a shop and all its products"""
@@ -94,30 +98,21 @@ class ShopProductListView(GenericAPIView, BaseResponseMixin):
     permission_classes = [AllowAny]
     authentication_classes = []
     pagination_class = StandardResultsSetPagination
-    serializer_class = MixedProductSerializer
+    serializer_class = ProductIndexSerializer
 
     def get_queryset(self):
-        """Get all products of a shop"""
-        return get_product_queryset()
+        """Get all indexed products of a shop"""
+        shop_id = self.kwargs.get("shop_id")
+        return ProductIndex.objects.filter(shop_id=shop_id)
 
     def get(self, request, shop_id, *args, **kwargs):
         """Get all products of a shop"""
-        shop = get_object_or_404(Shop, pk=shop_id)
+        queryset = self.get_queryset()
+        page = self.paginate_queryset(queryset)
+        serializer = self.get_serializer(page, many=True)
 
-        products_data = []
-
-        for model, serializer_class, category_name in product_models:
-            products = model.published.filter(shop=shop)
-            if products.exists():
-                serializer = serializer_class(products, many=True)
-                for product_data in serializer.data:
-                    product_data['category_name'] = category_name
-                    products_data.append(product_data)
-                    print(products_data)
-
-        page = self.paginate_queryset(products_data)
         if page is not None:
-            paginated_response = self.get_paginated_response(products_data)
+            paginated_response = self.get_paginated_response(serializer.data)
             paginated_response.data["status"] = "success"
             paginated_response.data["status_code"] = status.HTTP_200_OK
             paginated_response.data["message"] = "Shop products retrieved successfully"
