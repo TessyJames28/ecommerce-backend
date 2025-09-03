@@ -56,10 +56,11 @@ def update_order_status(order, new_status, changed_by=None, \
         changed_by (User or None): The user who triggered the change
     """
     from orders.models import Order, OrderReturnRequest
+
     if force or order.status != new_status:
+
         if order_type == OrderStatusLog.OrderType.ORDERRETURNREQUEST:
             OrderStatusLog.objects.create(
-                parent=order,
                 content_type=ContentType.objects.get_for_model(OrderReturnRequest),
                 object_id=order.id,
                 old_status=order.status,
@@ -68,16 +69,19 @@ def update_order_status(order, new_status, changed_by=None, \
                 changed_by=changed_by
             )
         else:
-            OrderStatusLog.objects.create(
-                parent=order,
-                content_type=ContentType.objects.get_for_model(Order),
-                object_id=order.id,
-                old_status=order.status,
-                new_status=new_status,
-                changed_by=changed_by
-            )
+            print("Updating order status in Orderlog")
+            try:
+                log, created = OrderStatusLog.objects.get_or_create(
+                    content_type=ContentType.objects.get_for_model(Order),
+                    object_id=order.id,
+                    old_status=order.status,
+                    new_status=new_status,
+                    changed_by=changed_by
+                )
+            except Exception as e:
+                print(f"Order log not creating: {str(e)}")
         order.status = new_status
-        order.save()
+        order.save(update_fields=["status"])
 
 
 def fetch_and_store_bank():
