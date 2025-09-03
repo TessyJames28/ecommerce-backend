@@ -42,6 +42,18 @@ product_models_list = [
     HealthAndBeautyProduct
 ]
 
+# Product image mapping
+IMAGE_MAP = {
+    "fashion": FashionImage,
+    "foods": FoodImage,
+    "gadget": GadgetImage,
+    "electronics": ElectronicsImage,
+    "accessories": AccessoryImage,
+    "health and beauty": HealthAndBeautyImage,
+    "vehicles": VehicleImage,
+    "children": ChildrenImage,
+}
+
 # Dynamically determine the right image model based on product model
 image_model_map = {
     "VehicleProduct": VehicleImage,
@@ -228,7 +240,7 @@ def topselling_product_sql(from_date):
                 products_productindex pi ON pi.id = pv.object_id
                        
             WHERE
-                o.status IN ('paid', 'shipped', 'delivered')
+                o.status = 'paid'
                 AND o.created_at >= %s
             GROUP BY
                 pi.id
