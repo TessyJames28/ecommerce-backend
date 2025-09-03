@@ -1,5 +1,6 @@
 from django.core.mail import send_mail
 from django.conf import settings
+import requests
 
 
 def send_otp_email(to_email, otp_code):
@@ -85,3 +86,19 @@ def send_kyc_final_status_email(user, status):
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
     )
+
+
+# def welcome_email_new_user(user):
+#     """
+#     Send welcome email to every new users after succesful registration
+#     """
+#     subject = "Welcome to Horal"
+#     message = f"Hello {user.full_name}\n\n" \
+#                 f"Welcome to Horal!!!"
+    
+#     send_mail(
+#         subject=subject,
+#         message=message,
+#         from_email=settings.DEFAULT_FROM_EMAIL,
+#         recipient_list=[user.email]
+#     )
