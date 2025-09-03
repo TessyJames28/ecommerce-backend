@@ -132,6 +132,7 @@ def send_support_received_email(sender, instance, created, **kwargs):
             body=body,
             from_email=f"Support <{from_email}>"
         )
+        print(f"Final body to send: {body}")
 
         # Get sender horal bot
 
@@ -402,6 +403,10 @@ def update_support_ticket_status_to_completion(sender, instance, **kwargs):
         body=body,
         from_email=f"Support <support@{settings.MAILGUN_DOMAIN}>"
     )
+
+    # Delete user if a temporary user after ticket resolution
+    if user_obj.is_temporary:
+        user_obj.delete()
 
 
 @receiver(post_save, sender=Support)
