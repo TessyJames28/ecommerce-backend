@@ -16,13 +16,13 @@ def order_item_transaction(sender, instance, created, **kwargs):
     - Create PENDING record when delivered but not yet paid
     - Create COMPLETED record when payout is done
     """
-    if not instance.is_completed or instance.order.status != Order.Status.DELIVERED:
+    if not instance.is_completed or instance.delivered_at:
         return 
     
     seller = instance.variant.shop.owner.user
     amount = instance.unit_price * instance.quantity
     
-    # Aoid duuplicate checks if transaction record already exists
+    # Avoid duuplicate checks if transaction record already exists
     record = SellerTransactionHistory.objects.filter(
         seller=seller,
         message__icontains=f"order #{instance.order.id}",
