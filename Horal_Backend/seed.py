@@ -31,6 +31,7 @@ from products.models import (
     VehicleImage, FashionImage, ElectronicsImage, FoodImage,
     HealthAndBeautyImage, AccessoryImage, ChildrenImage, GadgetImage
 )
+from logistics.models import Logistics
 from django.conf import settings
 
 from products.utils import image_model_map
@@ -301,6 +302,8 @@ def create_variants(product, count=2):
             content_type=ContentType.objects.get_for_model(product),
             object_id=product.id,
             standard_size=random.choice(["S", "M", "L"]),
+            custom_size_unit=random.choice(["KG", "G", "L", "ML", "M"]),
+            custom_size_value=random.randint(1, 5),
             color=random.choice([c[0] for c in Color.choices]),
             stock_quantity=random.randint(10, 50),
             price_override=product.price + random.uniform(1.0, 10.0),
@@ -308,6 +311,18 @@ def create_variants(product, count=2):
         )
         variants.append(variant)
     return variants
+
+
+def create_logistics(product):
+    """Create variants tied to a product via ContentType."""
+    
+    logistics = Logistics.objects.create(
+        content_type=ContentType.objects.get_for_model(product),
+        object_id=product.id,
+        weight_measurement=random.choice(["KG", "G", "L", "ML", "M"]),
+        total_weight=random.randint(1, 5),
+    )
+    return logistics
 
 # Create products for each seller (16 total = 2 per category)
 product_index_list = []
@@ -390,6 +405,9 @@ for user, shop in sellers:
             create_images(p, count=3)
 
             # ✅ attach variants
+            create_logistics(p)
+
+            # ✅ attach variants
             create_variants(p, count=3)
 
             # Add to ProductIndex
@@ -419,13 +437,15 @@ for buyer in remaining_users:
         )
 
         status = random.choices(
-            [Order.Status.DELIVERED, Order.Status.CANCELLED, Order.Status.SHIPPED, Order.Status.PAID],
-            weights=[6, 1, 1, 1]
+            [Order.Status.CANCELLED, Order.Status.PAID],
+            weights=[1, 6]
         )[0]
 
         order = Order.objects.create(
             user=buyer,
-            total_amount=total,
+            product_total=total,
+            total_amount=total + total,
+            shipping_total=total,
             status=status,
             street_address="123 Test St",
             local_govt=random.choice(states_and_lgas[buyer.location.state]),
@@ -436,42 +456,70 @@ for buyer in remaining_users:
             created_at=timezone.now()
         )
 
+        # order_item_status = random.choices(
+        #     [
+        #         OrderItem.Status.SHIPMENT_INITIATED,
+        #         OrderItem.Status.SHIPMENT_CREATED,
+        #         OrderItem.Status.SHIPMENT_CREATED_BY_CUSTOMER,
+        #         OrderItem.Status.AVAILABLE_FOR_PICKUP,
+        #         OrderItem.Status.SHIPMENT_PICKED_UP,
+        #         OrderItem.Status.OUT_FOR_DELIVERY,
+        #         OrderItem.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
+        #         OrderItem.Status.DELIVERED_TO_PICKUP_POINT,
+        #         OrderItem.Status.DELIVERED_TO_TERMINAL,
+        #         OrderItem.Status.DELAYED_DELIVERY,
+        #         OrderItem.Status.DELAYED_PICKUP,
+        #         OrderItem.Status.DELAYED_PICKUP_BY_CUSTOMER
+        #     ], 
+        #     weights=[1, 1, 1, 1, 1, 1, 3, 3, 3, 1, 1, 1]
+        # )[0]
+
         for item in items:
             delivered_at = None
             is_completed = False
-
-            if status == Order.Status.DELIVERED:
-                # Randomly choose a delivery date: today or a few days ago
-                days_ago = random.choice([0, 1, 2, 3, 4, 5])
-                delivered_at = timezone.now() - timezone.timedelta(days=days_ago)
-
-                # Mark as completed if more than 3 days ago or simulate review
-                if days_ago > 3 or random.choice([True, False]):
-                    is_completed = True
 
             order_item = OrderItem.objects.create(
                 order=order,
                 variant=item,
                 quantity=1,
                 unit_price=item.price_override or item.product.price,
-                delivered_at=delivered_at,
-                is_completed=is_completed
             )
 
-            # Simulate return request only for delivered orders
-            if status == Order.Status.DELIVERED and random.choice([True, False]):
-                # return_status = random.choice([
-                #     OrderReturnRequest.Status.REQUESTED,
-                #     # OrderReturnRequest.Status.REJECTED,
-                #     # OrderReturnRequest.Status.COMPLETED
-                # ])
-                OrderReturnRequest.objects.create(
-                    order_item=order_item,
-                    reason="Item defective or not as described",
-                    status=OrderReturnRequest.Status.REQUESTED
-                )
+            # if status in [
+            #     OrderItem.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
+            #     OrderItem.Status.DELIVERED_TO_PICKUP_POINT,
+            #     OrderItem.Status.DELIVERED_TO_TERMINAL
+            # ]:
+            #     # Randomly choose a delivery date: today or a few days ago
+            #     days_ago = random.choice([0, 1, 2, 3, 4, 5])
+            #     delivered_at = timezone.now() - timezone.timedelta(days=days_ago)
 
-            if status == Order.Status.DELIVERED:
+            #     # Mark as completed if more than 3 days ago or simulate review
+            #     if days_ago > 3 or random.choice([True, False]):
+            #         is_completed = True
+
+            #     order_item.delivered_at=delivered_at
+            #     order_item.is_completed=is_completed
+            #     order_item.save(update_fields=["delivered_at", "is_completed"])
+
+            # # Simulate return request only for delivered orders
+            # if status in [
+            #     OrderItem.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
+            #     OrderItem.Status.DELIVERED_TO_PICKUP_POINT,
+            #     OrderItem.Status.DELIVERED_TO_TERMINAL
+            # ] and random.choice([True, False]):
+            #     # return_status = random.choice([
+            #     #     OrderReturnRequest.Status.REQUESTED,
+            #     #     # OrderReturnRequest.Status.REJECTED,
+            #     #     # OrderReturnRequest.Status.COMPLETED
+            #     # ])
+            #     OrderReturnRequest.objects.create(
+            #         order_item=order_item,
+            #         reason="Item defective or not as described",
+            #         status=OrderReturnRequest.Status.REQUESTED
+            #     )
+
+            if status == "paid":
                 delivered_variants.append((buyer, item))
 
     cart.delete()
