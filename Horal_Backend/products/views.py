@@ -3,7 +3,8 @@ from rest_framework import status
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Avg
+from django.db.models import Q, Avg, Value
+from django.db.models.functions import Coalesce
 from django.core.exceptions import PermissionDenied
 from sellers.models import SellerKYC
 from sellers_dashboard.serializers import SellerProfileSerializer
@@ -11,6 +12,7 @@ from ratings.serializers import UserRatingSerializer
 from ratings.models import UserRating
 from django.http import Http404
 from datetime import timedelta
+from users.authentication import CookieTokenAuthentication
 from rest_framework.exceptions import NotFound
 from shops.models import Shop
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -24,7 +26,7 @@ from .models import ProductIndex, RecentlyViewedProduct
 from categories.models import Category
 from subcategories.models import SubCategory
 from .models import ProductVariant
-from .serializers import get_product_serializer, MixedProductSerializer
+from .serializers import get_product_serializer, ProductIndexSerializer, MixedProductSerializer
 from carts.authentication import SessionOrAnonymousAuthentication
 
 
@@ -56,7 +58,8 @@ class ProductCreateView(GenericAPIView, BaseResponseMixin):
     """
     API endpoint to create a new product based on a selected category
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSellerAdminOrSuperuser]
+    authentication_classes = [CookieTokenAuthentication]
 
     def get_serializer_class(self):
         category_name = self.kwargs.get('category_name')
@@ -83,7 +86,6 @@ class ProductCreateView(GenericAPIView, BaseResponseMixin):
         
         # Get the category
         category = get_object_or_404(Category, name__iexact=category_name)
-        print("I haven't gotten here")
 
         # Get seller's shop internally (skip request.data.get('shop'))
         if user.is_seller:
@@ -186,7 +188,7 @@ class ProductDetailView(GenericAPIView, BaseResponseMixin):
     API endpoint to retrieve, update or delete a product
     """
     permission_classes = [IsSellerAdminOrSuperuser]
-    # authentication_classes = []  # Disable all authentication backends
+    authentication_classes = [CookieTokenAuthentication]
 
     def get_product_and_check_permissions(self, pk, category_name):
         """Get the product and check permissions"""
@@ -299,11 +301,11 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
     """
     authentication_classes = []  # Disable all authentication backends
     pagination_class = StandardResultsSetPagination
-    serializer_class = MixedProductSerializer
+    serializer_class = ProductIndexSerializer
 
 
     def get_queryset(self):
-        return ProductIndex.objects.select_related('content_type')
+        return ProductIndex.objects.filter(is_published=True)
 
     def get(self, request, *args, **kwargs):
         """Get all products with optional filtering"""
@@ -321,79 +323,69 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
         rating = request.query_params.get('rating')
         sub_category = request.query_params.get('sub_category')
 
-        products_data = []
-
         queryset = self.get_queryset()
 
+        query = Q()
+
         if category:
-            queryset = queryset.filter(category_name__iexact=category)
+            query &= Q(category_name__iexact=category)
     
-        for index in queryset:
-            product = index.linked_product
-            if product is None:
-                continue  # Skip if GenericForeignKey couldn't resolve
-            
-            model = product.__class__
-            query = Q(id=product.id)
         
+        if shop_id:
+            query &= Q(shop__id=shop_id)
 
-            if shop_id:
-                query &= Q(shop__id=shop_id)
+        if search_query:
+            query &= (
+                Q(title__icontains=search_query) |
+                Q(description__icontains=search_query) |
+                Q(brand__icontains=search_query) |
+                Q(specifications__icontains=search_query)
+            )
 
-            if search_query:
-                query &= (
-                    Q(title__icontains=search_query) |
-                    Q(description__icontains=search_query) |
-                    Q(brand__icontains=search_query) |
-                    Q(specifications__icontains=search_query)
-                )
+        if brand:
+            query &= Q(brand__icontains=brand)
 
-            if brand:
-                query &= Q(brand__icontains=brand)
+        if state:
+            query &= Q(state__iexact=state)
 
-            if state:
-                query &= Q(state__iexact=state)
+        if local_govt:
+            query &= Q(local_govt__icontains=local_govt)
 
-            if local_govt:
-                query &= Q(local_govt__icontains=local_govt)
+        if price_min:
+            query &= Q(price__gte=price_min)
 
-            if price_min:
-                query &= Q(price__gte=price_min)
+        if price_max:
+            query &= Q(price__lte=price_max)
 
-            if price_max:
-                query &= Q(price__lte=price_max)
+        if sub_category:
+            query &= Q(sub_category__iexact=sub_category)
 
-            if sub_category:
-                query &= Q(sub_category__iexact=sub_category)
+        # Apply the filter only to the correct model manager
+        products = queryset.filter(query)
 
-            # Apply the filter only to the correct model manager
-            products = model.published.filter(query)
+        if rating:
+            rating = float(rating)
+            # Only include products with avg rating >= requested rating
+            products = products.annotate(
+                avg_rating=Coalesce(Avg("product__rating"), Value(0.0)) 
+            ).filter(avg_rating__gte=rating)
 
-            if rating:
-                products = products.annotate(avg_rating=Avg(
-                    'reviews__rating'
-                )).filter(avg_rating__gte=rating)
 
-            if products.exists():
-                for matched_product in products:
-                    serializer = MixedProductSerializer(matched_product)
-                    data = serializer.data
-                    products_data.append(data)
-
-        page = self.paginate_queryset(products_data)
+        page = self.paginate_queryset(products)
         if page is not None:
-            paginated_response = self.get_paginated_response(page)
+            serializer = self.get_serializer(page, many=True)
+            paginated_response = self.get_paginated_response(serializer.data)
             paginated_response.data["status"] = "success"
             paginated_response.data["status_code"] = status.HTTP_200_OK
             paginated_response.data["message"] = "Products retrieved successfully"
             return paginated_response
         
+        serializer = ProductIndexSerializer(products, many=True)
         return self.get_response(
             status.HTTP_200_OK,
             "Products retrieved successfully",
-            products_data
+            serializer.data
         )
-    
 
 
 class TopSellingProductListView(GenericAPIView, BaseResponseMixin):
@@ -402,7 +394,7 @@ class TopSellingProductListView(GenericAPIView, BaseResponseMixin):
     """
     authentication_classes = []  # Disable all authentication backends
     pagination_class = StandardResultsSetPagination
-    serializer_class = MixedProductSerializer
+    serializer_class = ProductIndexSerializer
 
 
     def get_queryset(self):
@@ -412,19 +404,13 @@ class TopSellingProductListView(GenericAPIView, BaseResponseMixin):
         product_ids = [row['product_index_id'] for row in raw_data]
 
         # Get ProductIndex entries with their actual linked product
-        indices = ProductIndex.objects.filter(id__in=product_ids).select_related('content_type')
+        product_index = ProductIndex.objects.filter(id__in=product_ids, is_published=True)
 
-        # Extract real product instances (GenericForeignKey)
-        linked_products = []
-        for index in indices:
-            product = index.linked_product
-            if product is not None:
-                linked_products.append(product)
-
-        return linked_products
+        return product_index
 
 
     def get(self, request, *args, **kwargs):
+        """Return top selling products"""
         category = request.query_params.get('category')
         shop_id = request.query_params.get('shop')
         search_query = request.query_params.get('search')
@@ -436,69 +422,61 @@ class TopSellingProductListView(GenericAPIView, BaseResponseMixin):
         rating = request.query_params.get('rating')
         sub_category = request.query_params.get('sub_category')
 
-        products_data = []
+        queryset = self.get_queryset()
 
-        linked_products = self.get_queryset()
+        query = Q()
 
-        for product in linked_products:
-            model = product.__class__
-            try:
-                query = Q(id=product.id)
+        if shop_id:
+            query &= Q(shop__id=shop_id)
 
-                if shop_id:
-                    query &= Q(shop__id=shop_id)
+        if category:
+            query &= Q(category_name__iexact=category)
 
-                if category:
-                    query &= Q(category_name__iexact=category)
+        if search_query:
+            query &= (
+                Q(title__icontains=search_query) |
+                Q(description__icontains=search_query) |
+                Q(brand__icontains=search_query) |
+                Q(specifications__icontains=search_query)
+            )
 
-                if search_query:
-                    query &= (
-                        Q(title__icontains=search_query) |
-                        Q(description__icontains=search_query) |
-                        Q(brand__icontains=search_query) |
-                        Q(specifications__icontains=search_query)
-                    )
+        if brand:
+            query &= Q(brand__icontains=brand)
 
-                if brand:
-                    query &= Q(brand__icontains=brand)
+        if state:
+            query &= Q(state__iexact=state)
 
-                if state:
-                    query &= Q(state__iexact=state)
+        if local_govt:
+            query &= Q(local_govt__icontains=local_govt)
 
-                if local_govt:
-                    query &= Q(local_govt__icontains=local_govt)
+        if price_min:
+            query &= Q(price__gte=price_min)
 
-                if price_min:
-                    query &= Q(price__gte=price_min)
+        if price_max:
+            query &= Q(price__lte=price_max)
 
-                if price_max:
-                    query &= Q(price__lte=price_max)
+        if sub_category:
+            query &= Q(sub_category__iexact=sub_category)
 
-                if sub_category:
-                    query &= Q(sub_category__iexact=sub_category)
+        products = queryset.filter(query)
 
-                products = model.published.filter(query)
+        if rating:
+            rating = float(rating)
+            # Only include products with avg rating >= requested rating
+            products = products.annotate(
+                avg_rating=Coalesce(Avg("product__rating"), Value(0.0)) 
+            ).filter(avg_rating__gte=rating)
 
-                if rating:
-                    products = products.annotate(
-                        avg_rating=Avg('reviews__rating')
-                    ).filter(avg_rating__gte=rating)
-
-                for p in products:
-                    serializer = MixedProductSerializer(p)
-                    products_data.append(serializer.data)
-
-            except Exception:
-                continue  # In case model manager is missing, etc.
-
-        page = self.paginate_queryset(products_data)
+        page = self.paginate_queryset(products)
         if page is not None:
-            paginated_response = self.get_paginated_response(page)
+            serializer = self.get_serializer(page, many=True)
+            paginated_response = self.get_paginated_response(serializer.data)
             paginated_response.data["status"] = "success"
             paginated_response.data["status_code"] = status.HTTP_200_OK
             paginated_response.data["message"] = "Top selling products retrieved successfully"
             return paginated_response
 
+        serializer = self.get_serializer(products, many=True)
         return self.get_response(
             status.HTTP_200_OK,
             "top selling products retrieved successfully",
@@ -603,7 +581,7 @@ class RecentlyViewedProductView(GenericAPIView, BaseResponseMixin):
     """Class to retrieve recently viewed products"""
     permission_classes = [AllowAny]
     authentication_classes = [SessionOrAnonymousAuthentication]
-    serializer_class = MixedProductSerializer
+    serializer_class = ProductIndexSerializer
 
     def get(self, request, *args, **kwargs):
         """Retrieve users recently viewed products"""
@@ -623,18 +601,18 @@ class RecentlyViewedProductView(GenericAPIView, BaseResponseMixin):
         else:
             views = RecentlyViewedProduct.objects.filter(session_key=session_key)
 
-        
         views = views.select_related('product_index')[:20]
-        product_ids = [v.product_index.object_id for v in views]
-        
-        # Match across product models
-        products = []
-        for model in product_models_list:
-            matched = model.objects.filter(id__in=product_ids)
-            products.extend(matched)
 
-        # preserve original view order
-        product_sorted = sorted(products, key=lambda x: product_ids.index(x.id))
+        # Create mapping: product_index_id -> position in views
+        position_map = {v.product_index.id: i for i, v in enumerate(views)}
+
+        product_indexes = [v.product_index for v in views]
+
+        # Sort safely, fallback to large number if not found
+        product_sorted = sorted(
+            product_indexes,
+            key=lambda p: position_map.get(p.id, 9999)
+        )
         serializer = self.get_serializer(product_sorted, many=True)
 
         return self.get_response(
