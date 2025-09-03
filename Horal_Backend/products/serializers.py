@@ -8,12 +8,14 @@ from .models import (
     VehicleImage, FashionImage, ElectronicsImage, FoodImage,
     HealthAndBeautyImage, AccessoryImage, ChildrenImage, GadgetImage
 )
+from django.core.exceptions import ValidationError as DRFValidationError
 from categories.serializers import CategorySerializer
 from subcategories.serializers import SubCategoryProductSerializer
 from categories.models import Category
 from subcategories.models import SubCategory
 from django.contrib.contenttypes.models import ContentType
 from ratings.models import UserRating
+from logistics.serializers import LogisticsSerializer
 
 from .textchoices import (
     Color, SizeOption, ProductCondition, EngineType, EngineSize,
@@ -89,19 +91,27 @@ class GadgetImageSerializer(BaseProductImageSerializer):
         model = GadgetImage
 
 
+
 class ProductVariantSerializer(serializers.ModelSerializer):
     """Serializer for product variant model which include sizes and colors."""
     color = serializers.CharField(required=False)
     standard_size = serializers.CharField(required=False)
     custom_size_unit = serializers.CharField(required=False)
+    logistics = LogisticsSerializer(write_only=True, required=False)
+    logistics_data = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ProductVariant
         fields = [
             'id', 'color', 'custom_size_unit', 'standard_size', 'sku',
-            'custom_size_value', 'stock_quantity', 'reserved_quantity', 'price_override'
+            'custom_size_value', 'stock_quantity', 'reserved_quantity', 'price_override',
+            'logistics', 'logistics_data'
         ]
-        read_only_fields = ['id', 'sku']
+        read_only_fields = ['id', 'sku', 'logistics_data']
+    
+    def get_logistics_data(self, obj):
+        logistics_qs = obj.get_logistics() # defined in BaseProduct
+        return LogisticsSerializer(logistics_qs, many=True).data
 
     def validate_custom_size_unit(self, value):
         return normalize_choice(value, SizeOption.SizeUnit)
@@ -149,10 +159,31 @@ class ProductRatingMixin(serializers.Serializer):
 class ProductCreateMixin:
     def create(self, validated_data):
         from .utils import image_model_map
+        from logistics.models import Logistics
+        from logistics.serializers import LogisticsSerializer
 
         # Pop nested relationships so they don’t go into model.create()
         images = validated_data.pop('images', [])
-        variants = validated_data.pop('variants', [])
+        variant_data = validated_data.pop('variants', [])
+        logistic_data = validated_data.pop('logistics', {})
+
+        # Check variant logistics consistency
+        variant_have_logistics = [v.get('logistics') is not None for v in variant_data]
+        print(f"Variant logistics: {variant_have_logistics}")
+        if any(variant_have_logistics) and logistic_data:
+            raise serializers.ValidationError(
+                    "Logistics can either be at variant or product level not both"
+                )
+        elif any(variant_have_logistics):
+            if not all(variant_have_logistics):
+                raise serializers.ValidationError(
+                    "if any variant has logistics, all variant must have logistics"
+                )
+        else:
+            if not logistic_data:
+                raise serializers.ValidationError(
+                    "No variant logistics provided, product-level is required if no variant logistics"
+                )
 
         # Now create the product safely
         instance = self.Meta.model.objects.create(**validated_data)
@@ -165,9 +196,27 @@ class ProductCreateMixin:
             for img in images:
                 image_model_class.objects.create(product=instance, **img)
 
-        # Create variants
-        for data in variants:
-            ProductVariant.objects.create(product=instance, **data)
+        # Create variants and their logistics
+        for variant in variant_data:
+            variant_logistics = variant.pop('logistics', None)
+            variant_instance = ProductVariant.objects.create(product=instance, **variant)
+
+            # Create logistics for this variant if provided
+            if variant_logistics:
+                # logistic_data['product_variant'] = variant_instance.id
+                serializer = LogisticsSerializer(data=variant_logistics)
+                if serializer.is_valid():
+                    serializer.save(product_variant=variant_instance)  # attach variant
+                else:
+                    raise serializers.ValidationError(serializer.errors)
+                # Logistics.objects.create(product_variant=variant_logistics, **variant_logistics)
+        
+        # Create logistics for a single product if provided
+        if not any(variant_have_logistics) and logistic_data:
+                serializer = LogisticsSerializer(data=logistic_data)
+                if serializer.is_valid(raise_exception=True):
+                    serializer.save(product=instance)  # attach product
+        # Logistics.objects.create(product=instance, **logistic_data)
 
         # Update product quantity based on stock
         from .utils import update_quantity
@@ -178,11 +227,13 @@ class ProductCreateMixin:
 
     def update(self, instance, validated_data):
         from .utils import image_model_map
+        from logistics.models import Logistics
         """
         Product update especially for nested fields like images and variants
         """
         images = validated_data.pop('images', [])
-        variants = validated_data.pop('variants', [])
+        variant_data = validated_data.pop('variants', [])
+        logistic_data = validated_data.pop('logistics', {})
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -198,11 +249,46 @@ class ProductCreateMixin:
             for img in images:
                 image_model_class.objects.create(product=instance, **img)
 
-        if variants:
-            instance.get_variants().delete()
-            for data in variants:
-                ProductVariant.objects.create(product=instance, **data)
+        # Check variant logistics consistency
+        variant_have_logistics = [v.get('logistics') is not None for v in variant_data]
+        if any(variant_have_logistics):
+            if not all(variant_have_logistics):
+                raise serializers.ValidationError(
+                    "if any variant has logistics, all variant must have logistics"
+                )
+        else:
+            if not logistic_data:
+                raise serializers.ValidationError(
+                    "No variant logistics provided, product-level is required if no variant logistics"
+                )
 
+        if variant_data:
+            instance.get_variants().delete()
+            for variant in variant_data:
+                variant_instance = ProductVariant.objects.create(product=instance, **variant)
+
+                # Update variant logistics if updated
+                variant_logistics = variant.pop('logistics', None)
+                if variant_logistics:
+                    serializer = LogisticsSerializer(data=variant_logistics)
+                    if serializer.is_valid(raise_exception=True):
+                        serializer.save(product_variant=variant_instance)  # attach product
+                    else:
+                        raise serializers.ValidationError(serializer.errors)
+                    # variant_instance.logistics_variant.delete()
+                    # Logistics.objects.create(product_variant=variant_instance, **variant_logistics)
+
+        # Update product-level logistics if variants have None
+        if not any(variant_have_logistics) and logistic_data:
+            # Delete old product logistics
+            instance.get_logistics().delete()
+            serializer = LogisticsSerializer(data=logistic_data)
+            if serializer.is_valid(raise_exception=True):
+                serializer.save(product=instance)  # attach product
+           
+            # instance.get_logistics().delete()
+            # Logistics.objects.create(product=instance, **logistic_data)
+        
         # Update product quantity based on stock
         from .utils import update_quantity
         update_quantity(instance)
@@ -262,7 +348,7 @@ class ProductRepresentationMixin:
 
         cat_data = ['category', 'sub_category']
 
-        fields = ["images", "variants_details"]
+        fields = ["images", "variants_details", "logistics_data"]
 
         rating_data = ['average_rating', 'total_reviews']
 
@@ -297,11 +383,17 @@ class BaseProductSerializer(serializers.ModelSerializer):
     """Serializer for the base product model"""
     variants = ProductVariantSerializer(many=True, write_only=True, required=False)
     variants_details = serializers.SerializerMethodField(read_only=True)
+    logistics = LogisticsSerializer(write_only=True, required=False)
+    logistics_data = serializers.SerializerMethodField(read_only=True)
     quantity = serializers.SerializerMethodField()
     
     def get_variants_details(self, obj):
         variant_qs = obj.get_variants() # defined in BaseProduct
         return ProductVariantSerializer(variant_qs, many=True).data
+    
+    def get_logistics_data(self, obj):
+        logistics_qs = obj.get_logistics() # defined in base product
+        return LogisticsSerializer(logistics_qs, many=True).data
 
     def validate_images(self, value):
         if not value:
@@ -568,7 +660,7 @@ class FoodProductSerializer(
     sub_category = serializers.PrimaryKeyRelatedField(
         queryset=SubCategory.objects.all()
     )
-    food_condition = serializers.CharField(required=False)
+    # food_condition = serializers.CharField(required=False)
     condition = serializers.CharField(required=False)
     
     class Meta:
@@ -576,11 +668,11 @@ class FoodProductSerializer(
         fields = '__all__'
         read_only_fields = ['id']
 
-    def validate_food_condition(self, value):
+    def validate_condition(self, value):
         return normalize_choice(value, FoodCondition)
     
-    def validate_condition(self, value):
-        return normalize_choice(value, ProductCondition)
+    # def validate_condition(self, value):
+    #     return normalize_choice(value, ProductCondition)
 
 
 # Dynamic serializer solver (for views)
@@ -620,3 +712,53 @@ class MixedProductSerializer(serializers.Serializer):
             raise serializers.ValidationError(f"No serializer found for model {model_name}")
         
         return serializer_class(instance).data
+    
+
+# class ProductIndexSerializer(serializers.ModelSerializer, ProductRatingMixin):
+#     """Serializer for product index model"""
+#     image = serializers.SerializerMethodField()
+
+#     class Meta:
+#         model = ProductIndex
+#         fields = [
+#             "id", "title", "slug", "price", "image",
+#             "state", "local_govt", "condition",
+#             "category_name", "shop",
+#         ]
+
+#     def get_image(self, instance):
+#         if hasattr(instance, "images"):
+#             first_image = instance.images.first()
+#             return first_image.url if first_image else None
+#         return None
+
+
+
+class ProductIndexSerializer(serializers.ModelSerializer):
+    average_rating = serializers.SerializerMethodField()
+    total_reviews = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductIndex
+        fields = [
+            "id", "title", "slug", "price", "image", "brand",
+            "state", "local_govt", "condition", "description",
+            "category", "sub_category", "shop", "is_published", "specifications",
+            "average_rating", "total_reviews",
+        ]
+
+
+    def get_average_rating(self, instance):
+        product = instance.linked_product
+        if hasattr(product, "reviews"):
+            agg = product.reviews.aggregate(avg=Avg("rating"))
+            return agg["avg"] or 0
+        return 0
+
+    def get_total_reviews(self, instance):
+        product = instance.linked_product
+        if hasattr(product, "reviews"):
+            return product.reviews.count()
+        return 0
+
+
