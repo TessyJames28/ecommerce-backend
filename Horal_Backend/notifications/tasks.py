@@ -12,7 +12,7 @@ def send_notification_email(notification_id):
         send_mail(
             subject=notification.title,
             message=notification.message,
-            from_email="support@yourapp.com",
+            from_email=f"Support <support@{settings.MAILGUN_DOMAIN}>",
             recipient_list=[notification.user.email],
         )
     except Notification.DoesNotExist:
