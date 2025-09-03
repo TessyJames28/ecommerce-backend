@@ -328,7 +328,7 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
         query = Q()
 
         if category:
-            query &= Q(category_name__iexact=category)
+            query &= Q(category__iexact=category)
     
         
         if shop_id:
@@ -430,7 +430,7 @@ class TopSellingProductListView(GenericAPIView, BaseResponseMixin):
             query &= Q(shop__id=shop_id)
 
         if category:
-            query &= Q(category_name__iexact=category)
+            query &= Q(category__iexact=category)
 
         if search_query:
             query &= (
