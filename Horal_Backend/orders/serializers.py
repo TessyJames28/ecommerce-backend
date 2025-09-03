@@ -74,9 +74,9 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'user', 'user_email', 'created_at', 'updated_at', 'status',
-            'total_amount', 'items', 'shipping_address'
+            'product_total', 'shipping_total', 'total_amount', 'items', 'shipping_address'
         ]
-        read_only_fields = ['user', 'total_amount', 'status', 'created_at', 'items', 'user_email']
+        read_only_fields = ['user', 'product_total', 'shipping_cost', 'total_amount', 'status', 'created_at', 'items', 'user_email']
 
     def get_user_email(self, obj):
         return obj.user.email
@@ -138,7 +138,8 @@ class OrderSerializer(serializers.ModelSerializer):
 
         # Update shipping address when provided or changed by timers
         if shipping_address_data:
-            ShippingAddress.objects.update_or_create(
+            print(f"Shipping address data: {shipping_address_data}")
+            shipping_address, _ = ShippingAddress.objects.update_or_create(
                 user=user,
                 defaults=shipping_address_data
             )
@@ -152,7 +153,7 @@ class OrderSerializer(serializers.ModelSerializer):
                 'street_address', 'local_govt', 'landmark',
                 'country', 'state', 'phone_number'
             ]:
-                value = shipping_address_data.get(field)
+                value = getattr(shipping_address, field, None)
                 if value:
                     setattr(instance, field, value) 
             instance.save()
