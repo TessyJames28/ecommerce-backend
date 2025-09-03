@@ -82,16 +82,17 @@ def get_service_token(email, password):
         "password": password,
     }
 
-    response = requests.post(login_url, data=payload)
-    print(f"login response: {response}")
+    session = requests.Session()
+    response = session.post(login_url, json=payload)
 
     if response.status_code == 200:
-        data = response.json().get("data", {})
-        print(f"Data: {data}")
-        # adjust depending on how your login response looks
-        tokens = data.get("tokens", {})
-        print(f"Access token: {tokens.get("access")}")
-        return tokens.get("access")
+        # Access token is stored as a cookie not json
+        access_token = session.cookies.get("access_token")
+
+        if not access_token:
+            raise Exception("No access token cookie found")
+
+        return access_token
 
     raise Exception(f"Failed to get service token: {response.status_code}, {response.text}")
 
@@ -107,7 +108,7 @@ def handle_mailgun_attachments(attachments, msg, type=None):
         password = settings.SUPPORT_PASSWORD
         email = settings.SUPPORT_EMAIL
         token = get_service_token(email, password)
-    print(f"Token: {token}")
+        
     headers = {"Authorization": f"Bearer {token}"}
 
     for key in attachments:
