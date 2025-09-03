@@ -17,6 +17,7 @@ from orders.serializers import OrderSerializer
 from products.utils import update_quantity, IsAdminOrSuperuser
 from django.utils.decorators import method_decorator
 from rest_framework.exceptions import ValidationError
+from users.authentication import CookieTokenAuthentication
 import uuid, os
 from wallet.models import Payout
 
@@ -27,6 +28,8 @@ class InitializeTransaction(APIView):
     """
     class to initialize order payment on paystack
     """
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def post(self, request):
         """Function to handle payment initialization on paystack"""
@@ -114,6 +117,7 @@ class VerifyTransaction(APIView):
     Class to verify paystack transaction if successful
     """
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def get(self, request, reference):
         """Method to verify user payment by admin"""
@@ -175,16 +179,12 @@ def transaction_webhook(request):
     body = request.body
     expected_signature = hmac.new(secret, body, hashlib.sha512).hexdigest()
 
-    if not settings.PAYSTACK_TEST_MODE:
-        print(settings.PAYSTACK_TEST_MODE)
-        if signature != expected_signature:
-            return JsonResponse({
-                "status": "error",
-                "status_code": status.HTTP_400_BAD_REQUEST,
-                "message": "Invalid signature"
-            })
-    else:
-        pass
+    if signature != expected_signature:
+        return JsonResponse({
+            "status": "error",
+            "status_code": status.HTTP_400_BAD_REQUEST,
+            "message": "Invalid signature"
+        })
     
     event = json.loads(body)
     data = event.get('data', {})
@@ -226,11 +226,11 @@ def transaction_webhook(request):
                         variant.reserved_quantity -= item.quantity
                         variant.save()
                         update_quantity(variant.product)
-
                     CartItem.objects.filter(cart__user=order.user).delete()
                     update_order_status(order, Order.Status.PAID)
-            except Exception:
-                pass
+            except Exception as e:
+                raise
+                # pass
     elif event_type == "charge.failed":
         tx.status = PaystackTransaction.StatusChoices.FAILED
         tx.save()
@@ -271,6 +271,7 @@ class RetryRefundView(APIView):
     class to handle refund retry for failed refund cases
     """
     permission_classes = [IsAdminOrSuperuser]
+    authentication_classes = [CookieTokenAuthentication]
 
     def post(self, request):
         """
@@ -340,11 +341,3 @@ class RetryRefundView(APIView):
                 "message": result.get("message", "Refund retry failed")  # extract Paystack error if present
             }, status=status.HTTP_400_BAD_REQUEST)
         
-
-# class Callback(APIView):
-#     def post(self, request):
-#         return Response({
-#             "status": "ok",
-#         })
-
-
