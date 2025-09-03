@@ -17,20 +17,21 @@ class CartView(GenericAPIView, BaseResponseMixin):
 
     def get_cart(self, request):
         """Get or create a cart based on user authentication status"""
+        print(f"User for this cart: {request.user}")
         try:
             if request.user.is_authenticated:
                 cart, _ = Cart.objects.get_or_create(user=request.user)
 
-                # Check if there is an orphaned session cart and merge if needed
-                session_key = request.session.session_key
-                if session_key:
-                    session_cart = Cart.objects.filter(session_key=session_key).first()
-                    if session_cart and session_cart.id != cart.id: # Don't merge is it's the same cart
-                        self._merge_carts(session_cart, cart)
-                        session_cart.delete() # Remove the session cart after merging
+                # # Check if there is an orphaned session cart and merge if needed
+                # session_key = request.session.session_key
+                # if session_key:
+                #     session_cart = Cart.objects.filter(session_key=session_key).first()
+                #     if session_cart and session_cart.id != cart.id: # Don't merge is it's the same cart
+                #         self._merge_carts(session_cart, cart)
+                #         session_cart.delete() # Remove the session cart after merging
 
-                        # Clear the session key reference to avoid stale references
-                        request.session['cart_merged'] = True
+                #         # Clear the session key reference to avoid stale references
+                #         request.session['cart_merged'] = True
                     
                 return cart
             else:
@@ -197,6 +198,7 @@ class CartItemUpdateDeleteView(GenericAPIView, BaseResponseMixin):
     def delete(self, request, item_id, *args, **kwargs):
         """Remove item from the cart"""
         cart_item = self.get_cart_item(request, item_id)
+
         if not cart_item:
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
