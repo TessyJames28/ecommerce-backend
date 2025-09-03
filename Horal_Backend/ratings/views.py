@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from django.db.models import Avg
+from users.authentication import CookieTokenAuthentication
 from .models import UserRating
 from .serializers import UserRatingSerializer
 from products.utils import BaseResponseMixin, IsAdminOrSuperuser
@@ -15,6 +16,7 @@ from products.models import ProductIndex, ProductVariant
 
 class UserRatingCreateView(GenericAPIView, BaseResponseMixin):
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = UserRatingSerializer
 
     def post(self, request, product_id, *args, **kwargs):
@@ -123,6 +125,7 @@ class ProductReviewUpdateDeleteView(GenericAPIView, BaseResponseMixin):
     """
     serializer_class = UserRatingSerializer
     permission_classes = [IsAdminOrSuperuser]
+    authentication_classes = [CookieTokenAuthentication]
 
     def put(self, request, *args, **kwargs):
         """Update feature for user review"""
