@@ -9,7 +9,7 @@ def send_support_email(to_email, subject, body, ticket_type=None, attachment=Non
     if ticket_type == "support":
         from_email = f"Support <support@{settings.MAILGUN_DOMAIN}>"
     elif ticket_type == "returns":
-        f"Returns <returns@{settings.MAILGUN_DOMAIN}>",
+        from_email = f"Returns <returns@{settings.MAILGUN_DOMAIN}>",
     data = {
         "from": from_email,
         "to": [to_email],
