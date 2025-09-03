@@ -27,7 +27,7 @@ class OrderStatusLog(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Order {self.order.id}: {self.old_status} → {self.new_status} by {self.changed_by}"
+        return f"Order {self.object_id}: {self.old_status} → {self.new_status} by {self.changed_by}"
 
 
 class PaystackTransaction(models.Model):
