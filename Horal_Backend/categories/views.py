@@ -8,8 +8,11 @@ from categories.models import Category
 from .serializers import CategorySerializer
 from products.utils import (
     IsAdminOrSuperuser, BaseResponseMixin,
-    StandardResultsSetPagination
+    StandardResultsSetPagination, CATEGORY_MODEL_MAP
 )
+from products.models import ProductIndex
+from products.serializers import ProductIndexSerializer
+from users.authentication import CookieTokenAuthentication
 from products.serializers import get_product_serializer
 
 # Create your views here.
@@ -39,6 +42,7 @@ class CategoryCreateView(GenericAPIView, BaseResponseMixin):
     API endpoint to list all categories or create a new one
     """
     serializer_class = CategorySerializer
+    authentication_classes = [CookieTokenAuthentication]
     queryset = Category.objects.all()
 
     def get_permissions(self):
@@ -66,6 +70,7 @@ class CategoryDetailView(GenericAPIView, BaseResponseMixin):
     and list all products in that category.
     """
     serializer_class = CategorySerializer
+    authentication_classes = [CookieTokenAuthentication]
     queryset = Category.objects.all()
 
     def get_permissions(self):
@@ -128,14 +133,15 @@ class SingleCategoryDetailView(GenericAPIView, BaseResponseMixin):
 
 
         # Get the product model for this category
-        product_model = self.get_product_model_by_category(category.name)
-        products = product_model.published.filter(
-            category=category) if product_model else []
+        # product_model = self.get_product_model_by_category(category.name)
+        # products = product_model.published.filter(
+        #     category=category) if product_model else []
+        products = ProductIndex.objects.filter(category=category.name)
         
         # Paginate the product queryset
         page = self.paginate_queryset(products)
         if page is not None:
-            product_serializer = get_product_serializer(category.name)(page, many=True)
+            product_serializer = ProductIndexSerializer(page, many=True)
             paginated_response = self.get_paginated_response(product_serializer.data)
             paginated_response.data["category"] = category_serializer.data
             paginated_response.data["status"] = "success"
@@ -144,7 +150,7 @@ class SingleCategoryDetailView(GenericAPIView, BaseResponseMixin):
         
             return paginated_response
     
-        product_serializer = get_product_serializer(category.name)(products, many=True)
+        product_serializer = ProductIndexSerializer(products, many=True)
         
         response_data = {
             'category': category_serializer.data,
