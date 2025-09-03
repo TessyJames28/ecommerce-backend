@@ -11,10 +11,13 @@ from payment.views import trigger_refund
 from payment.models import PaystackTransaction, OrderStatusLog
 from payment.utils import update_order_status
 from users.models import CustomUser
-from .utils import approve_return
+from .discounts import apply_coupon_discount
+from .utils import approve_return, create_shipments_for_order, get_consistent_checkout_payload
 from .models import Order, OrderItem
 from .serializers import OrderReturnRequest, OrderSerializer, OrderReturnRequestSerializer
 from carts.models import Cart
+from users.authentication import CookieTokenAuthentication
+from logistics.utils import calculate_shipping_for_order
 from products.utils import BaseResponseMixin, update_quantity
 from django.utils.timezone import now
 from support.serializers import MessageSerializer
@@ -29,6 +32,7 @@ import re
 class CheckoutView(GenericAPIView, BaseResponseMixin):
     """Checkout cart and place order (status: pending)"""
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = OrderSerializer
 
     def get_queryset(self):
@@ -40,6 +44,7 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
         Post method to create an order based on user's cart
         """
         user = request.user
+        print(f"Checkout user: {user}")
         cart = Cart.objects.filter(user=user).first()
 
         if not cart or not cart.cart_item.exists():
@@ -50,34 +55,42 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
         
         try:
             with transaction.atomic():
-                existing_order = Order.objects.filter(user=user, status=Order.Status.PENDING).first()
-                if existing_order:
-                    serializer = self.get_serializer(existing_order)
-                    return self.get_response(
-                        status.HTTP_200_OK,
-                        "You already have a pending order",
-                        serializer.data
+                # Instead of getting existing order, recreate the order to allow
+                # users to remove item from cart if them choose maybe because of shipping cost
+                # WIthout them abandoning the order
+                order = Order.objects.filter(user=user, status=Order.Status.PENDING).first()
+                print(f"Order: {order}")
+                if not order:   
+                    print("Entered here")     
+                    # If no existing order, continue creating one and calculate total
+                    total = cart.total_price
+                    address = None
+                    if hasattr(user, 'shipping_address'):
+                        address = user.shipping_address
+                    print("Before creating order")
+                    order, created = Order.objects.update_or_create(
+                        user=user,
+                        status="pending",
+                        defaults={
+                            "product_total": total,
+                            "total_amount": total,
+                            "street_address": address.street_address if address else None,
+                            "local_govt": address.local_govt if address else None,
+                            "landmark": address.landmark if address else None,
+                            "country": address.country if address else None,
+                            "state": address.state if address else None,
+                            "phone_number": address.phone_number if address else None,
+                            "created_at": now()
+                        }
                     )
+                    print("Order created")
+                    update_order_status(order, Order.Status.PENDING, user, force=True)
+                    print("Order updated")
+                # Clear existing order items to resync with cart
+                order.order_items.all().delete()
+                print(f"Order item deleted")
 
-                # If no existing order, continue creating one and calculate total
-                total = cart.total_price
-                address = None
-                if hasattr(user, 'shipping_address'):
-                    address = user.shipping_address
-
-                order, created = Order.objects.update_or_create(
-                    user=user,
-                    total_amount=total,
-                    street_address=address.street_address if address else None,
-                    local_govt=address.local_govt if address else None,
-                    landmark=address.landmark if address else None,
-                    country=address.country if address else None,
-                    state=address.state if address else None,
-                    phone_number=address.phone_number if address else None,
-                    created_at=now()  # Ensure created_at is set
-                )
-                update_order_status(order, Order.Status.PENDING, user, force=True)
-            
+                # Add order items
                 for item in cart.cart_item.all():
                     variant = item.variant
 
@@ -98,14 +111,70 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                         quantity=item.quantity,
                         unit_price=item.variant.price_override or item.variant.product.price,
                     )
+                    print("Order Item created")
 
-                serializer = self.get_serializer(order)
+                #--------------------
+                # Create shipment first
+                #--------------------
+                # Clear old shipments if this a re-checkout
+                order.shipments.all().delete()
+                shipments = create_shipments_for_order(order)
+                print(f"Shipment for order: {shipments}")
+
+                #--------------------
+                # Calculate shipping
+                #--------------------
+                has_address = all([order.street_address, order.state, order.local_govt])
+                shipping_total, items = (0, [])
+
+                # Only calculate shipping if we have a full address
+                if has_address:
+                    shipping_total, items = calculate_shipping_for_order(order)
+                product_total = sum(
+                    i.unit_price * i.quantity for i in order.order_items.all()
+                )
+                grand_total = product_total + shipping_total
+
+                # Save them to DB
+                order.product_total = product_total
+                order.shipping_total = shipping_total
+                order.total_amount = grand_total
+                order.save(update_fields=["product_total", "shipping_total", "total_amount", "discount_applied"])
+                if order.discount_applied:
+                    apply_coupon_discount(order)
+
+                # Get consistent order payload  
+                print("Before calling consistent payload")              
+                shipments = get_consistent_checkout_payload(order)
 
                 return self.get_response(
                     status.HTTP_201_CREATED,
-                    "Order placed, Awaiting payment",
-                    serializer.data
+                    "Order placed and shipping cost calculated",
+                    {
+                        "order_id": str(order.id),
+                        "user_email": order.user.email,
+                        "shipments": shipments,
+                        "product_total": str(order.product_total),
+                        "shipping_total": str(order.shipping_total),
+                        "total_amount": str(order.total_amount),
+                        "address": {
+                            "street": order.street_address,
+                            "local_govt": order.local_govt,
+                            "state": order.state,
+                            "country": order.country,
+                            "phone_number": order.phone_number,
+                        },
+                    },
                 )
+                # else:
+                #     serializer = self.get_serializer(order)
+
+                #     return self.get_response(
+                #         status.HTTP_201_CREATED,
+                #         "Order placed, Awaiting payment",
+                #         serializer.data
+                #     )
+                
         except ValidationError as e:
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
@@ -119,8 +188,10 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                 str(e)
             )
         
+
     def put(self, request, *args, **kwargs):
         """Partial updates for user address during checkout"""
+        print(f"User updating shipping address: {request.user}")
         order = self.get_queryset().first()
 
         if not order:
@@ -132,12 +203,116 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
         serializer = self.get_serializer(order, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        print("About to calculate shipping cost")
+        shipping_total, items = calculate_shipping_for_order(order)
+        print(f"Calculated shipping cost:\n\tShipping Total: {shipping_total}\n\tItems: {items}")
+        product_total = sum(i.unit_price * i.quantity for i in order.order_items.all())
+        grand_total = product_total + shipping_total
+        
+        # Save them to DB
+        order.product_total = product_total
+        order.shipping_total = shipping_total
+        order.total_amount = grand_total
+        order.save(update_fields=["product_total", "shipping_total", "total_amount"])
+        
+        if order.discount_applied:
+            apply_coupon_discount(order)
+
+        # Get consistent order payload                
+        shipments = get_consistent_checkout_payload(order)
 
         return self.get_response(
-            status.HTTP_200_OK,
-            "Shipping address updated successfully",
-            serializer.data
+            status.HTTP_201_CREATED,
+            "Shipping address updated successfully and shipping cost recalculated",
+            {
+                "order_id": str(order.id),
+                "user_email": order.user.email,
+                "shipments": shipments,
+                "product_total": str(order.product_total),
+                "shipping_total": str(order.shipping_total),
+                "total_amount": str(order.total_amount),
+                "address": {
+                    "street": order.street_address,
+                    "local_govt": order.local_govt,
+                    "state": order.state,
+                    "country": order.country,
+                    "phone_number": order.phone_number,
+                },
+            },
         )
+
+
+    def patch(self, request, *args, **kwargs):
+        """
+        Apply a coupon or discount to the order total (product cost only).
+        Example: Deduct 3000 from the product total.
+        """
+        user = request.user
+        order = self.get_queryset().first()
+        if not order:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "No pending order found for coupon application"
+            )
+        
+        # Check is the user already has a paid order
+        has_previous_order = Order.objects.filter(
+            user=user, status='paid'
+        ).exists()
+
+        if has_previous_order:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Discount only applies to first-time buyers"
+            ) 
+        
+        if order.discount_applied:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Discount already applied for this order"
+            )
+        
+        discount_amount = 3000
+
+        # Called to get the item for consistency
+        _, items = calculate_shipping_for_order(order)
+
+        try:
+            order = apply_coupon_discount(order, discount_amount)
+            
+            # Get consistent order payload                
+            shipments = get_consistent_checkout_payload(order)
+
+            return self.get_response(
+                status.HTTP_201_CREATED,
+                "Coupon applied successfully to total product amount",
+                {
+                    "order_id": str(order.id),
+                    "user_email": order.user.email,
+                    "shipments": shipments,
+                    "product_total": str(order.product_total),
+                    "shipping_total": str(order.shipping_total),
+                    "total_amount": str(order.total_amount),
+                    "address": {
+                        "street": order.street_address,
+                        "local_govt": order.local_govt,
+                        "state": order.state,
+                        "country": order.country,
+                        "phone_number": order.phone_number,
+                    },
+                },
+            )
+        except ValueError as e:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                str(e)
+            )
+        except Exception as e:
+            print(e)
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                str(e)
+            )
 
 
 class OrderDeleteView(GenericAPIView):
@@ -145,6 +320,8 @@ class OrderDeleteView(GenericAPIView):
     class to handle the delete view for order
     and reset reserved quantities
     """
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def delete(self, request, *args, **kwargs):
         order_id = self.kwargs.get('pk')
@@ -182,6 +359,7 @@ class OrderDeleteView(GenericAPIView):
 class AdminAllOrderView(GenericAPIView, BaseResponseMixin):
     """Class to handle the retrieval of all orders"""
     permission_classes = [IsSuperAdminPermission]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = OrderSerializer
 
     def get(self, request):
@@ -199,6 +377,7 @@ class AdminAllOrderView(GenericAPIView, BaseResponseMixin):
 class UserOrderListView(GenericAPIView, BaseResponseMixin):
     """List all order from a single user"""
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = OrderSerializer
 
     def get(self, request):
@@ -215,6 +394,7 @@ class UserOrderListView(GenericAPIView, BaseResponseMixin):
 class OrderDetailView(GenericAPIView, BaseResponseMixin):
     """Class to view order details"""
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = OrderSerializer
 
     def get(self, request, order_id):
@@ -237,6 +417,7 @@ class OrderReturnRequestView(GenericAPIView, BaseResponseMixin):
     For order cancellation and request for a refund
     """
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = OrderReturnRequestSerializer
 
     def post(self, request, *args, **kwargs):
@@ -266,11 +447,11 @@ class OrderReturnRequestView(GenericAPIView, BaseResponseMixin):
             )
        #=============================Commented out for testing========================== 
         # Check if the order has been paid for
-        # if order_item.order.status != Order.Status.DELIVERED:
-        #     return self.get_response(
-        #         status.HTTP_400_BAD_REQUEST,
-        #         "Only delivered orders can be returned"
-        #     )
+        if order_item.order.status != Order.Status.DELIVERED:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Only delivered orders can be returned"
+            )
         
         # Check to prevent duplicate request
         if OrderReturnRequest.objects.filter(order_item=order_item).exists():
@@ -309,6 +490,7 @@ class ApproveReturnView(APIView, BaseResponseMixin):
     Class to allow admin or superuser to approve return request
     """
     permission_classes = [IsAdminUser]
+    authentication_classes = [CookieTokenAuthentication]
 
 
     def patch(self, request):
@@ -383,6 +565,7 @@ class RejectReturnView(APIView, BaseResponseMixin):
     Class to allow admin or superuser to reject return request
     """
     permission_classes = [IsAdminUser]
+    authentication_classes = [CookieTokenAuthentication]
 
 
     def patch(self, request):
