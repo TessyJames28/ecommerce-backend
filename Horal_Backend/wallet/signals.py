@@ -4,6 +4,8 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.conf import settings
 from django.utils.timezone import now
+from notifications.tasks import send_email_task
+from django.conf import settings
 import uuid
 
 
@@ -105,3 +107,26 @@ def payout_transaction(sender, instance, created, **kwargs):
             transaction_type=SellerTransactionHistory.TransactionType.WITHDRAWAL,
             transaction_status=SellerTransactionHistory.TransactionStatus.PENDING
         )
+
+
+@receiver(post_save, sender=Payout)
+def notify_seller_of_initiated_withdrawal(sender, instance, **kwargs):
+    """
+    Signal to send email to seller after initiating withdrawal
+    """
+    if instance.status != Payout.StatusChoices.PROCESSING:
+        return
+    
+    recipient = instance.seller.email
+    amount = instance.amount_naira
+    seller_name = instance.seller.full_name
+    subject = "Congratulations on Successful Withdrawal"
+    body = f"Hello {seller_name}\n\nCongratulation on successful withdrawal\n\n" \
+            f"Your withdrawal {amount} is underway and you will receive it within 48hours\n\n" \
+            f"Happy selling on Horal!"
+    from_email = f"Horal Wallet <{settings.DEFAULT_FROM_EMAIL}>"
+
+    send_email_task.delay(recipient, subject, body, from_email)
+
+    # Mark as sent
+    Payout.objects.filter(id=instance.id).update(email_sent=True)
