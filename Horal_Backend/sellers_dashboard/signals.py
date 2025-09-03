@@ -34,10 +34,9 @@ def update_raw_sales(sender, instance, **kwargs):
     Signal to populate raw order model once an order is paid for
     Will skip if RawSale already exists for that order
     """
-    status_req = ["paid", "shipped", "at_pick_up", "delivered"]
     order = instance.order
     
-    if order.status not in status_req:
+    if order.status != Order.Status.PAID:
         return
     
     # Avoid duplicating entries if already populated
