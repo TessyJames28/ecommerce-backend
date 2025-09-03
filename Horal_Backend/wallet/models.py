@@ -58,6 +58,7 @@ class Payout(models.Model):
     paystack_transfer_code = models.CharField(max_length=100, blank=True, null=True)
     retry_count = models.SmallIntegerField(default=0)
     last_retry_at = models.DateTimeField(null=True, blank=True)
+    email_sent = models.BooleanField(default=False)
     status = models.CharField(max_length=20, choices=StatusChoices.choices, default=StatusChoices.PROCESSING)
     reason = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(default=now)
