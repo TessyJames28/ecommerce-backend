@@ -72,7 +72,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         if password:
             user = instance.user
             user.set_password(password)
-            user.save()
+            user.save(update_fields=['password'])
             user.refresh_from_db()
 
         return instance
