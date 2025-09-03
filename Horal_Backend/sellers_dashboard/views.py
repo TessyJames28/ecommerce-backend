@@ -12,6 +12,7 @@ from .serializers import (
     SellerProductOrdersSerializer,
     SellerProfileSerializer,
 )
+from users.authentication import CookieTokenAuthentication
 from .utils import (
     get_return_order,
     get_rolling_topselling_products,
@@ -40,6 +41,7 @@ class SellerProductRatingView(GenericAPIView, BaseResponseMixin):
     """
     serializer_class = SellerProductRatingsSerializer
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def get(self, request, *args, **kwargs):
         """
@@ -98,6 +100,7 @@ class SellerOrderListView(GenericAPIView, BaseResponseMixin):
     """
     serializer_class = SellerProductOrdersSerializer
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def get(self, request, *args, **kwargs):
         """
@@ -179,6 +182,7 @@ class SellerProfileView(GenericAPIView):
     View to retrieve the complete seller profile
     """
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = SellerProfileSerializer
 
     def get_profile(self):
@@ -226,6 +230,7 @@ class SellerDashboardAnalyticsAPIView(APIView, BaseResponseMixin):
     analytics
     """
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
 
     def get(self, request, *args, **kwargs):
@@ -294,6 +299,7 @@ class TopSellingProductsAPIView(APIView, BaseResponseMixin):
     Can be filtered by recent and oldest
     """
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
 
     def get(self, request, *args, **kwargs):
