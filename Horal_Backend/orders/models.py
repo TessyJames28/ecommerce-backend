@@ -2,6 +2,7 @@ from django.db import models
 from users.models import CustomUser, phone_number_validator
 from products.models import ProductVariant
 from carts.models import Cart
+from sellers.models import SellerKYC
 import uuid
 from .utils import generate_reference
 
@@ -27,15 +28,18 @@ class Order(ShippingSnapshotMixin, models.Model):
         PAID = "paid", "Paid"
         FAILED = "failed", "Failed"
         CANCELLED = "cancelled", "Cancelled"
-        SHIPPED = "shipped", "Shipped"
-        AT_PICK_UP= "at_pick_up", "At_Pick_Up"
-        DELIVERED = "delivered", "Delivered"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='orders')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
-    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    discount_applied = models.BooleanField(default=False)
+    
+    # Financial fields
+    product_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)  # product_total + shipping_cost
+    shipping_total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
     status = models.CharField(max_length=50, choices=Status.choices, default=Status.PENDING)
 
     def __str__(self):
@@ -46,18 +50,64 @@ class Order(ShippingSnapshotMixin, models.Model):
         return Cart.objects.filter(user=self.user).first()
     
 
+
+class OrderShipment(models.Model):
+    """Represents a single shipment from a seller containing one or more order items."""
+
+    class Status(models.TextChoices):
+        """Enum for order status"""
+        SHIPMENT_INITIATED = "shipment_initiated", "Shipment Initiated"
+        SHIPMENT_CREATED = "shipment_created", "Shipment Created (CRT)"
+        SHIPMENT_CREATED_BY_CUSTOMER = "shipment_created_by_customer", "Shipment Created by Customer (MCRT)"
+        AVAILABLE_FOR_PICKUP = "available_for_pickup", "Available for Pick-Up (AD)"
+        SHIPMENT_PICKED_UP = "shipment_picked_up", "Shipment Picked Up (MPIK)"
+        SHIPMENT_ARRIVED_FINAL_DESTINATION = "shipment_arrived_final_destination", "Shipment Arrived Final Destination (MAFD)"
+        OUT_FOR_DELIVERY = "out_for_delivery", "Out for Delivery / With Courier (OFDU)"
+        DELIVERED_TO_CUSTOMER_ADDRESS = "delivered_to_customer_address", "Delivered to Customer Address (MAHD)"
+        DELIVERED_TO_PICKUP_POINT = "delivered_to_pickup_point", "Delivered to Pickup Point (OKC)"
+        DELIVERED_TO_TERMINAL = "delivered_to_terminal", "Delivered to Terminal (OKT)"
+        DELAYED_DELIVERY = "delayed_delivery", "Delayed Delivery (DLD)"
+        DELAYED_PICKUP = "delayed_pickup", "Delayed Pickup (DLP)"
+        DELAYED_PICKUP_BY_CUSTOMER = "delayed_pickup_by_customer", "Delayed Pickup By Customer"
+
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="shipments")
+    seller = models.ForeignKey(SellerKYC, on_delete=models.CASCADE, related_name="shipments")
+    tracking_number = models.CharField(max_length=50, null=True, blank=True)
+    status = models.CharField(max_length=50, choices=Status.choices, null=True, blank=True)
+    quantity = models.PositiveIntegerField(null=True, blank=True)
+    total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_weight = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+
+    # Set delivery and pickup stations
+    # seller_station = models.PositiveIntegerField()
+    # buyer_station = models.PositiveIntegerField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Shipment #{self.id} for Order {self.order.id}"
+
+    
+
 class OrderItem(models.Model):
     """Model that represent each variant ordered in the order"""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='order_items')
     variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE)
+    shipment = models.ForeignKey(OrderShipment, on_delete=models.CASCADE, related_name="items", null=True, blank=True)
     quantity = models.PositiveIntegerField()
     is_returned = models.BooleanField(default=False)
     is_return_requested = models.BooleanField(default=False)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     is_completed = models.BooleanField(default=False)
     delivered_at = models.DateTimeField(null=True, blank=True)
+    
 
     @property
     def total_price(self):
@@ -66,6 +116,7 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.variant} X {self.quantity}"
+        
     
 
 class OrderReturnRequest(models.Model):
@@ -119,3 +170,39 @@ class OrderReturnRequest(models.Model):
             order_item.is_returned = True
 
         order_item.save(update_fields=["is_return_requested", "is_returned"])
+
+
+GIGL_TO_ORDER_STATUS = {
+    'CRT': OrderShipment.Status.SHIPMENT_CREATED,
+    'MCRT': OrderShipment.Status.SHIPMENT_CREATED_BY_CUSTOMER,
+    'AD': OrderShipment.Status.AVAILABLE_FOR_PICKUP,
+    'MPIK': OrderShipment.Status.SHIPMENT_PICKED_UP,
+    'OFDU': OrderShipment.Status.OUT_FOR_DELIVERY,
+    'MAFD': OrderShipment.Status.SHIPMENT_ARRIVED_FINAL_DESTINATION,
+    'MAHD': OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
+    'OKC': OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
+    'OKT': OrderShipment.Status.DELIVERED_TO_TERMINAL,
+    'DLD': OrderShipment.Status.DELAYED_DELIVERY,
+    'DLP': OrderShipment.Status.DELAYED_PICKUP,
+    'DUBC': OrderShipment.Status.DELAYED_PICKUP_BY_CUSTOMER
+}
+
+
+PICKUP_STATUSES = [
+    OrderShipment.Status.AVAILABLE_FOR_PICKUP,
+]
+
+DELIVERED_STATUSES = [
+    OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
+    OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
+    OrderShipment.Status.DELIVERED_TO_TERMINAL,
+]
+
+DELAY_STATUSES = [
+    OrderShipment.Status.DELAYED_DELIVERY,
+]
+
+DELAY_STATUSES_CUSTOMER = [
+    OrderShipment.Status.DELAYED_PICKUP,
+    OrderShipment.Status.DELAYED_PICKUP_BY_CUSTOMER,
+]
