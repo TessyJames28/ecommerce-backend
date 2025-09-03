@@ -18,6 +18,7 @@ from users.serializers import (
     LocationSerializer,
     RegistrationOTPVerificationSerializer,
 )
+from .authentication import CookieTokenAuthentication
 from django.core.cache import cache
 from rest_framework.response import Response
 from rest_framework import status
@@ -30,8 +31,15 @@ from notifications.utils import (
     safe_cache_set, safe_cache_get
 )
 from notifications.emails import send_otp_email
+from rest_framework_simplejwt.views import TokenRefreshView
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.http import JsonResponse
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class RegisterUserView(GenericAPIView):
     """API endpoint to register users"""
     queryset = CustomUser.objects.all()
@@ -62,6 +70,7 @@ class RegisterUserView(GenericAPIView):
         }, status=status.HTTP_200_OK)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ConfirmRegistrationOTPView(GenericAPIView):
     """
     Confirms user otp and registers new user
@@ -131,16 +140,43 @@ class ConfirmRegistrationOTPView(GenericAPIView):
                 "is_superuser": user.is_superuser,
                 "is_seller": user.is_seller,
                 "is_active": user.is_active,
-                "token": {
-                    "access": tokens["access"],
-                    "refresh": tokens["refresh"],
-                }
             }
         }
 
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        # Determine platform (pass from frontend)
+        platform = request.data.get("platform", "web")  # default to web
+
+        if platform.lower() == "mobile":
+            # Include tokens in response body for mobile
+            response_data["data"]["tokens"] = {
+                "access": tokens["access"],
+                "refresh": tokens["refresh"],
+            }
+
+        # Create response object
+        response = Response(response_data, status=status.HTTP_201_CREATED)
+        # set HttpOnly cookies
+        response.set_cookie(
+            key="access_token",
+            value=tokens["access"],
+            httponly=True,
+            secure=False, # Use True in production (HTTPS)
+            samesite="Strict"
+        )
+        
+        response.set_cookie(
+            key="refresh_token",
+            value=tokens["refresh"],
+            httponly=True,
+            secure=False, # Use True in production (HTTPS)
+            samesite="Strict"
+        )
+        print("ACCESS TOKEN COOKIE:", request.COOKIES.get("access_token"))
+
+        return response
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UserLoginView(GenericAPIView):
     """API endpoint for user login"""
     queryset = CustomUser.objects.all()
@@ -174,20 +210,47 @@ class UserLoginView(GenericAPIView):
                 "is_superuser": user.is_superuser,
                 "is_seller": user.is_seller,
                 "is_active": user.is_active,
-                'tokens': {
-                    "access": serializer.get_access_token(user),
-                    "refresh": serializer.get_refresh_token(user)
-                }
             }
         }
+
+        # Determine platform (pass from frontend)
+        platform = request.data.get("platform", "web")  # default to web
+
+        if platform.lower() == "mobile":
+            # Include tokens in response body for mobile
+            response_data["data"]["tokens"] = {
+                "access": serializer.get_access_token(user),
+                "refresh": serializer.get_refresh_token(user),
+            }
+
+        # Create response object
+        response = Response(response_data, status=status.HTTP_200_OK)
+
+        # set HttpOnly cookies
+        response.set_cookie(
+            key="access_token",
+            value=serializer.get_access_token(user),
+            httponly=True,
+            secure=False, # Use True in production (HTTPS)
+            samesite="Strict"
+        )
+
+        response.set_cookie(
+            key="refresh_token",
+            value=serializer.get_refresh_token(user),
+            httponly=True,
+            secure=False, # Use True in production (HTTPS)
+            samesite="Strict"
+        )
+        print("ACCESS TOKEN COOKIE:", request.COOKIES.get("access_token"))
         
         # Manually send log in signal
         user_logged_in.send(sender=user.__class__, request=request, user=user)
 
-        return Response(response_data, status=status.HTTP_200_OK)
+        return response
     
 
-
+@method_decorator(csrf_exempt, name='dispatch')
 class GoogleLoginView(GenericAPIView):
     """Handles google login by accepting token_id from the frontend"""
     serializer_class = LoginSerializer
@@ -245,11 +308,11 @@ class GoogleLoginView(GenericAPIView):
         """Override the post method to handle Google login"""
         
         token_id = request.data.get('token_id')
-        refresh_token = request.data.get('refresh_token')
+        refresh_token = request.data.get('refresh_token', "")
         platform = request.data.get('platform') # "web" or "mobile"
         
-        if not token_id and not refresh_token:
-            return Response({"error": "Token ID or Refresh Token is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not token_id:
+            return Response({"error": "Token ID is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         if platform == "mobile":
             client_id = settings.GOOGLE_OAUTH['MOBILE_CLIENT_ID']
@@ -259,7 +322,7 @@ class GoogleLoginView(GenericAPIView):
         if token_id:
             try:
                 # Verify the token using Google's API
-                id_info = verify_google_token(token_id, refresh_token, client_id)
+                id_info = verify_google_token(token_id, client_id)
                             
                 email = id_info['email']
                 full_name = id_info['name']
@@ -293,20 +356,45 @@ class GoogleLoginView(GenericAPIView):
                         "is_superuser": user.is_superuser,
                         "is_seller": user.is_seller,
                         "is_active": user.is_active,
-                        'tokens': {
-                            "access": serializer.get_access_token(user),
-                            "refresh": serializer.get_refresh_token(user)
-                        }
                     }
                 }
 
-                # include the refresh token in the response if available
-                if refresh_token:
-                    response_data['data']['google_tokens'] = {
-                        "token_id": id_info.pop('refreshed_token', None)
+                # Determine platform (pass from frontend)
+                platform = request.data.get("platform", "web")  # default to web
+
+                if platform.lower() == "mobile":
+                    # Include tokens in response body for mobile
+                    response_data["data"]["tokens"] = {
+                        "access": serializer.get_access_token(user),
+                        "refresh": serializer.get_refresh_token(user),
                     }
 
-                return Response(response_data, status=status.HTTP_200_OK)
+                # Create response object
+                response = Response(response_data, status=status.HTTP_200_OK)
+
+                # set HttpOnly cookies
+                response.set_cookie(
+                    key="access_token",
+                    value=serializer.get_access_token(user),
+                    httponly=True,
+                    secure=False, # Use True in production (HTTPS)
+                    samesite="Strict"
+                )
+
+                response.set_cookie(
+                    key="refresh_token",
+                    value=serializer.get_refresh_token(user),
+                    httponly=True,
+                    secure=False, # Use True in production (HTTPS)
+                    samesite="Strict"
+                )
+
+                # Save refresh token in the DB
+                if refresh_token:
+                    user.google_refresh_token = refresh_token
+                    user.save(update_fields=["google_refresh_token"])
+
+                return response
 
             except ValueError as e:
                 return Response({
@@ -322,21 +410,19 @@ class UserLogoutView(GenericAPIView):
     serializer_class = LogoutSerializer
 
     def post(self, request, *args, **kwargs):
-        """Override the post method to handle user logout"""
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            
-            return Response({
-                "status": "success",
-                "status_code": status.HTTP_200_OK,
-                "message": "Logout successful"
-            }, status=status.HTTP_200_OK)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        """Override the post method to handle user logout"""            
+        response = Response({
+            "status": "success",
+            "status_code": status.HTTP_200_OK,
+            "message": "Logout successful"
+        }, status=status.HTTP_200_OK)
+        response.delete_cookie("access_token")
+        response.delete_cookie("refresh_token")
+
+        return response
 
 
-
+@method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetRequestView(GenericAPIView):
     """API endpoint for password reset request"""
     serializer_class = PasswordResetRequestSerializer
@@ -366,6 +452,7 @@ class PasswordResetRequestView(GenericAPIView):
         }, status=status.HTTP_200_OK)
     
 
+@method_decorator(csrf_exempt, name='dispatch')
 class VerifyOTPView(GenericAPIView):
     """API endpoint for verifying OTP"""
     serializer_class = OTPVerificationSerializer
@@ -385,6 +472,7 @@ class VerifyOTPView(GenericAPIView):
         }, status=status.HTTP_200_OK)
     
 
+@method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetConfirmView(GenericAPIView):
     """API endpoint for confirming password reset"""
     serializer_class = PasswordResetConfirmSerializer
@@ -423,7 +511,7 @@ class CreateLocationView(GenericAPIView):
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        location = serializer.save(user=request.user)
+        serializer.save(user=request.user)
 
         response_data = {
             "status": "success",
@@ -439,6 +527,7 @@ class LocationUpdateDeleteView(GenericAPIView):
     """View endpoint to handle user location update and deletion"""
     serializer_class = LocationSerializer
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     queryset = Location.objects.all()
 
 
@@ -508,6 +597,7 @@ class SingleLocationView(GenericAPIView):
     """View endpoint to handle single user location view"""
     serializer_class = LocationSerializer
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     queryset = Location.objects.all()
 
     def get(self, request, pk, *args, **kwargs):
@@ -538,3 +628,60 @@ class SingleLocationView(GenericAPIView):
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
+
+
+class CookieTokenRefreshView(TokenRefreshView):
+    """Class to handle the refreshing of jwt token"""
+    serializer_class = TokenRefreshSerializer
+
+    def post(self, request, *args, **kwargs):
+        """
+        JWT token to be refreshed are gotten from
+        The cookie where it's set
+        """
+        # Pull refresh token from cookies
+        refresh_token = request.COOKIES.get("refresh_token")
+
+        if not refresh_token:
+            return Response({"detail": "Refresh token missing"}, status=401)
+        
+        # Inject into request data for serializer
+        request.data._mutable = True # Temporary make data mutable
+        request.data["refresh"] = refresh_token
+        request.data._mutable = False
+
+        response = super().post(request, *args, **kwargs)
+        access = request.data.get("access")
+        refresh = request.data.get("refersh")
+
+        # Clear response body tokens => optional
+        response.data = {"detail", "Token refreshed"}
+
+        # Set new access token cookie
+        response.set_cookie(
+            key="access_token",
+            value=access,
+            httponly=True,
+            secure=False,
+            samesite="Strict",
+        )
+
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh,
+            httponly=True,
+            secure=False,
+            samesite="Strict",
+        )
+
+        return response
+    
+
+@ensure_csrf_cookie
+def get_csrf_token(request):
+    """
+    View that sets and returns a CSRF token in JSON.
+    Frontend should call this endpoint first to get the token.
+    """
+    return JsonResponse({"csrfToken": request.META.get("CSRF_COOKIE")})
+

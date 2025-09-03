@@ -11,6 +11,8 @@ from .views import(
     SingleLocationView,
     LocationUpdateDeleteView,
     ConfirmRegistrationOTPView,
+    CookieTokenRefreshView,
+    get_csrf_token,
 )
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from django.conf import settings
@@ -22,14 +24,15 @@ urlpatterns = [
     path("google-login/", GoogleLoginView.as_view(), name="google_login"),
     path("logout/", UserLogoutView.as_view(), name="logout"),
     path("token/verify/", TokenVerifyView.as_view(), name="token_verify"),
-    path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("token/refresh/", CookieTokenRefreshView.as_view(), name="token_refresh"),
     path('password-reset/request/', PasswordResetRequestView.as_view(), name='password-reset-request'),
     path('password-reset/verify-otp/', VerifyOTPView.as_view(), name='password-reset-verify-otp'),
     path('password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
     path('location/add/', CreateLocationView.as_view(), name="user_location"),
     path('location/<uuid:pk>/view/', SingleLocationView.as_view(), name="single_user_location"),
     path('location/<uuid:pk>/', LocationUpdateDeleteView.as_view(), name="location_update_delete"),
-
+    path('get-csrf-token/', get_csrf_token, name="get-csrf-token"),
+    
 ]
 
 
