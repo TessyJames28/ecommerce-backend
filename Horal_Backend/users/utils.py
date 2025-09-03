@@ -7,6 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 import requests
 from rest_framework_simplejwt.tokens import RefreshToken
+from jwt import decode as jwt_decode
 
 
 def refresh_google_token(refresh_token, client_id):
@@ -48,7 +49,7 @@ def refresh_google_token(refresh_token, client_id):
         return None
     
 
-def verify_google_token(token_id, refresh_token, client_id):
+def verify_google_token(token_id, client_id):
     """Verify the Google token ID and refresh token."""
     print("Verifying Google token...")
     try:
@@ -62,9 +63,29 @@ def verify_google_token(token_id, refresh_token, client_id):
         return id_info
     except ValueError as e:
         print(f"Token expired or invalid, attempting a refresh ...")
-        if not refresh_token:
-            raise ValueError("Token expired and no refresh token provided")
+
+        # Get refresh token from the DB
+        # Decode the expired token to extract user's Google sub/email
+        try:
+            payload = jwt_decode(token_id, options={"verify_signature": False})
+            google_sub = payload.get("sub")
+            email = payload.get("email")
+
+        except Exception as decode_err:
+            raise ValueError(f"Cannot decode expired token: {decode_err}")
+
+        if not google_sub and not email:
+            raise ValueError("Unable to extract user info from expired token.")
+
+        # Lookup refresh token in DB
+        from .models import CustomUser
+        user = CustomUser.objects.filter(email=email).first()
+
+        if not user or not user.google_refresh_token:
+            raise ValueError("Token has expired and no refresh token found in DB for this user.")
         
+        refresh_token = user.google_refresh_token
+
         # Attempt to refresh the token if it's expired
         user_info = refresh_google_token(refresh_token, client_id)
         if user_info:
