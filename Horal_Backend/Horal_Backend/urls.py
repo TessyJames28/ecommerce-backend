@@ -66,6 +66,7 @@ urlpatterns = [
     path('api/v1/dashboard/admin/support/', include('support.urls')),
     path('api/v1/', include('notifications.urls')),
     path('api/v1/media/', include('media.urls')),
+    path('api/v1/logistics/', include('logistics.urls')),
 
     # Optional: Redirect from root to Swagger UI
 ]
