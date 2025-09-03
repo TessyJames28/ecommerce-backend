@@ -6,7 +6,7 @@ from .signals import cart_abandoned
 
 @shared_task
 def check_abandoned_carts():
-    cutoff = timezone.now() - timedelta(minutes=5)  # 24 hours of inactivity
+    cutoff = timezone.now() - timedelta(hours=24)  # 24 hours of inactivity
     abandoned_carts = Cart.objects.filter(updated_at__lt=cutoff)
 
     for cart in abandoned_carts:
