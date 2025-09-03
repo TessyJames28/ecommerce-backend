@@ -29,6 +29,7 @@ class ProductLocationMixin(models.Model):
         abstract = True
 
 
+
 class IndexableProductMixin(models.Model):
     """Reusable mixin for product indexing."""
 
@@ -78,6 +79,14 @@ class BaseProduct(models.Model):
             object_id=self.id
         )
     
+    def get_logistics(self):
+        from logistics.models import Logistics
+
+        return Logistics.objects.filter(
+            content_type=ContentType.objects.get_for_model(self.__class__),
+            object_id=self.id
+        )
+    
 
 class ProductVariant(models.Model):
     """Model to distinguish each individual product variants per sizes and color"""
@@ -90,9 +99,9 @@ class ProductVariant(models.Model):
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="variants")
     sku = models.CharField(max_length=50, unique=True, blank=True)
     color = models.CharField(max_length=20, choices=Color.choices, null=True,blank=True)
-    custom_size_unit = models.CharField(max_length=10, choices=SizeOption.SizeUnit.choices, blank=True, null=True)
+    custom_size_unit = models.CharField(max_length=10, choices=SizeOption.SizeUnit.choices, null=True, blank=True)
     standard_size = models.CharField(max_length=10, choices=SizeOption.StandardSize.choices, null=True, blank=True)
-    custom_size_value = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
+    custom_size_value = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     stock_quantity = models.PositiveBigIntegerField(default=0)
     reserved_quantity = models.PositiveIntegerField(default=0)
     price_override = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
@@ -119,6 +128,13 @@ class ProductVariant(models.Model):
             self.shop = self.product.shop
 
         super().save(*args, **kwargs)
+
+    def get_logistics(self):
+        from logistics.models import Logistics
+
+        return Logistics.objects.filter(
+            product_variant=self.id
+        )
 
     class Meta:
         unique_together = (
@@ -440,7 +456,7 @@ class FoodProduct(BaseProduct, ProductLocationMixin):
     dietary_info = models.CharField(max_length=250, null=True, blank=True)
     origin = models.CharField(max_length=250, null=True, blank=True)
     weight = models.CharField(max_length=50, null=True, blank=True)
-    food_condition = models.CharField(max_length=50, choices=FoodCondition.choices, null=True, blank=True)
+    condition = models.CharField(max_length=50, choices=FoodCondition.choices, null=True, blank=True)
     shelf_life = models.CharField(max_length=50, null=True, blank=True)
     size = models.CharField(max_length=50, null=True, blank=True)
     # images = models.ManyToManyField(ImageLink, related_name='food_products', blank=False)
@@ -463,22 +479,41 @@ class ProductIndex(models.Model):
     object_id = models.UUIDField()
     linked_product = GenericForeignKey('content_type', 'object_id')
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE)
-    category_name = models.CharField(max_length=50)
+    category = models.CharField(max_length=50)
+    sub_category = models.CharField(max_length=50)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Updated to reduce memory load
+    title = models.CharField(max_length=255)
+    slug = models.SlugField(unique=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2) 
+    image = models.URLField(null=True, blank=True)   
+    state = models.CharField(max_length=50)
+    description = models.TextField()
+    specifications = models.TextField(null=True, blank=True) 
+    local_govt = models.CharField(max_length=150)
+    condition = models.CharField(max_length=50, choices=ProductCondition.choices, default=ProductCondition.NEW)
+    brand = models.CharField(max_length=120, blank=True, db_index=True)
+    is_published = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ('object_id', 'content_type')
         indexes = [
-            models.Index(fields=['category_name']),
+            models.Index(fields=['category', 'sub_category']),
             models.Index(fields=['object_id']),
+            models.Index(fields=['price']),
+            models.Index(fields=['state']),
+            models.Index(fields=['local_govt']),
+            models.Index(fields=['brand']),
+            models.Index(fields=['condition']),
+            models.Index(fields=['is_published']),
         ]
 
     
     def get_real_product(self):
         """Method to retrieve the real product"""
         from .utils import CATEGORY_MODEL_MAP
-        model_class = CATEGORY_MODEL_MAP.get(self.category_name)
+        model_class = CATEGORY_MODEL_MAP.get(self.category)
         return model_class.objects.get(id=self.id)
 
 
