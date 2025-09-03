@@ -8,6 +8,7 @@ from django.db.models import Q, F
 from django.utils.timezone import now
 from django.contrib.contenttypes.models import ContentType
 from users.models import CustomUser
+from users.authentication import CookieTokenAuthentication
 import re
 from .models import (
     Support, SupportTeam,
@@ -36,6 +37,7 @@ from notifications.utils import ALLOWED_NOTIFICATION_MODELS
 class SupportTeamCreateView(GenericAPIView, BaseResponseMixin):
     """Class for user with is_staff flag to create or list all support team"""
     permission_classes = [IsAdminUser]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = SupportTeamSerializer    
 
     def post(self, request):
@@ -57,6 +59,7 @@ class SupportTeamCreateView(GenericAPIView, BaseResponseMixin):
 class SupportTeamUpdateView(GenericAPIView, BaseResponseMixin):
     """Class for user with is_staff flag to create or list all support team"""
     permission_classes = [IsAdminUser]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = SupportTeamSerializer
 
 
@@ -89,6 +92,7 @@ class SupportTeamUpdateView(GenericAPIView, BaseResponseMixin):
 class RetrieveAllStaffView(GenericAPIView, BaseResponseMixin):
     """Class to retrieve all staff name from db"""
     permission_classes = [IsAdminUser]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = StaffSerializer
 
     def get(self, request):
@@ -107,6 +111,7 @@ class RetrieveAllStaffView(GenericAPIView, BaseResponseMixin):
 class SupportTeamNameAPIView(GenericAPIView, BaseResponseMixin):
     """Class to retrieve all support team"""
     permission_classes = [IsAdminUser]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = SupportTeamNameSerializer
 
 
@@ -129,6 +134,7 @@ class SupportTeamNameAPIView(GenericAPIView, BaseResponseMixin):
 class CreateSupportView(GenericAPIView, BaseResponseMixin):
     """Class to create a support ticket by user"""
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = SupportSerializer
 
 
@@ -153,6 +159,7 @@ class CreateSupportView(GenericAPIView, BaseResponseMixin):
 class UpdateSupportView(GenericAPIView, BaseResponseMixin):
     """Class to update the support ticket by staff"""
     permission_classes = [IsAdminUser]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = SupportSerializer
 
 
@@ -189,6 +196,7 @@ class UpdateSupportView(GenericAPIView, BaseResponseMixin):
 class SingleSupportView(GenericAPIView, BaseResponseMixin):
     """Class to update the support ticket by staff"""
     permission_classes = [IsAdminUser]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = SupportSerializer
 
 
@@ -217,6 +225,7 @@ class SingleSupportView(GenericAPIView, BaseResponseMixin):
 class SingleSupportTeamView(GenericAPIView, BaseResponseMixin):
     """Class to view a single support team data"""
     permission_classes = [IsAdminUser]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = SupportTeamSerializer
 
 
@@ -252,6 +261,7 @@ class SingleSupportTicketView(GenericAPIView, BaseResponseMixin):
     Class to retrieve a single support ticket data
     """
     permission_classes = [IsAdminUser]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = TicketsSerializer
 
     def get(self, request, ticket_id):
@@ -289,7 +299,7 @@ class AllTicketsListView(GenericAPIView, BaseResponseMixin):
     pagination_class = StandardResultsSetPagination
     serializer_class = TicketsSerializer
     permission_classes = [IsAdminUser]
-
+    authentication_classes = [CookieTokenAuthentication]
 
     def get_queryset(self):
         return Tickets.objects.all()
@@ -349,6 +359,7 @@ class AllTicketsListView(GenericAPIView, BaseResponseMixin):
 class UpdateTicketView(GenericAPIView, BaseResponseMixin):
     """Class to update the ticket by staff"""
     permission_classes = [IsAdminUser]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = TicketsUpdateSerializer
 
 
@@ -384,6 +395,7 @@ class SupportMessageListCreateView(GenericAPIView, BaseResponseMixin):
     """
     serializer_class = MessageSerializer
     permission_classes = [IsAdminUser]
+    authentication_classes = [CookieTokenAuthentication]
 
     def get_support(self):
         """Helper to retrieve the support instance"""
