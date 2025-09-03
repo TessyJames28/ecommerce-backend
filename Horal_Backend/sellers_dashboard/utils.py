@@ -32,7 +32,7 @@ def get_total_revenue(shop):
 
     qs = OrderItem.objects.filter(
         variant__shop=shop,
-        order__status__in=["paid", "shipped", "at_pick_up", "delivered"],
+        order__status=Order.Status.PAID,
         is_returned=False
     ).annotate(
         line_total=ExpressionWrapper(
@@ -92,7 +92,7 @@ def get_total_order(shop):
 
     total = OrderItem.objects.filter(
         variant__shop=shop,
-        order__status__in=["paid", "shipped", "at_pick_up", "delivered"],
+        order__status=Order.Status.PAID,
         is_returned=False,
         # is_return_requested=False
     ).aggregate(total=Sum("quantity"))
@@ -163,7 +163,7 @@ def aggregate_sales_for_period(period: str):
     sales = RawSale.objects.filter(
         is_valid=True, created_at__lt=cutoff_time
     ).filter(
-        Q(**{f"processed_flags__{flag_key}__isnull": True}) | ~Q(**{f"processed_flags__{flag_key}": True})
+        Q(**{f"processed_flags__{flag_key}__isnull": True}) | ~Q(**{f"processed_flags__{flag_key}": False})
     )
 
     aggregates = {}
@@ -277,7 +277,7 @@ def populate_time_series_sales(period: str):
     sales = RawSale.objects.filter(
         is_valid=True, created_at__lt=cutoff_time
     ).filter(
-        Q(**{f"processed_flags__{flag_key}__isnull": True}) | ~Q(**{f"processed_flags__{flag_key}": True})
+        Q(**{f"processed_flags__{flag_key}__isnull": True}) | ~Q(**{f"processed_flags__{flag_key}": False})
     )
 
     aggregates = {}
