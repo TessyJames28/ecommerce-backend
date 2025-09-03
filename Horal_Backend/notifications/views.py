@@ -5,6 +5,7 @@ from rest_framework import status
 from .models import Notification
 from products.utils import BaseResponseMixin
 from .serializers import NotificationSerializer
+from users.authentication import CookieTokenAuthentication
 from .tasks import send_notification_email
 from django.utils.timezone import now
 from rest_framework.permissions import IsAuthenticated
@@ -17,6 +18,7 @@ class NotificationListView(GenericAPIView, BaseResponseMixin):
     """
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def get(self, request, *args, **kwargs):
         """method to get notifications"""
@@ -58,6 +60,7 @@ class NotificationDetailView(GenericAPIView, BaseResponseMixin):
     """Class to retrieve and view a single notification"""
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def get_object(self, pk, user):
         return Notification.objects.filter(
@@ -124,6 +127,7 @@ class MarkAsReadView(GenericAPIView, BaseResponseMixin):
     """Class to retrieve and view a single notification"""
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def get_object(self, pk, user):
         return Notification.objects.filter(
@@ -156,6 +160,7 @@ class MarkAsReadView(GenericAPIView, BaseResponseMixin):
 class SupportCreateView(GenericAPIView, BaseResponseMixin):
     """Class to handle the creation of support ticket"""
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = SupportSerializer
 
 
