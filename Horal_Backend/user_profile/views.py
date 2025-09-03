@@ -5,6 +5,7 @@ from rest_framework.generics import GenericAPIView
 from .models import Profile
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from products.views import BaseResponseMixin
+from users.authentication import CookieTokenAuthentication
 from products.utils import IsAdminOrSuperuser
 
 # Create your views here.
@@ -14,6 +15,7 @@ class GetUserProfileView(GenericAPIView, BaseResponseMixin):
     """Get user profile details"""
     serializer_class = ProfileSerializer
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def get_profile(self):
         return get_object_or_404(Profile, user=self.request.user)
@@ -57,6 +59,7 @@ class AllUserProfileView(GenericAPIView, BaseResponseMixin):
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
     permission_classes = [IsAdminOrSuperuser]
+    authentication_classes = [CookieTokenAuthentication]
 
     def get(self, request):
         """Retrieve all user profile"""
