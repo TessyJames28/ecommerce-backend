@@ -70,26 +70,6 @@ categories_data = {
 }
 
 
-
-# Clear data first (optional in dev)
-SupportTeam.objects.all().delete()
-CustomUser.objects.all().delete()
-Category.objects.all().delete()
-SubCategory.objects.all().delete()
-RawSale.objects.all().delete()
-SalesAdjustment.objects.all().delete()
-DailySales.objects.all().delete()
-DailyShopSales.objects.all().delete()
-WeeklySales.objects.all().delete()
-WeeklyShopSales.objects.all().delete()
-MonthlySales.objects.all().delete()
-MonthlyShopSales.objects.all().delete()
-YearlySales.objects.all().delete()
-YearlyShopSales.objects.all().delete()
-SellersBankDetails.objects.all().delete()
-SellerTransactionHistory.objects.all().delete()
-Payout.objects.all().delete()
-
 # Create categories and subcategories
 category_map = {}
 subcategory_map = {}
