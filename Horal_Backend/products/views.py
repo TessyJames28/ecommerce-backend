@@ -151,7 +151,7 @@ class SingleProductDetailView(GenericAPIView, BaseResponseMixin):
             })
         
         # get the product model based on category
-        category_name = index.category_name
+        category_name = index.category
         product_model = self.get_product_model_by_category(category_name)
         if not product_model:
             return None, self.get_response(
