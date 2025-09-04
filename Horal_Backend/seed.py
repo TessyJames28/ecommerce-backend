@@ -10,36 +10,16 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Horal_Backend.settings')
 
 # Setup Django
 django.setup()
-import random
-import uuid
-from datetime import date, timedelta
-from django.utils import timezone
-from django.contrib.contenttypes.models import ContentType
 
 # os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Horal_Backend.settings')
 # django.setup()
 
-from users.models import CustomUser, Location
-from sellers.models import SellerKYC, SellerSocials, SellerKYCAddress, SellerKYCCAC, SellerKYCNIN
-from shops.models import Shop
+from users.models import CustomUser
 from categories.models import Category
 from subcategories.models import SubCategory
-from products.models import (
-    ChildrenProduct, FashionProduct, GadgetProduct, ElectronicsProduct,
-    VehicleProduct, AccessoryProduct, HealthAndBeautyProduct, FoodProduct,
-    ProductVariant, ProductIndex, Color,
-    VehicleImage, FashionImage, ElectronicsImage, FoodImage,
-    HealthAndBeautyImage, AccessoryImage, ChildrenImage, GadgetImage
-)
-from logistics.models import Logistics
+
 from django.conf import settings
 
-from products.utils import image_model_map
-from carts.models import Cart, CartItem
-from orders.models import Order, OrderItem, OrderReturnRequest
-from ratings.models import UserRating
-from favorites.models import Favorites, FavoriteItem
-from images import image_urls
 from sellers_dashboard.models import (
     RawSale, WeeklySales, WeeklyShopSales, MonthlySales,
     SalesAdjustment, DailyShopSales, DailySales, MonthlyShopSales,
@@ -49,16 +29,9 @@ from wallet.models import SellersBankDetails, SellerTransactionHistory, Payout
 from support.models import SupportTeam
 from wallet.models import Bank
 import requests
+from station_addresses import stations
+from logistics.utils import sync_stations_from_gigl, sync_station_addresses, register_gigl_webhook_on_table
 
-
-# Sample data
-states_and_lgas = {
-    "Lagos": ["Ikeja", "Surulere", "Yaba"],
-    "Port Harcourt": ["Obio-Akpor", "Port Harcourt City", "Eleme"],
-    "Abuja": ["Garki", "Wuse", "Maitama"],
-    "Imo": ["Owerri", "Mbaitoli", "Orlu"],
-    "Kaduna": ["Kaduna North", "Kaduna South", "Zaria"]
-}
 
 categories_data = {
     "fashion": [
@@ -205,6 +178,24 @@ def fetch_and_store_bank():
     else:
         raise Exception(f"Failed to fetch banks: {data}")
     
+
+def sync_gigl_data(station_address):
+    print("Syncing GIGL data")
+
+    print("Starting to sync stations from gigl")
+    sync_stations_from_gigl()
+    print("Done syncing stations from gigl")
+
+    print("Stating to sync experience centre addresses")
+    sync_station_addresses(station_address)
+    print("Done syncing experience center addresses")
+
+    print("About to register webhook for secret")
+    register_gigl_webhook_on_table()
+    print("Registered webhook on table")
+    
 if __name__ == "__main__":
     fetch_and_store_bank()
     print(f"Bank data fetched successfully")
+    sync_gigl_data(stations)
+    print("Done syncing gigl data")
