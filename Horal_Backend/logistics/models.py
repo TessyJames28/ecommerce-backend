@@ -24,17 +24,6 @@ class Logistics(models.Model):
     total_weight = models.DecimalField(max_digits=5, decimal_places=2)
     
 
-    # def clean(self):
-    #     """Ensure either product variant or GFK is set"""
-    #     if not self.product_variant or not (self.content_type and self.object_id):
-    #         raise ValidationError("Logistics must be linked to either a product variant or a product")
-
-
-    # def save(self, *args, **kwargs):
-    #     self.full_clean() # Calls clean before saving
-    #     super().save(*args, **kwargs)
-
-
     def __str__(self):
         target = self.product_variant or self.product
         return f"{target} - {self.total_weight}{self.weight_measurement}"

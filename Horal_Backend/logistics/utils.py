@@ -24,7 +24,6 @@ def get_coordinates(address):
     Function to return the latitude and longitude
     Based on given address using google API Map
     """
-    print("Called get coordinates function")
     try:
         geocode_result = gmaps.geocode(address)
         if geocode_result:
@@ -134,7 +133,6 @@ def get_nearest_station_id(state_name: str) -> Optional[int]:
     Return the first station_id for a given state.
     If not found, use predefined fallback states for Kebbi and Yobe.
     """
-    print("Called nearest station id function")
     
     fallback_states = {
         "kebbi": "sokoto",
@@ -627,9 +625,6 @@ def save_gigl_webhook_data(decrypted_payload: str):
     # update order item status if mapped
     if gigl_status_code and order_shipment.status != order_status:
         order_shipment.status = order_status
-        # if not created:
-        #     print("About to save shipment to force signal triggering")
-        #     order_shipment.save()
         if gigl_status_code in delivery_status:
             order_shipment.delivered_at = now()
             for item in order_shipment.items.all():
