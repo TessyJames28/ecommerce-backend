@@ -1,0 +1,106 @@
+{% extends "notifications/emails/base_email.html" %} {% block content %}
+
+<h3 style="color: #333">Order Confirmed!</h3>
+<p>Hi {{ user.first_name }}</p>
+<p style="font-size: 14px; color: #555; line-height: 1.6">
+  Thank you for your order! Your purchase is confirmed and we're now preparing
+  your items for delivery. You'll receive a separate email once your order has
+  been shipped with tracking details.
+</p>
+<!-- Link aligned with the container -->
+<div style="width: 100%; max-width: 700px; margin: 0 auto; text-align: left">
+  Order
+  <a
+    href="https://horal.ng"
+    style="font-size: 14px; color: #2196f3; line-height: 1.6"
+  >
+    #ORD-{{orderId}}
+  </a>
+</div>
+
+<!-- Main container -->
+<div
+  style="
+    width: 100%;
+    max-width: 700px;
+    margin: 10px auto 0 auto;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+  "
+>
+  <!-- Header -->
+  <div
+    style="
+      display: flex;
+      background-color: #f6f6f6;
+      padding: 18px 15px;
+      margin: 10px;
+      border-radius: 5px;
+    "
+  >
+    <div style="flex: 1; text-align: left; font-weight: bold">Item</div>
+    <div style="flex: 1; text-align: right; font-weight: bold">Price</div>
+  </div>
+  <!-- Items -->
+  {% for item in order.items %}
+  <div
+    style="
+      display: flex;
+      padding: 8px 20px;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: #555;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    "
+  >
+    <div style="flex: 1; text-align: left; word-break: break-word">
+      {{ item.name }} (Q{{ item.quantity }})
+    </div>
+    <div style="flex: 1; text-align: right; white-space: nowrap">
+      N{{ item.price }}
+    </div>
+  </div>
+  {% endfor %}
+
+  <!-- Total -->
+  <div
+    style="
+      display: flex;
+      font-weight: bold;
+      background-color: #c0e1fc;
+      padding: 18px 15px;
+      margin: 10px;
+      border-radius: 5px;
+    "
+  >
+    <div style="flex: 1; text-align: left">Total</div>
+    <div style="flex: 1; text-align: right">N{{ order.total }}</div>
+  </div>
+</div>
+<!-- view order Button -->
+<p style="text-align: center; margin: 30px auto">
+  <a
+    href="https://horal.ng/"
+    style="
+      background: #ff6b00;
+      color: #fff;
+      padding: 7px 15px;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 12px;
+    "
+  >
+    View Order Details
+  </a>
+</p>
+<!-- Email ednding -->
+<p style="font-size: 14px; color: #555; line-height: 1.6">
+  We appreciate your business and hope to see you again soon.
+</p>
+
+<p style="font-size: 15px; color: #555; margin-top: 30px">Best Regards,</p>
+<p style="font-size: 15px; color: #555">The Horal Team.</p>
+{% endblock %}

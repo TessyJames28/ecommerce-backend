@@ -1,0 +1,37 @@
+{% extends "notifications/emails/base_email.html" %} {% block content %}
+<h3 style="color: #333">Welcome to Horal, {{ user.first_name }}! 👋</h3>
+<p style="font-size: 14px; color: #555; line-height: 1.6">
+  We're thrilled to have you join our community. Horal is the secure and easy
+  way to buy and sell products, with every transaction protected by our escrow
+  system.
+</p>
+<p style="font-size: 14px; color: #555; line-height: 1.6">
+  Whether you're here to find amazing deals or to start your own business, we've
+  got you covered.
+</p>
+<p style="text-align: center; margin: 30px auto">
+  <a
+    href="https://horal.ng/"
+    style="
+      background: #ff6b00;
+      color: #fff;
+      padding: 7px 15px;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 12px;
+    "
+  >
+    Start Shopping Now
+  </a>
+</p>
+<p style="font-size: 14px; color: #555; line-height: 1.6">
+  Interested in selling?
+  <span
+    ><a style="color: #2196f3" href="https://www.horal.ng/kyc-verification"
+      > Become a seller</a
+    ></span
+  > and start listing your products today.
+</p>
+<p style="font-size: 15px; color: #555; margin-top: 30px">Best Regards,</p>
+<p style="font-size: 15px; color: #555">The Horal Team.</p>
+{% endblock %}

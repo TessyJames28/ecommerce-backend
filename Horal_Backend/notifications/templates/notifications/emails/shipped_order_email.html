@@ -1,0 +1,33 @@
+{% extends "notifications/emails/base_email.html" %} {% block content %}
+<h3 style="color: #333">Great News,{{ user.first_name }}!</h3>
+<p style="font-size: 14px; color: #555; line-height: 1.6">
+  We're excited to let you know that your order
+  <a href="https://horal.ng/" style="color: #2196f3"> {{user.orderId}}</a> has
+  been shipped.
+</p>
+<p style="font-size: 14px; color: #555; line-height: 1.6">
+  Your package is on its way and should arrive within the next 3-5 business
+  days. You can track its progress using the button below.
+</p>
+<p style="text-align: center; margin: 30px auto">
+  <a
+    href="https://horal.ng/"
+    style="
+      background: #ff6b00;
+      color: #fff;
+      padding: 7px 15px;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 12px;
+    "
+  >
+    Track Your Order
+  </a>
+</p>
+<p style="font-size: 14px; color: #555; line-height: 1.6">
+  If you have any questions, please visit our Help Center or reply to this
+  email.
+</p>
+<p style="font-size: 15px; color: #555; margin-top: 30px">Best Regards,</p>
+<p style="font-size: 15px; color: #555">The Horal Team.</p>
+{% endblock %}

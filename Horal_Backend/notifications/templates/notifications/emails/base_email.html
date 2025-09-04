@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Horal Email</title>
+  </head>
+  <body
+    style="
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      background: #ffffff;
+      margin: 0;
+      color: #333;
+    "
+  >
+    <div
+      style="
+        background: #ffffff;
+        border-radius: 8px;
+        padding: 10px;
+        max-width: 680px;
+        margin: auto;
+      "
+    >
+      <!-- Header -->
+      <header style="text-align: center; margin-bottom: 20px">
+        <img
+          src="https://horal-media.ams3.digitaloceanspaces.com/seller_887f514c-131f-4b76-8998-a2df7954d368/image/41c3fa9e5ff641dbb17ecc88ffed86ba.png"
+          alt="Horal Logo"
+          width="100%"
+          style="display: block; margin: auto"
+        />
+      </header>
+
+      <!-- Dynamic content -->
+      {% block content %}{% endblock %}
+
+      <!-- Footer -->
+      <footer
+        style="
+          font-size: 12px;
+          color: #999;
+          margin-top: 30px;
+          text-align: center;
+          padding-top: 20px;
+          border-top: 1px solid #eee;
+        "
+      >
+        <div style="font-weight: bold; color: #4f4f4f">
+          &copy; {{ year|default:2025 }} Horal. All rights reserved.
+        </div>
+        <p style="margin-top: 10px">
+          <a
+            href="https://horal.ng/Contact-us"
+            style="color: #2196f3; margin-right: 6px; text-decoration: none"
+            >Help Center</a
+          ><span>|</span>
+          <a
+            href="https://horal.com/unsubscribe"
+            style="color: #2196f3; text-decoration: none"
+            >Unsubscribe</a
+          >
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>
