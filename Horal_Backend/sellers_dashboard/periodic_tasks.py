@@ -216,15 +216,6 @@ def setup_daily_task():
         },
     )
 
-    PeriodicTask.objects.get_or_create(
-        name="Process hourly orders",
-        defaults={
-            "task": f'{location}facilitate_hourly_order',
-            'crontab': schedule,
-            'enabled': True
-        },
-    )
-
 
 def setup_all_tasks():
     setup_hourly_task()
