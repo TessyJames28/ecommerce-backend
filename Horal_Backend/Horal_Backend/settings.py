@@ -118,15 +118,19 @@ CORS_ALLOWED_ORIGINS = [
 APPEND_SlASH = True
 
 
-SESSION_COOKIE_SAMESITE = "None"
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SAMESITE = "None"
-CSRF_COOKIE_SECURE = True
+if DEBUG or os.getenv("DJANGO_ENV") == "development":
+    # Development: frontend is http://localhost:3000
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SESSION_COOKIE_SAMESITE = "Lax"
+    CSRF_COOKIE_SAMESITE = "Lax"
+else:
+    # Production: frontend and backend served over HTTPS
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SAMESITE = "None"
+    CSRF_COOKIE_SAMESITE = "None"
 
-# SESSION_COOKIE_SAMESITE = "Lax"     # Allow cross-origin cookies for localhost
-# SESSION_COOKIE_SECURE = False       # Must be False for HTTP
-# CSRF_COOKIE_SAMESITE = "Lax"
-# CSRF_COOKIE_SECURE = False
 
 
 CSRF_TRUSTED_ORIGINS = env.list(
