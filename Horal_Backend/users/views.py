@@ -161,7 +161,7 @@ class ConfirmRegistrationOTPView(GenericAPIView):
             value=tokens["access"],
             httponly=True,
             secure=True, # Use True in production (HTTPS)
-            samesite="Strict"
+            samesite="None"
         )
         
         response.set_cookie(
@@ -169,7 +169,7 @@ class ConfirmRegistrationOTPView(GenericAPIView):
             value=tokens["refresh"],
             httponly=True,
             secure=True, # Use True in production (HTTPS)
-            samesite="Strict"
+            samesite="None"
         )
         print("ACCESS TOKEN COOKIE:", request.COOKIES.get("access_token"))
 
@@ -232,7 +232,7 @@ class UserLoginView(GenericAPIView):
             value=serializer.get_access_token(user),
             httponly=True,
             secure=True, # Use True in production (HTTPS)
-            samesite="Strict"
+            samesite="None"
         )
 
         response.set_cookie(
@@ -240,7 +240,7 @@ class UserLoginView(GenericAPIView):
             value=serializer.get_refresh_token(user),
             httponly=True,
             secure=True, # Use True in production (HTTPS)
-            samesite="Strict"
+            samesite="None"
         )
         print("ACCESS TOKEN COOKIE:", request.COOKIES.get("access_token"))
         
@@ -378,7 +378,7 @@ class GoogleLoginView(GenericAPIView):
                     value=serializer.get_access_token(user),
                     httponly=True,
                     secure=True, # Use True in production (HTTPS)
-                    samesite="Strict"
+                    samesite="None"
                 )
 
                 response.set_cookie(
@@ -386,7 +386,7 @@ class GoogleLoginView(GenericAPIView):
                     value=serializer.get_refresh_token(user),
                     httponly=True,
                     secure=True, # Use True in production (HTTPS)
-                    samesite="Strict"
+                    samesite="None"
                 )
 
                 # Save refresh token in the DB
@@ -663,7 +663,7 @@ class CookieTokenRefreshView(TokenRefreshView):
             value=access,
             httponly=True,
             secure=True,
-            samesite="Strict",
+            samesite="None",
         )
 
         response.set_cookie(
@@ -671,7 +671,7 @@ class CookieTokenRefreshView(TokenRefreshView):
             value=refresh,
             httponly=True,
             secure=True,
-            samesite="Strict",
+            samesite="None",
         )
 
         return response
