@@ -126,8 +126,8 @@ if DEBUG or os.getenv("DJANGO_ENV") == "development":
     CSRF_COOKIE_SAMESITE = "Lax"
 else:
     # Production: frontend and backend served over HTTPS
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
     SESSION_COOKIE_SAMESITE = "None"
     CSRF_COOKIE_SAMESITE = "None"
 
