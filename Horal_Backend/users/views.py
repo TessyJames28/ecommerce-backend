@@ -497,6 +497,7 @@ class CreateLocationView(GenericAPIView):
     """Handle the Location creation"""
     serializer_class = LocationSerializer
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def post(self, request, *args, **kwargs):
         """Create user location"""
