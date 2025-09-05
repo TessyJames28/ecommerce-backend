@@ -123,6 +123,17 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SAMESITE = "None"
 CSRF_COOKIE_SECURE = True
 
+# SESSION_COOKIE_SAMESITE = "Lax"     # Allow cross-origin cookies for localhost
+# SESSION_COOKIE_SECURE = False       # Must be False for HTTP
+# CSRF_COOKIE_SAMESITE = "Lax"
+# CSRF_COOKIE_SECURE = False
+
+
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=["https://ecommerce-backend-a5oq.onrender.com", "http://localhost:3000"]
+)
+
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SWAGGER_DOCS_BASE_URL= env('SWAGGER_DOCS_BASE_URL')
