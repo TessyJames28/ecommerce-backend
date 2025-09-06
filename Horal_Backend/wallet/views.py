@@ -16,6 +16,7 @@ from .utils import (
     create_transfer_recipient,
     initiate_payout
 )
+from users.views import CookieTokenAuthentication
 from users.models import CustomUser
 from products.utils import BaseResponseMixin
 from .models import SellersBankDetails, Payout, SellerTransactionHistory, Bank
@@ -37,6 +38,7 @@ class VerifySellerBankDetailsView(APIView, BaseResponseMixin):
     class to verify sellers bank details
     """
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def post(self, request):
         """Post method to get and verify seller bank details"""
@@ -114,6 +116,7 @@ class VerifySellerBankDetailsView(APIView, BaseResponseMixin):
 class ConfirmWithdrawalView(APIView, BaseResponseMixin):
     """Class to handle sellers withdrawal"""
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def post(self, request):
         """Post method for confirm withdrawal"""
@@ -168,6 +171,7 @@ class SellerBankDetailView(GenericAPIView, BaseResponseMixin):
     """
     serializer_class = SellersBankDetailsSerializer
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def get_bank_data(self):
         return get_object_or_404(SellersBankDetails, seller=self.request.user)
@@ -195,6 +199,7 @@ class InitiateWithdrawalView(APIView, BaseResponseMixin):
     """
 
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def get(self, request):
         """Get seller withdrawal overview"""
@@ -242,6 +247,7 @@ class InitiateWithdrawalView(APIView, BaseResponseMixin):
 class SingleSellerPayoutView(GenericAPIView, BaseResponseMixin):
     """Class to display seller payout data by payout id"""
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = PayoutSerializer
 
 
@@ -272,6 +278,7 @@ class SingleTransactionHistoryView(GenericAPIView, BaseResponseMixin):
     """Class to handle the retrieval of a single transaction history"""
     serializer_class = SellerTransactionHistorySerializer
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
 
     def get(self, request, transaction_id):
@@ -309,6 +316,7 @@ class AllBankDataView(GenericAPIView, BaseResponseMixin):
     For frontend usage
     """
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = BankSerializer
 
     def get_queryset(self):
