@@ -1,78 +1,86 @@
-{% extends "notifications/emails/base_email.html" %} {% block content %}
-<h3 style="color: #333">How Was Your Horal Order?</h3>
-<p>Hi {{ user.first_name }}</p>
+{% extends "notifications/emails/base_email.html" %}
+{% block content %}
 
-<p style="font-size: 14px; color: #555; line-height: 1.6">
-  We hope you're loving your recent purchase! Your feedback is important to us
-  and helps other buyers make informed decisions.
-</p>
-<!-- order details-->
+<h3 style="color: #333">{{ heading }}</h3>
+<p>Hi {{ user }},</p>
 
-<div
-  style="
-    display: flex;
-    gap: 10px;
-    background-color: #f8f8f8;
-    padding: 15px;
-    border-radius: 5px;
-  "
->
+{% if body_paragraphs %}
+  {% for paragraph in body_paragraphs %}
+    <p style="font-size: 14px; color: #555; line-height: 1.6;">
+      {{ paragraph }}
+    </p>
+  {% endfor %}
+{% endif %}
+
+{% if products and show_other_reviews is not defined or show_other_reviews %}
+<div style="margin-top: 20px">
+  {% for item in products %}
   <div
     style="
-      background-color: #d9d8d8;
-      width: 100px;
-      height: 100px;
+      display: flex;
+      gap: 10px;
+      background-color: #f8f8f8;
+      padding: 15px;
       border-radius: 5px;
+      margin-bottom: 15px;
     "
   >
-    <img
-      src="{{url}}"
-      alt="Item Image"
-      style="width: 100%; height: 100%; object-fit: cover"
-    />
-  </div>
-  <div>
-    <p
-      style="font-size: 20px; font-weight: bold; color: #333; line-height: 1.6"
+    <div
+      style="
+        background-color: #d9d8d8;
+        width: 100px;
+        height: 100px;
+        border-radius: 5px;
+      "
     >
-      {{ productName }}
-    </p>
-    <span
-      style="font-size: 16px; font-weight: bold; color: #333; line-height: 1.6"
-    >
-      Order from
-    </span>
+      <img
+        src="{{ item.image|default:'https://via.placeholder.com/100' }}"
+        alt="{{ item.name }}"
+        style="width: 100%; height: 100%; object-fit: cover"
+      />
+    </div>
+    <div style="flex: 1">
+      <p style="font-size: 18px; font-weight: bold; color: #333; margin: 0">
+        {{ item.name }}
+      </p>
+      <p style="font-size: 14px; color: #555; margin: 5px 0">
+        Sold by: {{ item.seller }}
+      </p>
 
-    <span style="font-size: 14px; color: #555">{{ order.seller }}</span>
+      {% if show_other_reviews is not defined or show_other_reviews %}
+      <p style="margin: 10px 0">
+        <a
+          href="{{ item.review_url }}"
+          style="
+            background: #ff6b00;
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 12px;
+          "
+        >
+          Leave a Review
+        </a>
+      </p>
+      {% endif %}
+    </div>
   </div>
+  {% endfor %}
 </div>
+{% endif %}
 
-<!-- CTA -->
-<p style="text-align: center; margin: 30px auto">
-  <a
-    href="https://horal.ng/"
-    style="
-      background: #ff6b00;
-      color: #fff;
-      padding: 7px 15px;
-      border-radius: 4px;
-      text-decoration: none;
-      font-size: 12px;
-    "
-  >
-    Leave a review
+{% if show_other_reviews %}
+<p style="font-size: 14px; color: #555; text-align: center; margin-top: 20px">
+  Want to review another order?
+  <a href="https://www.horal.ng/profile-page/order-history" style="color: #2196f3">
+    See all your purchases
   </a>
 </p>
-<p style="font-size: 14px; color: #555; line-height: 1.6; text-align: center">
-  Want to review another order?
-  <span
-    ><a
-      style="color: #2196f3"
-      href="https://www.horal.ng/profile-page/order-history"
-      >See all your purchases.
-    </a></span
-  >
-</p>
+{% endif %}
+
 <p style="font-size: 15px; color: #555; margin-top: 30px">Best Regards,</p>
 <p style="font-size: 15px; color: #555">The Horal Team.</p>
+
 {% endblock %}
+
