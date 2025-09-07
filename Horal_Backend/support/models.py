@@ -131,18 +131,18 @@ class Tickets(models.Model):
         SUPPORT = "support", "Support"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    ticket_type = models.CharField(max_length=20, choices=TicketType.choices)
+    ticket_type = models.CharField(max_length=20, choices=TicketType.choices, db_index=True)
     
     # Generic link to either Support or Return
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.UUIDField()  
     parent = GenericForeignKey('content_type', 'object_id')
 
-    ticket_state = models.CharField(max_length=20, choices=State.choices, default=State.UNASSIGNED)
+    ticket_state = models.CharField(max_length=20, choices=State.choices, default=State.UNASSIGNED, db_index=True)
     assigned_to = models.ForeignKey(
         SupportTeam, on_delete=models.SET_NULL,
         related_name="assigned_team",
-        null=True, blank=True
+        null=True, blank=True, db_index=True
     )
     re_assigned = models.BooleanField(default=False)
     re_assigned_to = models.ForeignKey(
@@ -150,8 +150,15 @@ class Tickets(models.Model):
         related_name="re_assigned_team",
         null=True, blank=True
     )
-    status = models.CharField(max_length=20, choices=Status.choices, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     assigned_at = models.DateTimeField(null=True, blank=True)
     re_assigned_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            # Composite indexes
+            models.Index(fields=["assigned_to", "status"]),
+            models.Index(fields=["re_assigned_to", "status"]),
+        ]
