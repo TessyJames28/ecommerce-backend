@@ -137,17 +137,14 @@ class CheckFavoriteStatusView(GenericAPIView, BaseResponseMixin):
             )
         
         try:
-            print("start to check ProductIndex")
             product_index = ProductIndex.objects.get(id=product_id)
-            print(product_index)
         except ProductIndex.DoesNotExist:
-            print("Enter exception")
             return self.get_response(
                 status.HTTP_200_OK,
                 "Product is not in favorites",
                 {"is_favorite": False}
             )
-        print("in favorite filter")
+
         is_favorite = FavoriteItem.objects.filter(
             product_index=product_index
         ).exists()
