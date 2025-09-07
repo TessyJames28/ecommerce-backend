@@ -14,7 +14,7 @@ import base64, hashlib, json
 from django.core.cache import cache
 from django.db.models import Q
 from Crypto.Cipher import AES
-import logging
+import logging, traceback
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +78,12 @@ def _extract_weight_kg(item, default_kg: float=1.0) -> float:
 
     try:
         logistics = Logistics.objects.get(product_variant=item.variant)
-    except ObjectDoesNotExist:
+    except ObjectDoesNotExist as e:
+        logger.warning(f"Logistics entry not found for variant {item.variant.id}: {str(e)}")
         try:
             logistics = Logistics.objects.get(object_id=item.variant.object_id)
-        except ObjectDoesNotExist:
+        except ObjectDoesNotExist as e:
+            logger.warning(f"Logistics entry not found for product {item.variant.object_id}: {str(e)}")
             logistics = None  # or raise a validation error
     
     quantity = getattr(item, "quantity", 1)
@@ -338,7 +340,7 @@ def create_gigl_shipment_for_shipment(order_id):
                 else:
                     all_success = False
             else:
-                print(f"Shipment {shipment.id} already has tracking number {shipment.tracking_number}")
+                logger.info(f"Shipment {shipment.id} already has tracking number {shipment.tracking_number}, skipping creation.")   
         except Exception as e:
             logger.warning(f"Error creating shipment {shipment.id}: {e}")
             all_success = False
@@ -434,26 +436,25 @@ def calculate_shipping_for_order(order):
     Calculate and update shipping cost for every item in an order.
     Returns (items_shipping_total, updated_items_list)
     """
-    print(f"Calculating shipping for order {order.id}")
     api = GIGLogisticsAPI()
     shipping_total = Decimal("0.00")
     updated_items = []
 
     # Create grouped shipment payloads
-    shipment_payloads = create_shipment_payload(order)
+    try:
+        shipment_payloads = create_shipment_payload(order)
+    except Exception as e:
+        logger.error(f"Error creating shipment payloads for order {order.id}: {str(e)}")
+        raise ValidationError(f"Error creating shipment payload for order: {str(e)}\n{str(traceback.format_exc())}")
 
     for shipment, payload in shipment_payloads:
         result = api.get_price(payload)
-        print(f"Shipment payload: {payload}")
-        print(f"GIGL price result: {result}")
 
         try:
             price = Decimal(str(result.get("object", {}).get("deliveryPrice", 0)))
-            print(f"Parsed price: {price}")
         except Exception as e:
             logger.warning(f"Error parsing price for shipment {shipment.id}: {e}")
-            print(f"Error parsing price for shipment {shipment.id}: {e}")
-            return
+            raise ValidationError("Error retrieving shipment price from GIGL")
 
         # Apply shipping price back to each shipment item
         shipment.shipping_cost = price
@@ -521,8 +522,7 @@ def sync_station_addresses(station_addresses: list):
             state=state_name,
             centre_name=station_name
         )
-    print(f"Done populating {GIGLExperienceCentre.objects.all().count()} Experience centers")
-
+    logger.info(f"Done populating {GIGLExperienceCentre.objects.all().count()} Experience centers")
 
 
 def decrypt_webhook_data(encrypted_data: str, secret: str) -> bytes:
@@ -570,7 +570,6 @@ def register_gigl_webhook_on_table():
     """
     api = GIGLogisticsAPI()
     response = api.register_webhook()
-    print(f"GIGL webhook registration response: {response}")
 
     if "userId" in response and "secret" in response:
         GIGLWebhookCredentials.objects.update_or_create(
