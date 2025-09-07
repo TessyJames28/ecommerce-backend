@@ -8,13 +8,11 @@ cart_abandoned = Signal()
 @receiver(cart_abandoned)
 def handle_cart_abandonment(sender, cart, reminder=None, **kwargs):
     """Signal to notify users of abandoned carts with dynamic nudges"""
-    print("Signal called: cart_abandoned")
     if not cart.user:
         return
-    print("Entered cart abandonment handler")
+
     items = cart.cart_item.all()
     if not items.exists():
-        print(f"Cart {cart.id} is empty, skipping abandoned cart email.")
         return
 
     item_list = []
@@ -53,7 +51,6 @@ def handle_cart_abandonment(sender, cart, reminder=None, **kwargs):
             "You have items in your cart. Don't miss out—complete your order today!"
         ]
 
-    print(f"Preparing to send abandoned cart email to {recipient} for cart #{cart.id} (reminder={reminder})")
     # Send email
     send_email_task.delay(
         recipient=recipient,
@@ -71,6 +68,4 @@ def handle_cart_abandonment(sender, cart, reminder=None, **kwargs):
             }
         }
     )
-
-    print(f"Abandoned cart email sent for cart #{cart.id} (reminder={reminder})")
 
