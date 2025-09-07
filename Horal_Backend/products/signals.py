@@ -70,7 +70,6 @@ def update_product_index_image(sender, instance, **kwargs):
     
     # Get the related product instance from the image
     product = getattr(instance, 'product', None)  # assuming FK on image is named 'product'
-    print(f"Product Image: {product}")
     if not product:
         return
 

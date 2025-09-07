@@ -252,7 +252,6 @@ def topselling_product_sql(from_date):
         """, [from_date])
         
         # Get column names for dictionary output
-        # print(f"db data: {cursor.fetchall()}")
         rows = cursor.fetchall()  # ✅ fetch once
         columns = [col[0] for col in cursor.description]
         raw_data = [dict(zip(columns, row)) for row in rows]
