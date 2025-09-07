@@ -100,6 +100,7 @@ class ProductVariant(models.Model):
     sku = models.CharField(max_length=50, unique=True, blank=True)
     color = models.CharField(max_length=20, choices=Color.choices, null=True,blank=True)
     custom_size_unit = models.CharField(max_length=10, choices=SizeOption.SizeUnit.choices, null=True, blank=True)
+    size = models.CharField(max_length=10, null=True, blank=True)
     standard_size = models.CharField(max_length=10, choices=SizeOption.StandardSize.choices, null=True, blank=True)
     custom_size_value = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     stock_quantity = models.PositiveBigIntegerField(default=0)

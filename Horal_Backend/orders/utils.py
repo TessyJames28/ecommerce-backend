@@ -70,8 +70,7 @@ def create_shipments_for_order(order):
 
 
 def get_consistent_checkout_payload(order):
-    """Function that ensures consitent checkout payload"""
-    # Ensures a consistent payload
+    """Ensure consistent checkout payload"""
     shipments = []
 
     for shipment in order.shipments.all():
@@ -79,15 +78,21 @@ def get_consistent_checkout_payload(order):
             "shipment_id": str(shipment.id),
             "seller": shipment.seller.user.full_name,
             "shipping_cost": str(getattr(shipment, "shipping_cost", 0)),
-            "items": [
-                {
-                    "item_id": str(item.id),
-                    "product": str(item.variant),
-                    "unit_price": str(item.unit_price),
-                    "quantity": item.quantity,
-                }
-                for item in shipment.items.all()
-            ]
+            "items": []
         }
+
+        for item in shipment.items.all():
+            variant_obj = item.variant
+            product_title = getattr(getattr(variant_obj, "product", None), "title", str(variant_obj))
+
+            shipment_data["items"].append({
+                "item_id": str(item.id),
+                "product": product_title,
+                "unit_price": str(item.unit_price),
+                "quantity": item.quantity,
+            })
+
         shipments.append(shipment_data)
+
     return shipments
+
