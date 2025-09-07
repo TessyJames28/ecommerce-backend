@@ -12,7 +12,9 @@ from .views import(
     LocationUpdateDeleteView,
     ConfirmRegistrationOTPView,
     CookieTokenRefreshView,
+    ResendRegistrationOTPView,
     get_csrf_token,
+    preview_generic_email
 )
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from django.conf import settings
@@ -20,6 +22,7 @@ from django.conf import settings
 urlpatterns = [
     path("register/", RegisterUserView.as_view(), name="register"),
     path("confirm-registration/", ConfirmRegistrationOTPView.as_view(), name='confirm-registration'),
+    path("resend-registration-otp/", ResendRegistrationOTPView.as_view(), name='resend-registration-otp'),
     path("login/", UserLoginView.as_view(), name="login"),
     path("google-login/", GoogleLoginView.as_view(), name="google_login"),
     path("logout/", UserLogoutView.as_view(), name="logout"),
@@ -35,10 +38,3 @@ urlpatterns = [
     
 ]
 
-
-# Only add in DEBUG mode
-# if settings.DEBUG:
-#     from .views import OTPTestingView
-#     urlpatterns += [
-#         path('dev/get-otp/', OTPTestingView.as_view(), name='get-otp-for-testing'),
-#     ]
