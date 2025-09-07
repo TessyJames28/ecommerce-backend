@@ -14,7 +14,6 @@ def start_dummy_server():
 
     port = int(os.environ.get("PORT", 8000))
     with HTTPServer(("", port), Handler) as httpd:
-        print(f"Dummy HTTP server running on port {port}")
         httpd.serve_forever()
 
 def start_celery_worker():
