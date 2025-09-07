@@ -13,7 +13,7 @@ from payment.utils import update_order_status
 from users.models import CustomUser
 from .discounts import apply_coupon_discount
 from .utils import approve_return, create_shipments_for_order, get_consistent_checkout_payload
-from .models import Order, OrderItem
+from .models import Order, OrderItem, OrderShipment
 from .serializers import OrderReturnRequest, OrderSerializer, OrderReturnRequestSerializer
 from carts.models import Cart
 from users.authentication import CookieTokenAuthentication
@@ -447,7 +447,11 @@ class OrderReturnRequestView(GenericAPIView, BaseResponseMixin):
             )
        #=============================Commented out for testing========================== 
         # Check if the order has been paid for
-        if order_item.order.status != Order.Status.DELIVERED:
+        if order_item.shipment.status not in [
+            OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
+            OrderShipment.Status.DELIVERED_TO_TERMINAL,
+            OrderShipment.Status.DELIVERED_TO_PICKUP_POINT
+        ]:
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
                 "Only delivered orders can be returned"
