@@ -4,6 +4,9 @@ from orders.models import OrderReturnRequest
 import requests
 from django.conf import settings
 import uuid, re
+import logging
+
+logger = logging.getLogger(__name__)
 
 def create_message_for_instance(instance):
     from .models import Message, SupportAttachment, Support
@@ -16,7 +19,6 @@ def create_message_for_instance(instance):
         body = instance.body
         sender = getattr(instance, "customer", None)
     elif isinstance(instance, OrderReturnRequest):
-        print("In returns instance")
         body = instance.reason
         sender = instance.order_item.order.user
     else:
@@ -94,6 +96,7 @@ def get_service_token(email, password):
 
         return access_token
 
+    logger.error(f"Failed to get service token: {response.status_code}, {response.text}")
     raise Exception(f"Failed to get service token: {response.status_code}, {response.text}")
 
 
@@ -126,9 +129,9 @@ def handle_mailgun_attachments(attachments, msg, type=None):
                     message=msg,
                     url=uploaded_asset
                 )
-                print(f"URL Added: {uploaded_asset}")
+                logger.info(f"Attachment uploaded: {uploaded_asset}")
             else:
-                print("Upload failed:", response.status_code, response.text)
+                logger.error(f"Failed to upload attachment {f.name}: {response.status_code}, {response.text}")
 
 
 def extract_reply_body(full_body: str) -> str:
@@ -147,11 +150,3 @@ def extract_reply_body(full_body: str) -> str:
     split_body = re.split(pattern, full_body, flags=re.IGNORECASE)
     return split_body[0].strip()
 
-
-
-# CustomUser.objects.create_user(
-#     full_name="returns-bot",
-#     email="returns@mail.horal.ng",
-#     password="Returns@123",
-#     is_staff=True,
-# )

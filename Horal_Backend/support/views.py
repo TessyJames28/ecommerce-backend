@@ -408,7 +408,6 @@ class SupportMessageListCreateView(GenericAPIView, BaseResponseMixin):
 
     def get_queryset(self):
         support = self.get_support()
-        print(f"Support object: {support} ({support.__class__.__name__})")
 
         if isinstance(support, OrderReturnRequest):
             return Message.objects.filter(
@@ -481,19 +480,15 @@ class SupportEmailWebhookView(APIView, BaseResponseMixin):
             pass
 
         match = re.search(r"\[(SUP|RET)-[A-Z0-9]{8}\]", subject)
-        print(f"Match: {match}")
-        print(f"Subject: {subject}")
 
         if match:
             reference = match.group(0).strip("[]")
 
-            print(f"Reference: {reference}")
 
             # Try to find an existing ticket with that reference
             support_ticket = Support.objects.filter(
                 email=sender, subject__icontains=F("subject"), reference=reference
             ).first()
-            print(f"Support ticket: {support_ticket}")
 
         else:
             # No reference → always create a brand new ticket

@@ -12,7 +12,9 @@ from notifications.tasks import send_email_task
 from notifications.models import Notification
 from users.models import CustomUser
 from django.conf import settings
-import re
+import re, logging
+
+logger = logging.getLogger(__name__)
 
 
 @receiver(post_save, sender=Support)
@@ -114,10 +116,8 @@ def send_support_email_signal(sender, instance, created, **kwargs):
 
 @receiver(post_save, sender=Support)
 def send_support_received_email(sender, instance, created, **kwargs):
-    print("Triggered email sending")
     if created:
         if not instance.email:
-            print("No email found, skipping sending")
             return
         subject = generate_received_subject(instance)
         body = f"Hello {instance.customer.full_name if instance.customer else ''},\n\n" \
@@ -168,14 +168,12 @@ def update_user_on_processing_status_email(sender, instance, created, **kwargs):
     Signal to update user on changes to their ticket
     Once the assigned team start processing the request
     """
-    print("Triggered email sending")
     if created or instance.status != Tickets.Status.PROCESSING:
         return
 
     # Access the related object via the GFK
     related_obj = instance.parent
     if not related_obj:
-        print(f"No related object found for ticket {instance.id}")
         return
 
     # Determine user info based on ticket type
@@ -256,9 +254,8 @@ def update_support_returns_to_processing(sender, instance, **kwargs):
     # Access the related object via the GFK
     related_obj = instance.parent
 
-    # print(f"instance ticket type: {related_obj.ticket_type}")
     if not related_obj:
-        print(f"No related object found for ticket {instance.id}")
+        logger.error(f"No related object found for ticket {related_obj.id}")
         
     # Determine user info based on ticket type
     if instance.ticket_type == "returns" and isinstance(related_obj, OrderReturnRequest):
