@@ -60,15 +60,11 @@ def payout_transaction(sender, instance, created, **kwargs):
     - Create PENDING record when withdrawal requested
     - Create COMPLETED record when successful
     """
-    print(f"signal triggered: {instance.status}")
     if instance.status not in [
         Payout.StatusChoices.PROCESSING,
         Payout.StatusChoices.SUCCESS,
         Payout.StatusChoices.FAILED
     ]:
-        value = instance.status == Payout.StatusChoices.SUCCESS
-        print(f"Payout status: {Payout.StatusChoices.SUCCESS}")
-        print(f"Value: {value}")
         return
     
     # Find existing record
@@ -78,7 +74,6 @@ def payout_transaction(sender, instance, created, **kwargs):
         transaction_type=SellerTransactionHistory.TransactionType.WITHDRAWAL,
         reference_id=getattr(instance, "reference_id", None)
     ).first()
-    print(f"Record: {record}")
 
     if record and instance.status == Payout.StatusChoices.SUCCESS:
         SellerTransactionHistory.objects.create(
