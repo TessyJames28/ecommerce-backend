@@ -5,6 +5,9 @@ from .models import OrderStatusLog
 from django.contrib.contenttypes.models import ContentType
 from wallet.models import Bank
 import requests
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def trigger_refund(reference, amount=None, retry=False):
@@ -39,7 +42,8 @@ def trigger_refund(reference, amount=None, retry=False):
             send_refund_email(tx.email, tx.order.id, tx.user.full_name)
 
         tx.save()
-    except PaystackTransaction.DoesNotExist:
+    except PaystackTransaction.DoesNotExist as e:
+        logger.error(f"PaystackTransaction with reference {reference} in trigger refund: {str(e)}")
         pass
 
     return result
@@ -69,7 +73,6 @@ def update_order_status(order, new_status, changed_by=None, \
                 changed_by=changed_by
             )
         else:
-            print("Updating order status in Orderlog")
             try:
                 log, created = OrderStatusLog.objects.get_or_create(
                     content_type=ContentType.objects.get_for_model(Order),
@@ -79,7 +82,7 @@ def update_order_status(order, new_status, changed_by=None, \
                     changed_by=changed_by
                 )
             except Exception as e:
-                print(f"Order log not creating: {str(e)}")
+                logger.error(f"Error creating order status log for order {order.id}: {str(e)}")
         order.status = new_status
         order.save(update_fields=["status"])
 
@@ -98,6 +101,7 @@ def fetch_and_store_bank():
         response = requests.get(url, headers=headers)
         data = response.json()
     except Exception as e:
+        logger.error(f"Error fetching banks from Paystack: {str(e)}")
         raise Exception(f"Paystack bank fetch issue: {e}")
 
     if data.get("status") is True:
@@ -113,6 +117,7 @@ def fetch_and_store_bank():
 
         return F"Fetched and store {len(data.get("data", []))} banks."
     else:
+        logger.error(f"Failed to fetch banks: {data}")
         raise Exception(f"Failed to fetch banks: {data}")
     
 
@@ -121,5 +126,6 @@ def get_bank_code(bank_name):
     try:
         bank = Bank.objects.get(name__iexact=bank_name.strip())
         return bank.code
-    except Bank.DoesNotExist:
+    except Bank.DoesNotExist as e:
+        logger.error(f"Bank with name {bank_name} does not exist: {str(e)}")
         return None
