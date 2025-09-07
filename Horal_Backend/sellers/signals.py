@@ -49,14 +49,14 @@ def notify_kyc_info_completed(sender, instance, created, **kwargs):
     ):
     # Safe to send confirmation email
         if not kyc.info_completed_notified:
-            send_kyc_info_completed_email(kyc.user)
+            send_kyc_info_completed_email(kyc.user.id)
             SellerKYC.objects.filter(pk=kyc.pk).update(info_completed_notified=True)
 
 
 @receiver(post_save, sender=SellerKYC)
 def notify_kyc_status_change(sender, instance, **kwargs):
     if instance.status in ['verified', 'failed'] and not instance.status_notified:
-        send_kyc_final_status_email(instance.user, instance.status)
+        send_kyc_final_status_email(instance.user.id, instance.status)
         SellerKYC.objects.filter(pk=instance.pk).update(status_notified=True)
 
     
