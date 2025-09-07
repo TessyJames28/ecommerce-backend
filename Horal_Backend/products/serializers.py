@@ -158,7 +158,7 @@ class ProductRatingMixin(serializers.Serializer):
 
 class ProductCreateMixin:
     def create(self, validated_data):
-        from .utils import image_model_map
+        from .utils import image_model_map, validate_logistics_vs_variants
         from logistics.models import Logistics
         from logistics.serializers import LogisticsSerializer
 
@@ -184,6 +184,9 @@ class ProductCreateMixin:
                 raise serializers.ValidationError(
                     "No variant logistics provided, product-level is required if no variant logistics"
                 )
+        
+        # Ensure proper weight values are provided
+        validate_logistics_vs_variants(logistic_data, variant_data)
 
         # Now create the product safely
         instance = self.Meta.model.objects.create(**validated_data)

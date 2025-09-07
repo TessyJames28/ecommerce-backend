@@ -1,4 +1,4 @@
-from .models import SellerTransactionHistory, Payout
+from .models import SellerTransactionHistory, Payout, SellersBankDetails
 from orders.models import OrderItem, Order
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -117,16 +117,32 @@ def notify_seller_of_initiated_withdrawal(sender, instance, **kwargs):
     if instance.status != Payout.StatusChoices.PROCESSING:
         return
     
+    # Get seller bank details
+    bank_details = SellersBankDetails.objects.get(seller=instance.seller)
+
     recipient = instance.seller.email
-    amount = instance.amount_naira
     seller_name = instance.seller.full_name
+    amount = instance.amount_naira
+    transaction_id = instance.transaction_id
+    bank_name = bank_details.bank_name
+    expected_arrival = "Within 1-2 business days"
+
     subject = "Congratulations on Successful Withdrawal"
-    body = f"Hello {seller_name}\n\nCongratulation on successful withdrawal\n\n" \
-            f"Your withdrawal {amount} is underway and you will receive it within 48hours\n\n" \
-            f"Happy selling on Horal!"
     from_email = f"Horal Wallet <{settings.DEFAULT_FROM_EMAIL}>"
 
-    send_email_task.delay(recipient, subject, body, from_email)
+    send_email_task.delay(
+        recipient=recipient,
+        subject=subject,
+        from_email=from_email,
+        template_name="notifications/emails/withdrawal_email.html",
+        context={
+            "seller_name": seller_name,
+            "withdrawal_amount": amount,
+            "transaction_id": transaction_id,
+            "bank_name": bank_name,
+            "expected_arrival": expected_arrival
+        }
+    )
 
     # Mark as sent
     Payout.objects.filter(id=instance.id).update(email_sent=True)

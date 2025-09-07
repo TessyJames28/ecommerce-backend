@@ -1,0 +1,79 @@
+{% extends "notifications/emails/base_email.html" %}
+
+{% block content %}
+<h3 style="color: #333">Hello {{ user }},</h3>
+
+{% if body_paragraphs %}
+  {% for paragraph in body_paragraphs %}
+    <p style="font-size: 14px; color: #555; line-height: 1.6; text-align: center;">
+      {{ paragraph }}
+    </p>
+  {% endfor %}
+{% endif %}
+
+{% if order_items %}
+<table style="width: 300px; margin: 20px auto; border-collapse: collapse; font-family: monospace;">
+  <thead>
+    <tr>
+      <th style="border-bottom: 1px solid #ddd; text-align: left; padding: 4px;">Item</th>
+      <th style="border-bottom: 1px solid #ddd; text-align: center; padding: 4px;">Qty</th>
+      <th style="border-bottom: 1px solid #ddd; text-align: right; padding: 4px;">Price</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in order_items %}
+    <tr>
+      <td style="padding: 4px;">{{ item.name }}</td>
+      <td style="text-align: center; padding: 4px;">{{ item.quantity }}</td>
+      <td style="text-align: right; padding: 4px;">₦{{ item.price }}</td>
+    </tr>
+    {% endfor %}
+    
+    {% if totals %}
+      <tr>
+        <td colspan="2" style="text-align: right; padding: 4px; font-weight: bold;">Product Total:</td>
+        <td style="text-align: right; padding: 4px;">₦{{ totals.product_total }}</td>
+      </tr>
+      <tr>
+        <td colspan="2" style="text-align: right; padding: 4px; font-weight: bold;">Shipping:</td>
+        <td style="text-align: right; padding: 4px;">₦{{ totals.shipping_total }}</td>
+      </tr>
+      <tr>
+        <td colspan="2" style="text-align: right; padding: 4px; font-weight: bold;">Grand Total:</td>
+        <td style="text-align: right; padding: 4px;">₦{{ totals.grand_total }}</td>
+      </tr>
+    {% endif %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if addresses %}
+  <p style="font-size: 14px; color: #555; text-align: center; margin-top: 20px;">
+    Please get these items ready for shipment and drop them at any of the following location(s):
+  </p>
+  <ul style="list-style: none; padding: 0; font-family: monospace; text-align: center;">
+    {% for address in addresses %}
+      <li style="margin: 5px 0;">{{ address }}</li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+
+{% if cta %}
+<p style="text-align: center; margin: 30px auto">
+  <a href="{{ cta.url }}"
+     style="
+       background: {{ cta.bg_color|default:'#ff6b00' }};
+       color: {{ cta.text_color|default:'#fff' }};
+       padding: 7px 15px;
+       border-radius: 4px;
+       text-decoration: none;
+       font-size: 12px;">
+    {{ cta.text }}
+  </a>
+</p>
+{% endif %}
+
+<p style="font-size: 15px; color: #555; margin-top: 30px; text-align: center;">Best Regards,</p>
+<p style="font-size: 15px; color: #555; text-align: center;">{{ sender_name|default:"The Horal Team" }}</p>
+{% endblock %}

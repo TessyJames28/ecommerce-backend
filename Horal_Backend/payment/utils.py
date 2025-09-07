@@ -36,7 +36,7 @@ def trigger_refund(reference, amount=None, retry=False):
 
         if result.get("status"):
             tx.refund_successful = True
-            send_refund_email(tx.email, tx.order.id)
+            send_refund_email(tx.email, tx.order.id, tx.user.full_name)
 
         tx.save()
     except PaystackTransaction.DoesNotExist:

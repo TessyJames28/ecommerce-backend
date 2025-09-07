@@ -6,8 +6,8 @@ import json
 
 location = 'sellers_dashboard.tasks.'
 order_location = 'orders.tasks.'
-payment_location = 'payment.tasks'
-cart_location = 'carts.tasks'
+payment_location = 'payment.tasks.'
+cart_location = 'carts.tasks.'
 
 def setup_hourly_task():
     """Run every hour: populate shop sales"""
@@ -76,9 +76,10 @@ def setup_order_expiration_task():
     )
 
 
-def setup_cart_abandonment_task():
+def setup_cart_abandonment_and_order_review_task():
     """
     Schedules a Celery periodic task to check for abandoned carts every hour
+    Schedules a celery periodic task to check for delivered orders
     between 1 AM and 11 PM, running at the top of the hour.
     """
     schedule, _ = CrontabSchedule.objects.get_or_create(
@@ -97,6 +98,16 @@ def setup_cart_abandonment_task():
             'enabled': True
         }
     )
+
+    PeriodicTask.objects.update_or_create(
+        name="Invite users to leave a review",
+        defaults={
+            'task': f'{order_location}check_delivered_shipments',
+            'crontab': schedule,
+            'enabled': True
+        }
+    )
+
 
 
 def setup_weekly_task():
@@ -216,22 +227,13 @@ def setup_daily_task():
         },
     )
 
-    PeriodicTask.objects.get_or_create(
-        name="Process hourly orders",
-        defaults={
-            "task": f'{location}facilitate_hourly_order',
-            'crontab': schedule,
-            'enabled': True
-        },
-    )
-
 
 def setup_all_tasks():
     setup_hourly_task()
     setup_weekly_task()
     setup_monthly_task()
     setup_yearly_task()
-    setup_cart_abandonment_task()
+    setup_cart_abandonment_and_order_review_task()
     setup_order_expiration_task()
     setup_daily_task()
 

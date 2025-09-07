@@ -1,10 +1,16 @@
-{% extends "notifications/emails/base_email.html" %} {% block content %}
+{% extends "notifications/emails/base_email.html" %}
 
-<h3 style="color: #333">Did You Forget Something?</h3>
-<p>Hi {{ user.first_name }},</p>
-<p>
-  It looks like you left some items in your cart. They're still waiting for you!
-</p>
+{% block content %}
+<h3 style="color: #333">{{ title|default:"Did You Forget Something?" }}</h3>
+<p>Hi {{ user }},</p>
+
+{% if body_paragraphs %}
+  {% for paragraph in body_paragraphs %}
+    <p style="font-size: 14px; color: #555; line-height: 1.6;">
+      {{ paragraph }}
+    </p>
+  {% endfor %}
+{% endif %}
 
 {% if cart_items %}
 <div
@@ -54,26 +60,29 @@
 </div>
 {% endif %}
 
+{% if cta %}
 <p style="text-align: center; margin: 30px auto">
   <a
-    href="https://www.horal.ng/cart"
+    href="{{ cta.url }}"
     style="
-      background: #ff6b00;
-      color: #fff;
+      background: {{ cta.bg_color|default:'#ff6b00' }};
+      color: {{ cta.text_color|default:'#fff' }};
       padding: 7px 15px;
       border-radius: 4px;
       text-decoration: none;
       font-size: 12px;
     "
   >
-    Complete Your Order
+    {{ cta.text }}
   </a>
 </p>
+{% endif %}
+
 <p style="margin-top: 15px; text-align: center">
   Shopping on Horal is safe and secure with our escrow system.
 </p>
 
 <p style="font-size: 15px; color: #555; margin-top: 40px">Best Regards,</p>
-<p style="font-size: 15px; color: #555">The Horal Team.</p>
-
+<p style="font-size: 15px; color: #555">{{ sender_name|default:"The Horal Team" }}</p>
 {% endblock %}
+

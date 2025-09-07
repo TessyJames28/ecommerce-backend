@@ -58,9 +58,9 @@ class RegisterUserView(GenericAPIView):
         user_name = serializer.validated_data["full_name"]
         otp = generate_otp()
 
-        # Store registration data temporarily
-        safe_cache_set(f"reg_data:{email}", json.dumps(serializer.validated_data), timeout=300) #5 mins expiry
-        safe_cache_set(f"otp:{email}", otp, timeout=300) # OTP valid for 5 mins too
+        # Store registration data temporarily for 30mins
+        safe_cache_set(f"reg_data:{email}", json.dumps(serializer.validated_data), timeout=1800)
+        safe_cache_set(f"otp:{email}", otp, timeout=300) # OTP valid for 5 mins
 
         # Send OTP
         send_registration_otp_email(email, otp, user_name)
@@ -542,6 +542,7 @@ class CreateLocationView(GenericAPIView):
     """Handle the Location creation"""
     serializer_class = LocationSerializer
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def post(self, request, *args, **kwargs):
         """Create user location"""
@@ -729,32 +730,4 @@ def get_csrf_token(request):
     Frontend should call this endpoint first to get the token.
     """
     return JsonResponse({"csrfToken": request.META.get("CSRF_COOKIE")})
-
-
-#==========================For template testing ==========================
-from django.shortcuts import render
-from django.contrib.auth import get_user_model
-
-def preview_generic_email(request):
-    user = type("User", (), {"first_name": "Tessy"})()  # fake user object
-    context = {
-        "user": user,
-        "title": "Welcome to Horal",
-        "body_paragraphs": [
-            "We're thrilled to have you join our community.",
-            "Every transaction is protected by our escrow system."
-        ],
-        "cta": {
-            "text": "Start Shopping Now",
-            "url": "https://horal.ng/"
-        },
-        "secondary_cta": {
-            "text_before_link": "Interested in selling?",
-            "link_text": "Become a seller",
-            "url": "https://www.horal.ng/kyc-verification",
-            "text_after_link": "and start listing your products today."
-        }
-    }
-    return render(request, "notifications/emails/welcome_email_generic.html", context)
-
 

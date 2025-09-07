@@ -12,6 +12,11 @@ class Cart(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Flag for cart abandonment signal
+    reminder_2h_sent = models.BooleanField(default=False, db_index=True)
+    reminder_24h_sent = models.BooleanField(default=False, db_index=True)
+    reminder_48h_sent = models.BooleanField(default=False, db_index=True)
+
 
     class Meta:
         constraints = [
@@ -19,6 +24,9 @@ class Cart(models.Model):
                 check=models.Q(user__isnull=False) | models.Q(session_key__isnull=False),
                 name="cart_user_or_session_key_required"
             )
+        ]
+        indexes = [
+            models.Index(fields=["updated_at"]),
         ]
 
 

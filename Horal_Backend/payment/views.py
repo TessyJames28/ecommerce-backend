@@ -69,8 +69,32 @@ class InitializeTransaction(APIView):
         
         
         amount = int(order.total_amount * 100) # convert amount to kobo
-        reference = str(uuid.uuid4())
 
+        # --- Check if a transaction already exists for this order ---
+        existing_txn = PaystackTransaction.objects.filter(order=order).first()
+        if existing_txn:
+            if existing_txn.status == PaystackTransaction.StatusChoices.PENDING:
+                # Return existing pending transaction
+                return Response({
+                    "status": "success",
+                    "message": "Transaction already initialized",
+                    "data": {
+                        "authorization_url": existing_txn.authorization_url,
+                        "access_code": existing_txn.access_code,
+                        "reference": existing_txn.reference,
+                    }
+                })
+            else:
+                # If already completed or failed, optionally raise an error
+                return JsonResponse({
+                    "status": "error",
+                    "status_code": status.HTTP_400_BAD_REQUEST,
+                    "message": f"Transaction already {existing_txn.status.lower()} for this order"
+                }, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # Generate new reference
+            reference = str(uuid.uuid4())
+            
         # Step 1: Initialize payment with Paystack
         url = "https://api.paystack.co/transaction/initialize"
         headers = {
@@ -97,15 +121,17 @@ class InitializeTransaction(APIView):
                 "status_code": status.HTTP_400_BAD_REQUEST,
                 "message": "Paystack error"
             })
-
-        # Step 2: Save the transaction
-        PaystackTransaction.objects.create(
+        
+        # Save new transaction
+        existing_txn = PaystackTransaction.objects.create(
             reference=reference,
             user=request.user,
             email=email,
             amount=amount,
             order=order,
-            status=PaystackTransaction.StatusChoices.PENDING
+            status=PaystackTransaction.StatusChoices.PENDING,
+            access_code=res_data["data"]["access_code"],
+            authorization_url=res_data["data"]["authorization_url"]
         )
 
         return Response(res_data)

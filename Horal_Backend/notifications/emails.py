@@ -1,28 +1,61 @@
 from django.core.mail import send_mail
 from django.conf import settings
 import requests
+from .tasks import send_email_task
 
 
-def send_otp_email(to_email, otp_code):
+def send_registration_otp_email(to_email, otp_code, name):
     """Send an OTP email to the user."""
-    subject = 'Your OTP Code'
-    message = (
-        f"Hi there,\n\n"
-        f"Here is your OTP code from Horal: {otp_code}\n"
-        f"This code will expire in 5 minutes.\n\n"
-        f"If you didn't request this code, please ignore this email.\n\n"
-        f"Thanks,\n"
-        f"The Horal Team"
+    # subject = 'Your OTP Code'
+    # message = (
+    #     f"Hi there,\n\n"
+    #     f"Here is your OTP code from Horal: {otp_code}\n"
+    #     f"This code will expire in 5 minutes.\n\n"
+    #     f"If you didn't request this code, please ignore this email.\n\n"
+    #     f"Thanks,\n"
+    #     f"The Horal Team"
+    # )
+    from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
+
+    send_email_task.delay(
+        recipient=to_email,
+        subject="Horal Registration Verification",
+        from_email=from_email,
+        template_name="notifications/emails/otp_email.html",
+        context={
+            "user": name,
+            "title": "Your One-Time Passcode",
+            "body_text": "This is your one-time Horal verification code. Enter this code below to complete your registration. Code expires in 5 minutes.",
+            "otp": otp_code
+        }
     )
 
-    # from_email = "noreply@example.com"
-    send_mail(
-        subject,
-        message,
-        # from_email,
-        settings.DEFAULT_FROM_EMAIL, # from
-        [to_email], # To
-        fail_silently=False,
+
+def send_otp_email(to_email, otp_code, name):
+    """Send an OTP email to the user."""
+    # subject = 'Your OTP Code'
+    # message = (
+    #     f"Hi there,\n\n"
+    #     f"Here is your OTP code from Horal: {otp_code}\n"
+    #     f"This code will expire in 5 minutes.\n\n"
+    #     f"If you didn't request this code, please ignore this email.\n\n"
+    #     f"Thanks,\n"
+    #     f"The Horal Team"
+    # )
+    from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
+
+    send_email_task.delay(
+        recipient=to_email,
+        subject="Password Reset OTP",
+        from_email=from_email,
+        template_name="notifications/emails/otp_email.html",
+        context={
+            "user": name,
+            "title": "Password Reset Passcode",
+            "body_text": "This is your one-time password reset passcode. Code expires in 5 minutes. Please do not share it with anyone.",
+            "otp": otp_code,
+            "footer_note": "If you didn’t request a password reset, please ignore this email."
+        }
     )
 
 
@@ -41,64 +74,122 @@ def send_otp_email(to_email, otp_code):
 
 
 
-def send_refund_email(user_email, order_id):
+def send_refund_email(user_email, order_id, username):
     """
     Function to send confirmation for order cancellation
     and refund
     """
     subject = "Refund Processed Successfully"
-    message = f"Your return for order {order_id} has been approved\n and refund processed"
-    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user_email])
+    body_paragraphs = [
+        f"Your return for order {order_id} has been approved and refund is being processed",
+        "We are sorry for this unfavorable experience and know the next purchase will be exception.",
+        "We hope to see your next purchase soon."
+    ]
 
-
-# def send_refund_email(user_email, order_id):
-#     subject = "Refund Processed"
-#     message = f"Your refund for Order #{order_id} has been processed."
-    
-#     if settings.DEBUG:
-#         print(f"[Email MOCK] To: {user_email} | Subject: {subject} | Message: {message}")
-#     else:
-#         send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user_email])
+    send_email_task.delay(
+        recipient=user_email,
+        subject=subject,
+        from_email=f"Horal <{settings.DEFAULT_FROM_EMAIL}>",
+        template_name="notifications/emails/general_email.html",
+        context={
+            "user": username,
+            "title": subject,
+            "body_paragraphs": body_paragraphs
+        }
+    )
 
 
 def send_kyc_info_completed_email(user):
     """
     Send email to users on successful kyc verification submission
     """
-    send_mail(
-        subject="KYC Verification Submitted",
-        message="You have successfully submitted all required KYC information",
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
+    from users.models import CustomUser
+
+    # Get user details
+    try:
+        user = CustomUser.objects.get(id=user)
+    except CustomUser.DoesNotExist:
+        pass
+
+    subject = "KYC Verification Submitted"
+    username = user.full_name
+    email = user.email
+    body_paragraphs = [
+        "You have successfully submitted all required KYC information.",
+        "We’re reviewing them and will notify you once verification is complete.",
+        "We appreciate your interest in selling on Horal."
+    ]
+
+    send_email_task.delay(
+        recipient=email,
+        subject=subject,
+        from_email=f"Horal Marketplace <{settings.DEFAULT_FROM_EMAIL}>",
+        template_name="notifications/emails/general_email.html",
+        context={
+            "user": username,
+            "title": subject,
+            "body_paragraphs": body_paragraphs
+        }
     )
 
 
 def send_kyc_final_status_email(user, status):
     """
-    Send email that confirms seller veririfation status
+    Send dynamic KYC status email to user.
+    :param user: CustomUser instance
+    :param status: str, one of ["verified", "failed"]
     """
-    message = "Congratulations! Your KYC was verified." if status == 'verified' else \
-              "Unfortunately, your KYC verification failed. Please try again."
+    from users.models import CustomUser
 
-    send_mail(
-        subject="KYC Verification Confirmation",
-        message=message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
+    # Get user details
+    try:
+        user = CustomUser.objects.get(id=user)
+    except CustomUser.DoesNotExist:
+        pass
+    
+    subject = ""
+    body_paragraphs = []
+    cta = None
+    email = user.email
+    username = user.full_name
+
+    if status == "verified":
+        subject = "KYC Verification Successful"
+        body_paragraphs = [
+            "Congratulations! Your KYC verification has been successfully completed."
+            " Your account is now KYC-verified, unlocking full access to Horal."
+        ]
+        cta = {
+            "text": "Start Listing Your Products",
+            "url": "https://www.horal.ng/sellers-dashboard/shop-products"
+        }
+
+    elif status == "failed":
+        subject = "KYC Verification Failed"
+        body_paragraphs = [
+            "Unfortunately, your KYC verification could not be completed.",
+            "Please re-submit clear and valid documents to complete your KYC.",
+            "For assistance, <a href='mailto:support@mail.horal.ng'>contact support</a>."
+
+        ]
+        cta = {
+            "text": "Retry Verification",
+            "url": "https://www.horal.ng/kyc-verification"
+        }
+
+    else:
+        raise ValueError("Invalid KYC status")
+
+    send_email_task.delay(
+        recipient=email,
+        subject=subject,
+        from_email=f"Horal Marketplace <{settings.DEFAULT_FROM_EMAIL}>",
+        template_name="notifications/emails/general_email.html",
+        context={
+            "user": username,
+            "title": subject,
+            "body_paragraphs": body_paragraphs,
+            "cta": cta
+        }
     )
 
-
-# def welcome_email_new_user(user):
-#     """
-#     Send welcome email to every new users after succesful registration
-#     """
-#     subject = "Welcome to Horal"
-#     message = f"Hello {user.full_name}\n\n" \
-#                 f"Welcome to Horal!!!"
-    
-#     send_mail(
-#         subject=subject,
-#         message=message,
-#         from_email=settings.DEFAULT_FROM_EMAIL,
-#         recipient_list=[user.email]
-#     )

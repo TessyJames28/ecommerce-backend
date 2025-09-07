@@ -4,6 +4,7 @@ from google.auth.transport import requests as google_requests
 from google.oauth2.credentials import Credentials
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+from django.core.cache import cache
 from django.conf import settings
 import requests
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -157,3 +158,24 @@ def get_or_create_temp_user(email, full_name=None):
     )
     return user
 
+MAX_OTP_RESENDS = 3  # max resends per hour
+RESEND_WINDOW = 3600  # 1 hour in seconds
+
+def can_resend_otp(email: str) -> bool:
+    """
+    Checks if user can resend OTP.
+    Increments counter if allowed, returns True.
+    Returns False if limit exceeded.
+    """
+    key = f"otp_resend_count:{email}"
+    current_count = cache.get(key) or 0
+
+    if current_count >= MAX_OTP_RESENDS:
+        return False
+
+    # Increment count and set expiry if new
+    cache.incr(key)
+    if current_count == 0:
+        cache.expire(key, RESEND_WINDOW)
+
+    return True

@@ -16,7 +16,7 @@ class UserRating(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="user_review")
     order_item = models.OneToOneField("orders.OrderItem", on_delete=models.CASCADE, related_name="order_item")
     product = models.ForeignKey(ProductIndex, on_delete=models.CASCADE, related_name="product")
-    rating = models.PositiveIntegerField(choices=[(i, str(i)) for i in range(1, 6)])
+    rating = models.PositiveIntegerField(choices=[(i, str(i)) for i in range(1, 6)], db_index=True)
     comment = models.TextField(blank=True, null=True)
     date_of_review = models.DateTimeField(default=timezone.now)
 

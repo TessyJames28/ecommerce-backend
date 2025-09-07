@@ -6,59 +6,71 @@ from django.conf import settings
 cart_abandoned = Signal()
 
 @receiver(cart_abandoned)
-def handle_cart_abandonment(sender, cart, **kwargs):
-    """Signal to notify users of abandoned carts"""
+def handle_cart_abandonment(sender, cart, reminder=None, **kwargs):
+    """Signal to notify users of abandoned carts with dynamic nudges"""
+    print("Signal called: cart_abandoned")
     if not cart.user:
         return
-    
-    print(f"Cart: {cart}")
-
-    # Get all items in the cart
+    print("Entered cart abandonment handler")
     items = cart.cart_item.all()
     if not items.exists():
         print(f"Cart {cart.id} is empty, skipping abandoned cart email.")
-        return  # Exit early if there are no items
+        return
 
     item_list = []
     for item in items:
-        print("Looping over cart.item")
         product = ProductIndex.objects.get(id=item.variant.object_id)
-        name = product.title
-        quantity = item.quantity
-        price = item.item_total_price
-        item_list.append(f"{name} x {quantity}  (₦{price})")
-        print(f"Item list: {item_list}")
-    
-    item_lines = "\n".join(item_list)
-    print(f"Items from shipments: {item_lines}")
-    
-    receipt_box = (
-        f"+{'-'*40}+\n"
-        f"|{'HORAL CART'.center(40)}|\n"
-        f"+{'-'*40}+\n"
-        f"| Cart ID: {str(cart.id).ljust(28)}|\n"
-        f"|{'-'*40}|\n"
-        f"{item_lines}\n"
-        f"|{'-'*40}|\n"
-        f"| Total Items: {str(cart.total_item).ljust(22)}|\n"
-        f"| Total Price: ₦{str(cart.total_price).ljust(27)}|\n"
-        f"+{'-'*40}+"
-    )
-
-    subject = "Hello Friend, You left something in your cart!"
-    greeting = f"Hello {cart.user.full_name},\n\nYou left items in your cart!"
-
-    body = (
-        f"{greeting}\n\n"
-        f"Here are a summary of the items in your cart:\n\n"
-        f"{receipt_box}\n\n"
-        f"Thank you for your interest in shopping with Horal!"
-    )
+        item_list.append({
+            "image_url": product.image if product.image else None,
+            "name": product.title,
+            "quantity": item.quantity,
+            "price": item.item_total_price  # template adds ₦
+        })
 
     recipient = cart.user.email
+    user = cart.user.full_name
     from_email = f"Horal Cart <{settings.DEFAULT_FROM_EMAIL}>"
-    
-    send_email_task.delay(recipient, subject, body, from_email)
-    print("Email sent to user")
 
+    # Set dynamic heading and body based on reminder
+    if reminder == "2h":
+        heading = "Did You Forget Something?"
+        body_paragraphs = [
+            "You left some items in your cart. Complete your purchase before they sell out!"
+        ]
+    elif reminder == "24h":
+        heading = "Your Cart is Waiting!"
+        body_paragraphs = [
+            "Your cart still has items waiting. These products are popular and might sell out soon!"
+        ]
+    elif reminder == "48h":
+        heading = "Last Chance to Grab Your Items!"
+        body_paragraphs = [
+            "Your cart hasn't been checked out yet. Complete your purchase before it's too late!"
+        ]
+    else:
+        heading = "Did You Forget Something?"
+        body_paragraphs = [
+            "You have items in your cart. Don't miss out—complete your order today!"
+        ]
+
+    print(f"Preparing to send abandoned cart email to {recipient} for cart #{cart.id} (reminder={reminder})")
+    # Send email
+    send_email_task.delay(
+        recipient=recipient,
+        subject=heading,
+        from_email=from_email,
+        template_name="notifications/emails/cart_abandoned_email.html",
+        context={
+            "user": user,
+            "title": heading,
+            "body_paragraphs": body_paragraphs,
+            "cart_items": item_list,
+            "cta": {
+                "url": "https://www.horal.ng/cart",
+                "text": "Complete Your Order"
+            }
+        }
+    )
+
+    print(f"Abandoned cart email sent for cart #{cart.id} (reminder={reminder})")
 
