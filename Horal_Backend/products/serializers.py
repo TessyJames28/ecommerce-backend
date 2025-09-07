@@ -103,7 +103,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductVariant
         fields = [
-            'id', 'color', 'custom_size_unit', 'standard_size', 'sku',
+            'id', 'color', 'custom_size_unit', 'standard_size', 'sku', 'size',
             'custom_size_value', 'stock_quantity', 'reserved_quantity', 'price_override',
             'logistics', 'logistics_data'
         ]
@@ -233,6 +233,8 @@ class ProductCreateMixin:
         """
         Product update especially for nested fields like images and variants
         """
+        from .utils import validate_logistics_vs_variants
+
         images = validated_data.pop('images', [])
         variant_data = validated_data.pop('variants', [])
         logistic_data = validated_data.pop('logistics', {})
@@ -253,24 +255,31 @@ class ProductCreateMixin:
 
         # Check variant logistics consistency
         variant_have_logistics = [v.get('logistics') is not None for v in variant_data]
-        if variant_data and any(variant_have_logistics):
+        if any(variant_have_logistics) and logistic_data:
+            raise serializers.ValidationError(
+                    "Logistics can either be at variant or product level not both"
+                )
+        elif any(variant_have_logistics):
             if not all(variant_have_logistics):
                 raise serializers.ValidationError(
                     "if any variant has logistics, all variant must have logistics"
                 )
-        elif logistic_data:
-            if not any(variant_have_logistics) and not logistic_data:
+        else:
+            if not logistic_data:
                 raise serializers.ValidationError(
                     "No variant logistics provided, product-level is required if no variant logistics"
                 )
+        
+        # Ensure proper weight values are provided
+        validate_logistics_vs_variants(logistic_data, variant_data)
 
         if variant_data:
             instance.get_variants().delete()
             for variant in variant_data:
+                variant_logistics = variant.pop('logistics', None)
                 variant_instance = ProductVariant.objects.create(product=instance, **variant)
 
                 # Update variant logistics if updated
-                variant_logistics = variant.pop('logistics', None)
                 if variant_logistics:
                     serializer = LogisticsSerializer(data=variant_logistics)
                     if serializer.is_valid(raise_exception=True):
