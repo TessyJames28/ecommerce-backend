@@ -7,6 +7,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .models import UploadedAsset
 from .serializers import UploadedAssetSerializer
 from .utils.s3 import upload_file, delete_file
+from users.views import CookieTokenAuthentication
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ def detect_media_type(content_type: str) -> str:
 class MediaUploadView(generics.CreateAPIView):
     serializer_class = UploadedAssetSerializer
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
 
     def perform_create(self, serializer):
         file_obj = self.request.FILES.get("file")
@@ -99,6 +101,7 @@ class MediaUploadView(generics.CreateAPIView):
 class MediaDeleteView(generics.DestroyAPIView):
     queryset = UploadedAsset.objects.all()
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     lookup_field = "pk"
 
     def perform_destroy(self, instance):
@@ -115,6 +118,7 @@ class MediaDeleteView(generics.DestroyAPIView):
 class MediaListView(generics.ListAPIView):
     serializer_class = UploadedAssetSerializer
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['media_type', 'is_private']
 
@@ -129,6 +133,7 @@ class MediaListView(generics.ListAPIView):
 class VendorMediaListView(generics.ListAPIView):
     serializer_class = UploadedAssetSerializer
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []  # disables all authentication
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['media_type']
 

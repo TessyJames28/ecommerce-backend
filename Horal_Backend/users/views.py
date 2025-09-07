@@ -162,16 +162,16 @@ class ConfirmRegistrationOTPView(GenericAPIView):
             key="access_token",
             value=tokens["access"],
             httponly=True,
-            secure=False, # Use True in production (HTTPS)
-            samesite="Lax"
+            secure=True, # Use True in production (HTTPS)
+            samesite="None"
         )
         
         response.set_cookie(
             key="refresh_token",
             value=tokens["refresh"],
             httponly=True,
-            secure=False, # Use True in production (HTTPS)
-            samesite="Lax"
+            secure=True, # Use True in production (HTTPS)
+            samesite="None"
         )
         print("ACCESS TOKEN COOKIE:", request.COOKIES.get("access_token"))
 
@@ -275,16 +275,16 @@ class UserLoginView(GenericAPIView):
             key="access_token",
             value=serializer.get_access_token(user),
             httponly=True,
-            secure=False, # Use True in production (HTTPS)
-            samesite="Lax"
+            secure=True, # Use True in production (HTTPS)
+            samesite="None"
         )
 
         response.set_cookie(
             key="refresh_token",
             value=serializer.get_refresh_token(user),
             httponly=True,
-            secure=False, # Use True in production (HTTPS)
-            samesite="Lax"
+            secure=True, # Use True in production (HTTPS)
+            samesite="None"
         )
         print("ACCESS TOKEN COOKIE:", request.COOKIES.get("access_token"))
         
@@ -421,16 +421,16 @@ class GoogleLoginView(GenericAPIView):
                     key="access_token",
                     value=serializer.get_access_token(user),
                     httponly=True,
-                    secure=False, # Use True in production (HTTPS)
-                    samesite="Lax"
+                    secure=True, # Use True in production (HTTPS)
+                    samesite="None"
                 )
 
                 response.set_cookie(
                     key="refresh_token",
                     value=serializer.get_refresh_token(user),
                     httponly=True,
-                    secure=False, # Use True in production (HTTPS)
-                    samesite="Lax"
+                    secure=True, # Use True in production (HTTPS)
+                    samesite="None"
                 )
 
                 # Save refresh token in the DB
@@ -708,16 +708,16 @@ class CookieTokenRefreshView(TokenRefreshView):
             key="access_token",
             value=access,
             httponly=True,
-            secure=False,
-            samesite="Lax",
+            secure=True,
+            samesite="None",
         )
 
         response.set_cookie(
             key="refresh_token",
             value=refresh,
             httponly=True,
-            secure=False,
-            samesite="Lax",
+            secure=True,
+            samesite="None",
         )
 
         return response
