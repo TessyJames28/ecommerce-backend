@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from products.textchoices import SizeOption
+from products.textchoices import LogisticSizeUnit
 from django.core.exceptions import ValidationError
 from products.models import ProductVariant
 import uuid
@@ -20,7 +20,7 @@ class Logistics(models.Model):
     object_id = models.UUIDField(null=True, blank=True)
     product = GenericForeignKey('content_type', 'object_id')
 
-    weight_measurement = models.CharField(max_length=10, choices=SizeOption.SizeUnit.choices)
+    weight_measurement = models.CharField(max_length=10, choices=LogisticSizeUnit.choices)
     total_weight = models.DecimalField(max_digits=5, decimal_places=2)
     
 
@@ -34,7 +34,7 @@ class Station(models.Model):
     station_name = models.CharField(max_length=255)
     station_code = models.CharField(max_length=10, blank=True, null=True)
     state_id = models.IntegerField()
-    state_name = models.CharField(max_length=255)
+    state_name = models.CharField(max_length=255, db_index=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -47,7 +47,7 @@ class GIGLExperienceCentre(models.Model):
     """Model to store all GIGL experience centers"""
     # Station address, longitute and latitude
     address = models.CharField(max_length=255)
-    state = models.CharField(max_length=50)
+    state = models.CharField(max_length=50, db_index=True)
     centre_name = models.CharField(max_length=50)
 
     created_at = models.DateTimeField(auto_now_add=True)

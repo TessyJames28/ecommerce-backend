@@ -2,6 +2,7 @@ import json
 from django.utils.timezone import now
 from django.shortcuts import get_object_or_404
 from rest_framework.generics import GenericAPIView
+from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import PermissionDenied
 from .utils import generate_token_for_user, verify_google_token, exchange_code_for_token
@@ -30,7 +31,7 @@ from notifications.utils import (
     verify_registration_otp,
     safe_cache_set, safe_cache_get
 )
-from notifications.emails import send_otp_email
+from notifications.emails import send_otp_email, send_registration_otp_email
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from django.views.decorators.csrf import csrf_exempt
@@ -54,14 +55,15 @@ class RegisterUserView(GenericAPIView):
         serializer.is_valid(raise_exception=True)
         
         email = serializer.validated_data["email"]
+        user_name = serializer.validated_data["full_name"]
         otp = generate_otp()
 
-        # Store registration data temporarily
-        safe_cache_set(f"reg_data:{email}", json.dumps(serializer.validated_data), timeout=300) #5 mins expiry
-        safe_cache_set(f"otp:{email}", otp, timeout=300) # OTP valid for 5 mins too
+        # Store registration data temporarily for 30mins
+        safe_cache_set(f"reg_data:{email}", json.dumps(serializer.validated_data), timeout=1800)
+        safe_cache_set(f"otp:{email}", otp, timeout=300) # OTP valid for 5 mins
 
         # Send OTP
-        send_otp_email(email, otp)
+        send_registration_otp_email(email, otp, user_name)
 
         return Response({
             "status": "success",
@@ -171,9 +173,50 @@ class ConfirmRegistrationOTPView(GenericAPIView):
             secure=True, # Use True in production (HTTPS)
             samesite="None"
         )
-        print("ACCESS TOKEN COOKIE:", request.COOKIES.get("access_token"))
 
         return response
+    
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ResendRegistrationOTPView(GenericAPIView):
+    """
+    Resends the OTP for a registration email if user hasn't confirmed yet
+    """
+    serializer_class = serializers.Serializer  # simple serializer for email only
+
+    class InputSerializer(serializers.Serializer):
+        email = serializers.EmailField()
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+
+        # Check if registration data exists in Redis
+        reg_data = safe_cache_get(f"reg_data:{email}")
+        if not reg_data:
+            return Response({
+                "status": "error",
+                "status_code": status.HTTP_400_BAD_REQUEST,
+                "message": "No pending registration found or registration expired."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Generate a new OTP or reuse the old one
+        otp = generate_otp()
+        safe_cache_set(f"otp:{email}", otp, timeout=300)  # 5 mins expiry
+
+        # Send OTP email
+        user_data = json.loads(reg_data)
+        user_name = user_data.get("full_name", "User")
+        send_registration_otp_email(email, otp, user_name)
+
+        return Response({
+            "status": "success",
+            "message": "OTP resent successfully. Check your email.",
+            "email": email
+        }, status=status.HTTP_200_OK)
+
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -242,7 +285,6 @@ class UserLoginView(GenericAPIView):
             secure=True, # Use True in production (HTTPS)
             samesite="None"
         )
-        print("ACCESS TOKEN COOKIE:", request.COOKIES.get("access_token"))
         
         # Manually send log in signal
         user_logged_in.send(sender=user.__class__, request=request, user=user)
@@ -334,7 +376,6 @@ class GoogleLoginView(GenericAPIView):
                 user, created = CustomUser.objects.get_or_create(email=email)
 
                 if created:
-                    print("User created")
                     pass
                     
                 user.full_name = full_name
@@ -435,11 +476,12 @@ class PasswordResetRequestView(GenericAPIView):
         # Placeholder for sending OTP
         email = serializer.validated_data['email']
         user = CustomUser.objects.get(email=email)
+        user_name = user.full_name
         
         
         # Generate OTP and send it to the user's email
         otp_code = generate_otp() # Generate a random OTP code
-        send_otp_email(email, otp_code) # Send the OTP email
+        send_otp_email(email, otp_code, user_name) # Send the OTP email
         store_otp(user.id, otp_code) # Store the OTP in Redis with a 5-minute expiry time
 
         return Response({

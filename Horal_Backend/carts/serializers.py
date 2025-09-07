@@ -8,6 +8,9 @@ from products.models import (
 )
 from products.serializers import MixedProductSerializer
 from products.utils import product_models_list
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class CartItemSerializer(serializers.ModelSerializer):
@@ -30,7 +33,7 @@ class CartItemSerializer(serializers.ModelSerializer):
         try:
             return MixedProductSerializer().to_representation(product)
         except Exception as e:
-            print(f"Error serializing product: {e}")
+            logger.error(f"Error serializing cart items mixed product {product.id}: {str(e)}")
             return None
 
 

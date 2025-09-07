@@ -7,6 +7,9 @@ from sellers.models import SellerKYC
 from sellers.serializers import SellerSerializer
 from users.serializers import ShippingAddressSerializer
 from user_profile.models import Profile, Image
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ProductRatingSummarySerializer(serializers.ModelSerializer):
@@ -103,13 +106,13 @@ class SellerProfileSerializer(serializers.ModelSerializer):
     def get_shop(self, obj):
         try:
             return ShopSerializer(obj.user.kyc.owner.first()).data
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error occurred when fetching shop in seller profile serializer: {e}")
             return None
     
 
     def update(self, instance, validated_data):
         # Update base CustomUser fields
-        print(f"Validated data: {validated_data}")
         user_data = validated_data.pop("user", {})
         phone_number = user_data.get("phone_number")
         kyc_data = user_data.get("kyc", {})
@@ -118,8 +121,6 @@ class SellerProfileSerializer(serializers.ModelSerializer):
         socials_data = kyc_data.get("socials")
 
         image_url = validated_data.pop("image", None)
-        print(f"phone number: {phone_number}")
-        print(f"address: {address_data}\nsocials: {socials_data}\nimage: {image_url}")
 
         # Raise error if KYC contains disallowed fields
         allowed_keys = {"address", "socials"}
@@ -152,11 +153,8 @@ class SellerProfileSerializer(serializers.ModelSerializer):
         address = seller_kyc.address
         socials = seller_kyc.socials
 
-        print(f"Address: {address}\nsocials: {socials}")
-        print("I am here")
         if address_data:
             for attr, value in address_data.items():
-                print(f"Address data: {attr} => {value}")
                 setattr(address, attr, value)
             address.save()
 

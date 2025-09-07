@@ -22,6 +22,9 @@ from .helper import (
 )
 from shops.models import Shop
 from users.models import CustomUser
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_total_revenue(shop):
@@ -56,7 +59,8 @@ def get_withdrawable_revenue(shop_id):
         user = shop.owner.user
         if not user.is_seller:
             raise Exception("User is not a seller")
-    except (Shop.DoesNotExist, AttributeError):
+    except (Shop.DoesNotExist, AttributeError) as e:
+        logger.warning(f"Error occurred: {e}")
         raise Exception(f"seller does not exists")
 
     cr = OrderItem.objects.filter(
@@ -98,7 +102,6 @@ def get_total_order(shop):
     ).aggregate(total=Sum("quantity"))
 
     for val in total.values():
-        print(val)
         return val
 
 
@@ -374,7 +377,6 @@ def get_topselling_product_sql(shop, from_date):
         """, [str(shop), from_date])
         
         # Get column names for dictionary output
-        # print(f"db data: {cursor.fetchall()}")
         rows = cursor.fetchall()  # ✅ fetch once
         columns = [col[0] for col in cursor.description]
         raw_data = [dict(zip(columns, row)) for row in rows]
@@ -393,7 +395,8 @@ def get_topselling_product_sql(shop, from_date):
                 row['price'] = getattr(product, 'price', None)
                 row['product_id'] = product.id
                 enriched.append(row)
-        except ProductIndex.DoesNotExist:
+        except ProductIndex.DoesNotExist as e:
+            logger.warning(f"Error occurred when reading topselling prod sql: {e}")
             continue
 
     return enriched
@@ -417,7 +420,8 @@ def attach_category_and_first_image(products_data):
         # Fetch the category from ProductIndex
         try:
             product_index = ProductIndex.objects.only("category_name").get(id=product_id)
-        except ProductIndex.DoesNotExist:
+        except ProductIndex.DoesNotExist as e:
+            logger.warning(f"Error occurred when attaching cat and first img: {e}")
             continue
 
         category_name = product_index.category_name.lower()
@@ -515,7 +519,7 @@ def parse_date_safe(date_str):
 def reconcile_raw_sales():
     """Function to reconcile rawsale"""
     RawSale.objects.filter(
-        order_items__is_returned=True,
+        order_item__is_returned=True,
         is_valid=True
     ).update(is_valid=False, invalidated_at=now(), processed_flags={})
 

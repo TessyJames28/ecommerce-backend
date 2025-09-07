@@ -4,15 +4,18 @@ from google.auth.transport import requests as google_requests
 from google.oauth2.credentials import Credentials
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+from django.core.cache import cache
 from django.conf import settings
 import requests
 from rest_framework_simplejwt.tokens import RefreshToken
 from jwt import decode as jwt_decode
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def refresh_google_token(refresh_token, client_id):
     """Refresh the Google access token using the refresh token."""
-    print("Refreshing Google token...")
     # Pass the refresh token to get a new access token
     try:
         credentials = Credentials(
@@ -22,11 +25,9 @@ def refresh_google_token(refresh_token, client_id):
             client_secret=settings.GOOGLE_OAUTH['CLIENT_SECRET'],
             token_uri='https://oauth2.googleapis.com/token'
         )
-        print("Credentials created successfully.")
         
         # Refresh the to get a new access token
         credentials.refresh(google_requests.Request())
-        print("Token refreshed successfully.")
 
         # Use the access token to get user info from Google's userinfo endpoint
         access_token = credentials.token
@@ -37,21 +38,17 @@ def refresh_google_token(refresh_token, client_id):
         if user_info_response.status_code == 200:
             # Return the user info directly
             user_info = user_info_response.json()
-            print("User info retrieved successfully.")
-            print(user_info)
             return user_info
         else:
-            print(f"Error retrieving user info: {user_info_response.text}")
             return None
         # return new_token_id
     except Exception as e:
-        print(f"Error refreshing Google token: {e}")
+        logger.error(f"Error refreshing Google token: {str(e)}")
         return None
     
 
 def verify_google_token(token_id, client_id):
     """Verify the Google token ID and refresh token."""
-    print("Verifying Google token...")
     try:
         # Verify the token using Google's API
         id_info = id_token.verify_oauth2_token(
@@ -59,10 +56,10 @@ def verify_google_token(token_id, client_id):
             google_requests.Request(),
             client_id
         )
-        print("Token verified successfully.")
+
         return id_info
     except ValueError as e:
-        print(f"Token expired or invalid, attempting a refresh ...")
+        logger.warning(f"Google token verification failed: {str(e)}")
 
         # Get refresh token from the DB
         # Decode the expired token to extract user's Google sub/email
@@ -72,9 +69,11 @@ def verify_google_token(token_id, client_id):
             email = payload.get("email")
 
         except Exception as decode_err:
+            logger.error(f"Error decoding expired token: {str(decode_err)}")
             raise ValueError(f"Cannot decode expired token: {decode_err}")
 
         if not google_sub and not email:
+            logger.error("No sub or email found in expired token payload")
             raise ValueError("Unable to extract user info from expired token.")
 
         # Lookup refresh token in DB
@@ -89,11 +88,10 @@ def verify_google_token(token_id, client_id):
         # Attempt to refresh the token if it's expired
         user_info = refresh_google_token(refresh_token, client_id)
         if user_info:
-            print("Successfully retrived user info with refresh token")
 
             # Add the refresh flag to indicate we used the refresh flow
             user_info['refreshed_token'] = True
-            print(f"In verified_google_token: {user_info}")
+
             return user_info
         else:
             raise ValueError("Failed to refresh expired token")
@@ -157,3 +155,24 @@ def get_or_create_temp_user(email, full_name=None):
     )
     return user
 
+MAX_OTP_RESENDS = 3  # max resends per hour
+RESEND_WINDOW = 3600  # 1 hour in seconds
+
+def can_resend_otp(email: str) -> bool:
+    """
+    Checks if user can resend OTP.
+    Increments counter if allowed, returns True.
+    Returns False if limit exceeded.
+    """
+    key = f"otp_resend_count:{email}"
+    current_count = cache.get(key) or 0
+
+    if current_count >= MAX_OTP_RESENDS:
+        return False
+
+    # Increment count and set expiry if new
+    cache.incr(key)
+    if current_count == 0:
+        cache.expire(key, RESEND_WINDOW)
+
+    return True

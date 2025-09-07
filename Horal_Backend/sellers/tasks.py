@@ -47,6 +47,5 @@ def verify_seller_kyc(kyc_id):
     except SellerKYC.DoesNotExist:
         pass
 
-    print("Scheduled Celery task ran.")  # Render shows stdout in logs
     logger.info("Scheduled Celery task ran.")
 

@@ -2,6 +2,7 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.utils.timezone import now
+from rest_framework import serializers
 from .models import (
     ChildrenProduct, VehicleProduct, GadgetProduct,
     FashionProduct, ElectronicsProduct, AccessoryProduct,
@@ -13,7 +14,7 @@ from .models import (
 from .serializers import (
     ChildrenProductSerializer, VehicleProductSerializer, GadgetProductSerializer,
     FashionProductSerializer, ElectronicsProductSerializer, FoodProductSerializer,
-    HealthAndBeautyProductSerializer, AccessoryProductSerializer
+    HealthAndBeautyProductSerializer, AccessoryProductSerializer, normalize_choice
 ) 
 from django.db import connection
 from django.utils.timezone import now
@@ -251,9 +252,82 @@ def topselling_product_sql(from_date):
         """, [from_date])
         
         # Get column names for dictionary output
-        # print(f"db data: {cursor.fetchall()}")
         rows = cursor.fetchall()  # ✅ fetch once
         columns = [col[0] for col in cursor.description]
         raw_data = [dict(zip(columns, row)) for row in rows]
 
     return raw_data
+
+
+
+def normalize_weight(value: float | None, unit: str) -> float | None:
+    """
+    Convert weight into kilograms.
+    Returns None if no weight is provided or if the unit is not a weight unit.
+    """
+    if value is None:
+        return None
+
+    unit = (unit or "KG").upper()
+
+    # Weight conversions to KG
+    if unit == "KG":
+        return float(value)
+    elif unit == "G":
+        return float(value) / 1000
+    elif unit == "LB":
+        return float(value) * 0.453592
+    elif unit == "OZ":
+        return float(value) * 0.0283495
+
+    # If it's not a weight unit, return None
+    return None
+
+
+
+
+def validate_logistics_vs_variants(logistics_data, variants_data):
+    """
+    Ensure logistics weight >= product/variant weight.
+    Variants and logistics must be compared in kg.
+    """
+    # Case 1: Product-level logistics
+    if logistics_data:
+        logistics_weight = normalize_weight(
+            logistics_data.get("total_weight"),
+            logistics_data.get("weight_measurement", "KG")
+        )
+
+        for variant in variants_data:
+            variant_weight = normalize_weight(
+                variant.get("custom_size_value"),
+                variant.get("custom_size_unit", "KG")
+            )
+            if variant_weight is not None and logistics_weight is not None:
+                if variant_weight > logistics_weight:
+                    raise serializers.ValidationError(
+                        f"Variant '{variant.get('custom_size_unit')}' weight of ({variant_weight:.2f}kg) "
+                        f"cannot exceed product logistics weight of ({logistics_weight:.2f}kg)."
+                    )
+
+    # Case 2: Variant-level logistics
+    else:
+        for variant in variants_data:
+            logistics = variant.get("logistics")
+            if not logistics:
+                continue
+
+            logistics_weight = normalize_weight(
+                logistics.get("total_weight"),
+                logistics.get("weight_measurement", "KG")
+            )
+            variant_weight = normalize_weight(
+                variant.get("custom_size_value"),
+                variant.get("custom_size_unit", "KG")
+            )
+            if variant_weight is not None and logistics_weight is not None:
+                if variant_weight > logistics_weight:
+                    raise serializers.ValidationError(
+                        f"Variant '{variant.get('custom_size_unit')}' weight of ({variant_weight:.2f}kg) "
+                        f"cannot exceed its logistics weight of ({logistics_weight:.2f}kg)."
+                    )

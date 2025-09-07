@@ -80,13 +80,10 @@ class SupportSerializer(serializers.ModelSerializer):
         ]
 
         # Get current status
-        print(f"ID: {instance.id}")
         support_stat = Support.objects.get(id=instance.id)
-        print(f"support stat: {support_stat}")
 
 
         # must pass through processing
-        print(f"Current status: {support_stat.status}")
         if status_value in must_pass_through_processing and support_stat.status != Support.Status.PROCESSING:
             raise serializers.ValidationError("The ticket must be in processing state first")
 
@@ -181,7 +178,6 @@ class TicketsSerializer(serializers.ModelSerializer):
 
         # Determine the type of the linked object
         model_class = obj.parent.__class__
-        print(f"Check model class: {model_class}")
         if model_class.__name__ == "Support":
             from .serializers import SupportSerializer
             return SupportSerializer(obj.parent).data
@@ -262,7 +258,6 @@ class TicketsUpdateSerializer(serializers.ModelSerializer):
 
         # If trying to assign/reassign or change state, caller must be a lead support staff
         if new_assignee or new_reassignee or ticket_state_value:
-            print(f"Staff: {request.user} \nName: {request.user.full_name}")
             self._require_lead(request.user)
 
         # Cannot reassign if never assigned
@@ -361,8 +356,6 @@ class MessageSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         support = self.context.get("support")   # passed from Support view
         return_obj = self.context.get("return") # passed from Return view
-        print(f"User auth: {request.user.is_authenticated}")
-        print(f"User: {request.user}")
 
         # Attach sender info
         if request and request.user.is_authenticated:

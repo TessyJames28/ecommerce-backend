@@ -80,25 +80,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_user_email(self, obj):
         return obj.user.email
-    
 
-    # def get_shipping_address(self, obj):
-    #     """
-    #     Get the shipping address data from the order
-    #     Group them under shipping_address in the response
-    #     """
-    #     fields = [
-    #         'street_address', 'local_govt', 'landmark',
-    #         'country', 'state', 'phone_number'
-    #     ]
-
-    #     address_data = {}
-    #     for field in fields:
-    #         address_data[field] = getattr(obj, field, None)
-    #     # Return None if all fields are empty
-    #     if not any(address_data.values()):
-    #         return None
-    #     return address_data
     
 
     def to_representation(self, instance):
@@ -123,7 +105,6 @@ class OrderSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         """Allow the user to set shipping address only once during first checkout"""
         shipping_address_data = validated_data.pop('shipping_address', None)
-        print(shipping_address_data)
 
         # Check that the order status is still pending
         if instance.status != Order.Status.PENDING:
@@ -138,17 +119,11 @@ class OrderSerializer(serializers.ModelSerializer):
 
         # Update shipping address when provided or changed by timers
         if shipping_address_data:
-            print(f"Shipping address data: {shipping_address_data}")
             shipping_address, _ = ShippingAddress.objects.update_or_create(
                 user=user,
                 defaults=shipping_address_data
             )
 
-            # Copy data into the order snapshot fields
-            # address_fields = [
-            #     'street_address', 'local_govt', 'landmark',
-            #     'country', 'state', 'phone_number'
-            # ]
             for field in [
                 'street_address', 'local_govt', 'landmark',
                 'country', 'state', 'phone_number'

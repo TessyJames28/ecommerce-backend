@@ -76,32 +76,3 @@ def update_raw_sales(sender, instance, **kwargs):
 
         SalesAdjustment.objects.create(raw_sales=raw_sale)
 
-
-
-# @receiver(post_save, sender=OrderItem)
-# def handle_order_status_change(sender, instance, **kwargs):
-#     """Track cancellations and returns for sales validity."""
-
-#     # Only proceed if this is a new return (not already invalidated)
-#     if instance.is_returned:
-#         raw_sales = RawSale.objects.filter(
-#             order_item=instance,
-#             variant=instance.variant,
-#             is_valid=True
-#         )
-#         for sale in raw_sales:
-#             # Reset processed_flags to all False
-#             if sale.processed_flags:
-#                 reset_flags = {k: False for k in sale.processed_flags.keys()}
-#             else:
-#                 reset_flags = {}
-
-#             sale.is_valid = False
-#             sale.invalidated_at = now()
-#             sale.processed_flags = reset_flags
-#             sale.save(update_fields=["is_valid", "invalidated_at", "processed_flags"])
-
-#             # Prevent duplicate adjustment records
-#             if not SalesAdjustment.objects.filter(raw_sales=sale).exists():
-#                 SalesAdjustment.objects.create(raw_sales=sale)
-

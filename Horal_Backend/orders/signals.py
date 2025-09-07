@@ -1,4 +1,4 @@
-from django.dispatch import receiver
+from django.dispatch import receiver, Signal
 from django.db.models.signals import post_save, post_delete
 from .models import (
     Order, OrderItem, OrderShipment,
@@ -23,6 +23,95 @@ from sellers.models import SellerKYC, SellerKYCAddress
 from shops.models import Shop
 from .tasks import create_gigl_shipment_on_each_shipment
 from logistics.utils import calculate_shipping_for_order, get_experience_centers
+import logging
+
+logger = logging.getLogger(__name__)
+
+shipment_delivered = Signal()
+
+
+@receiver(shipment_delivered)
+def handle_shipment_delivered(sender, shipment, reminder=None, **kwargs):
+    """
+    Signal to send email to customer for delivered shipment,
+    either as informational completion notice or review reminder.
+    """
+    if not shipment.delivered_at:
+        return
+
+    # Build product list
+    products = []
+    for item in shipment.items.all():
+        product = ProductIndex.objects.get(id=item.variant.object_id)
+        products.append({
+            "image": product.image if product.image else None,
+            "name": product.title,
+            "seller": shipment.seller.user.full_name,
+            "review_url": f"https://www.horal.ng/products/{product.slug}",
+        })
+
+    recipient = shipment.order.user.email
+    user = shipment.order.user.full_name
+    from_email = f"Horal Order <{settings.DEFAULT_FROM_EMAIL}>"
+
+    if reminder is None:
+        # Informational email for completed order
+        heading = "Your Order is Completed!"
+        body_paragraphs = [
+            "Your order has been marked as completed.",
+            "The seller has been paid successfully.",
+            "We hope you enjoyed your shopping experience!"
+        ]
+        show_other_reviews = False  # no review CTA here
+    else:
+        # Reminder emails for reviews
+        show_other_reviews = shipment.order.user.orders.exclude(id=shipment.order.id).filter(
+            shipments__status__in=[
+                OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
+                OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
+                OrderShipment.Status.DELIVERED_TO_TERMINAL
+            ]
+        ).exists()
+
+        if reminder == "2h":
+            heading = "Reminder: Share Your Feedback!"
+            body_paragraphs = [
+                "It’s been a couple of hours since your order was delivered.",
+                "Help us improve by leaving a review for your purchase."
+            ]
+        elif reminder == "24h":
+            heading = "24-Hour Reminder: Leave a Review"
+            body_paragraphs = [
+                "We noticed you haven’t left a review yet.",
+                "Sharing your experience helps other buyers and the seller."
+            ]
+        elif reminder == "48h":
+            heading = "Final Reminder: Tell Us About Your Order"
+            body_paragraphs = [
+                "This is a friendly final reminder to leave a review for your recent purchase.",
+                "Your feedback makes a difference!"
+            ]
+        else:
+            heading = "Your Recent Horal Order"
+            body_paragraphs = [
+                "We would love to hear your thoughts on your recent purchase."
+            ]
+
+    send_email_task.delay(
+        recipient=recipient,
+        subject=heading,
+        from_email=from_email,
+        template_name="notifications/emails/review_order_email.html",
+        context={
+            "user": user,
+            "heading": heading,
+            "body_paragraphs": body_paragraphs,
+            "products": products,
+            "show_other_reviews": show_other_reviews,
+        }
+    )
+
+    logger.info(f"Shipment email sent to user (reminder: {reminder})")
 
 
 @receiver(post_save, sender=OrderReturnRequest)
@@ -34,11 +123,8 @@ def send_return_received_email(sender, instance, created, **kwargs):
 
     if created:
         subject = generate_received_subject(instance)
-        body = f"Hello {instance.order_item.order.user.full_name},\n\n" \
-               f"We have received your return request for item {instance.order_item.id}:\n\n" \
-               f"{instance.reason}\n\n" \
-               "Our team will review it and get back to you shortly." \
-               "\n\nNote: All further correspondence will be via this email"
+        body = f"We have received your return request for item #{instance.order_item.id} " \
+                "Our team will review and update you within 7 business days"
 
         # Get user email
         returns = OrderReturnRequest.objects.get(
@@ -47,15 +133,26 @@ def send_return_received_email(sender, instance, created, **kwargs):
         )
 
         user = returns.order_item.order.user
-        print(f"User: {user}")
 
         from_email = f"returns@{settings.MAILGUN_DOMAIN}"
         # Trigger async email
+        body_paragraphs = [
+            f"We have received your return request for item {instance.order_item.id}",
+            "Our team will review and update you within 7 business days"
+        ]
+        footer_note = "Note: All further correspondence will be via this email thread"
+
         send_email_task.delay(
             recipient=instance.order_item.order.user.email,
             subject=subject,
-            body=body,
-            from_email=f"Returns <{from_email}>"
+            from_email=f"Horal Returns <returns@{settings.MAILGUN_DOMAIN}>",
+            template_name="notifications/emails/general_email.html",
+            context={
+                "user": instance.order_item.order.user.full_name,
+                "title": subject,
+                "body_paragraphs": body_paragraphs,
+                "footer_note": footer_note
+            }
         )
 
         sender = CustomUser.objects.get(email=from_email)
@@ -78,77 +175,66 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
     and send a customized receipt email. If this is the user's first order, 
     add a special message.
     """
-    print("Shipment creation signal called")
 
     # Don't trigger on creation only update
     if created or instance.status != Order.Status.PAID:
         return
     
-    # Check if status just changed to PAID
-    # previous = Order.objects.get(pk=instance.pk)
-    # if previous.status == Order.Status.PAID:
-    #     return  # Already marked as paid before, skip
-    print("About to create shipment")
     create_gigl_shipment_on_each_shipment.delay(str(instance.id))
-    print("Shipment created")
 
-    print("Preping customer email")
-    # Prepare a receipt-like order summary
-    item_list = []
+    from_email = f"Horal Order <{settings.DEFAULT_FROM_EMAIL}>"
+    order_items = []
+
     for shipment_data in instance.shipments.all():
         for item in shipment_data.items.all(): 
             product = ProductIndex.objects.get(id=item.variant.object_id)
-            name = product.title
-            quantity = item.quantity
-            price = item.total_price
-            item_list.append(f"{name} x {quantity}  (₦{price})")
-            print(f"Item list: {item_list}")
-    item_lines = "\n".join(item_list)
-    print(f"Items from shipments: {item_lines}")
-    receipt_box = (
-        f"+{'-'*40}+\n"
-        f"|{'HORAL ORDER RECEIPT'.center(40)}|\n"
-        f"+{'-'*40}+\n"
-        f"| Order ID: {str(instance.id).ljust(28)}|\n"
-        f"|{'-'*40}|\n"
-        f"{item_lines}\n"
-        f"|{'-'*40}|\n"
-        f"| Product Total: {str(instance.product_total).ljust(22)}|\n"
-        f"| Shipping: {str(instance.shipping_total).ljust(27)}|\n"
-        f"| Grand Total: {str(instance.total_amount).ljust(25)}|\n"
-        f"+{'-'*40}+"
-    )
+            order_items.append({
+                "name": product.title,
+                "quantity": item.quantity,
+                "price": item.total_price
+            })
 
-    # Check if this is the user's first successful payment
+    totals = {
+        "product_total": instance.product_total,
+        "shipping_total": instance.shipping_total,
+        "grand_total": instance.total_amount
+    }
+
     first_paid_order = not Order.objects.filter(
         user=instance.user,
         status=Order.Status.PAID
     ).exclude(id=instance.id).exists()
-    print("Prepping email sending")
-    # Customize subject and greeting if first paid order
+
     if first_paid_order:
         subject = "🎉 Congratulations on Your First Order!"
-        greeting = f"Hello {instance.user.full_name},\n\nThank you for placing your first order with Horal! 🎉"
+        body_paragraphs = [
+            "Thank you for placing your first order with Horal! 🎉",
+            f"Your order #{instance.id} is being processed. We’ll keep you updated.",
+            "Here is your receipt:"
+        ]
     else:
         subject = "Your Horal Order Receipt"
-        greeting = f"Hello {instance.user.full_name},\n\nThank you for your purchase!"
+        body_paragraphs = [
+            "Thank you for your purchase!",
+            f"Your order #{instance.id} is being processed. We’ll keep you updated.",
+            "Here is your receipt:"
+        ]
 
-    body = (
-        f"{greeting}\n\n"
-        f"Here is your receipt:\n\n"
-        f"{receipt_box}\n\n"
-        f"Thank you for shopping with Horal!"
+    send_email_task.delay(
+        recipient=instance.user.email,
+        subject=subject,
+        from_email=from_email,
+        template_name="notifications/emails/order_receipt_email.html",
+        context={
+            "user": instance.user.full_name,
+            "body_paragraphs": body_paragraphs,
+            "order_items": order_items,
+            "totals": totals
+        }
     )
-
-    recipient = instance.user.email
-    from_email = f"Horal Order <{settings.DEFAULT_FROM_EMAIL}>"
-    
-    send_email_task.delay(recipient, subject, body, from_email)
-    print("Email sent for buyer")
 
     
     # ======== Email each seller once with all their items ========
-    print("In seller data section")
 
     # Group seller data
     sellers_data = defaultdict(lambda: {
@@ -175,30 +261,34 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
         # Add shipment items
         for item in shipment.items.all():
             product = ProductIndex.objects.get(id=item.variant.object_id)
-            sellers_data[seller_id]["items"].append(
-                f"{product.title:<25} x{item.quantity:<3} ₦{item.total_price}"
-            )
-
-    print("About to send email to each seller")
-    print(f"Sellers data: {sellers_data}")
+            sellers_data[seller_id]["items"].append({
+                "name": product.title,
+                "quantity": item.quantity,
+                "price": f"₦{item.total_price}"
+            })
 
     # Send emails to each seller
     for seller_id, data in sellers_data.items():
-        items_str = "\n".join(data["items"])
         seller_subject = f"New order from {instance.user.full_name}"
-        
-        seller_body = (
-            f"Hello {data['name']},\n\n"
-            f"You have a new order from {instance.user.full_name}.\n\n"
-            f"Order ID: {instance.id}\n"
-            f"Items:\n{items_str}\n\n"
-            f"Please get these items ready for shipment and drop them at any of the below location(s):\n"
-            f"\t{data['addresses']}."
+        body_paragraphs = [
+            f"You have a new order from {instance.user.full_name}.",
+            f"Order ID: {instance.id}",
+            "Here are the items you need to prepare:"
+        ]
+
+        send_email_task.delay(
+            recipient=data["email"],
+            subject=seller_subject,
+            from_email=from_email,
+            template_name="notifications/emails/order_receipt_email.html",
+            context={
+                "user": data["name"],
+                "body_paragraphs": body_paragraphs,
+                "order_items": data["items"],
+                "addresses": data["addresses"]
+            }
         )
 
-
-        send_email_task.delay(data["email"], seller_subject, seller_body, from_email)
-        print("Email sent to seller")
 
 @receiver(post_delete, sender=OrderItem)
 def restore_reserved_stock(sender, instance, **kwargs):
@@ -220,42 +310,57 @@ def send_order_status_email(sender, instance, created, **kwargs):
     Send email notification to customers based on
     Shipment status updates.
     """
-    print("Signal for shipment status update called")
     if created:
         return
     
     status = instance.status
-    print(f"Instance status: {status}")
     recipient = instance.order.user.email
-    print(f"Recipient email: {recipient}")
     from_email = f"Horal Shipment <{settings.DEFAULT_FROM_EMAIL}>"
     # pickup_station = Station.objects.get(station_id=instance.buyer_station)
 
     # Email customers based on status
     if status in PICKUP_STATUSES:
         subject = "Your order is ready for pickup"
-        message = f"Dear {instance.order.user.full_name},\n\n" \
-                  f"Your order {instance.order.id} is now available for pickup at the designated location. " \
-                  f"Our partner will reach out with pickup address.\n\n" \
-                  f"Please collect it as soon as possible.\n\nThank you!"
+        message = [
+            f"Your order #{instance.order.id} is now available for pickup at the designated location.",
+            f"Our partner will reach out with pickup address." ,
+            f"Please collect it as soon as possible.",
+            "Thank you!"
+        ]
     elif status in DELIVERED_STATUSES:
         subject = "Your order has been delivered"
-        message = f"Dear {instance.order.user.full_name},\n\n" \
-                  f"Your order {instance.order.id} has been delivered to your address. " \
-                  f"Please check your package and leave a review within 3 days. " \
-                  f"If there are any issues, you may initiate a return request within this period.\n\nThank you!"
+        message = [
+            f"Your order #{instance.order.id} has been delivered to your address.",
+            f"Please check your package and leave a review within 3 days.",
+            f"If there are any issues, you may initiate a return request within this period.",
+            "Thank you!"
+        ]
     elif status in DELAY_STATUSES:
         subject = "Delivery Delay Notification"
-        message = f"Dear {instance.order.user.full_name},\n\n" \
-                  f"There has been a delay with your order {instance.order.id}. " \
-                  f"We apologize for the inconvenience and appreciate your patience.\n\nThank you!"
+        message = [
+            f"There has been a delay with your order #{instance.order.id}.",
+            "We sincerely apologize for the inconvenience and appreciate your patience.",
+            "Thank you!"
+        ]
     elif status in DELAY_STATUSES_CUSTOMER:
         subject = "Delivery Delay Notification"
-        message = f"Dear {instance.order.user.full_name},\n\n" \
-                  f"Your order shipment {instance.id} has arrived at the pickup station. " \
-                  f"Kindly go to the address provided by our partner to pick up your order\n\nThank you!"
+        message = [
+            f"Your order shipment #{instance.id} has arrived at the pickup station.",
+            f"Kindly go to the address provided by our partner to pick up your order",
+            "Thank you!"
+        ]
     else:
         return
 
-    send_email_task.delay(recipient, subject, message, from_email)
 
+    send_email_task.delay(
+        recipient=recipient,
+        subject=subject,
+        from_email=from_email,
+        template_name="notifications/emails/general_email.html",
+        context={
+            "user": instance.order.user.full_name,
+            "title": subject,
+            "body_paragraphs": message
+        }
+    )

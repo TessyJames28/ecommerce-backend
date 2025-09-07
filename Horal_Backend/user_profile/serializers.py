@@ -36,14 +36,11 @@ class ProfileSerializer(serializers.ModelSerializer):
         }
 
     def update(self, instance, validated_data):
-        print(validated_data)
         password = validated_data.pop('new_password', None)
         validated_data.pop('confirm_password', None)
         image_url = validated_data.pop("image", None)
         location = self.initial_data.get("location")
         phone_number = validated_data.pop("user", None).get("phone_number")
-
-        print(phone_number)
 
         user = instance.user
 

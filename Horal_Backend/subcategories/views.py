@@ -33,7 +33,6 @@ class SubCategoryCreateView(GenericAPIView, BaseResponseMixin):
     def post(self, request, *args, **kwargs):
         """Create a new sub category"""
         serializer = self.get_serializer(data=request.data)
-        print(serializer)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return self.get_response(

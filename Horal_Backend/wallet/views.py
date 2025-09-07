@@ -79,8 +79,12 @@ class VerifySellerBankDetailsView(APIView, BaseResponseMixin):
         business_name = business_name.strip().lower()
         account_name_clean = account_name.strip().lower()
 
+        full_name_set = set(full_name.split())
+        business_name_set = set(business_name.split())
+        account_name_set = set(account_name_clean.split())
+
         # Fail only if it doesn't match either personal name or business name
-        if account_name_clean not in full_name and account_name_clean not in business_name:
+        if not (account_name_set <= full_name_set or account_name_set <= business_name_set):
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
                 "The bank account name does not match your registered name or business name."
@@ -147,7 +151,6 @@ class ConfirmWithdrawalView(APIView, BaseResponseMixin):
         transfer_code = initiate_payout(seller_bank.recipient_code, seller_id)
         
         payout = Payout.objects.get(seller=seller_id, paystack_transfer_code=transfer_code)
-        print(f"Payout data: {payout}")
         # Get back data
         bank_data = PayoutSerializer(payout).data
 
@@ -179,7 +182,6 @@ class SellerBankDetailView(GenericAPIView, BaseResponseMixin):
     def get(self, request):
         """Get seller bank detail and revenue"""
         bank_data = self.get_bank_data()
-        print(f"Bank data: {bank_data}")
         serializer = self.get_serializer(bank_data)
 
         return self.get_response(

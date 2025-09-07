@@ -207,7 +207,6 @@ class SellerProfileView(GenericAPIView):
     
 
     def patch(self, request, *args, **kwargs):
-        print(f"Inside update view => data: {request.data}\nuser: {request.user}")
         profile = self.get_profile()
         serializer = self.get_serializer(
             profile,
@@ -332,7 +331,7 @@ class TopSellingProductsAPIView(APIView, BaseResponseMixin):
 
         # Rolling top selling products (last 30 days)
         top_selling_products = get_rolling_topselling_products(shop.id) or []
-        # print(f"top selling product: {top_selling_products}")
+
         if sort == "oldest":
             top_selling_products = sorted(
                 top_selling_products, 

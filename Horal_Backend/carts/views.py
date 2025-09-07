@@ -7,6 +7,9 @@ from .models import Cart, CartItem
 from .serializers import CartItemSerializer, CartSerializer, CartItemCreateSerializer
 from products.utils import BaseResponseMixin
 from .authentication import SessionOrAnonymousAuthentication
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Create your views here.
 class CartView(GenericAPIView, BaseResponseMixin):
@@ -17,21 +20,9 @@ class CartView(GenericAPIView, BaseResponseMixin):
 
     def get_cart(self, request):
         """Get or create a cart based on user authentication status"""
-        print(f"User for this cart: {request.user}")
         try:
             if request.user.is_authenticated:
                 cart, _ = Cart.objects.get_or_create(user=request.user)
-
-                # # Check if there is an orphaned session cart and merge if needed
-                # session_key = request.session.session_key
-                # if session_key:
-                #     session_cart = Cart.objects.filter(session_key=session_key).first()
-                #     if session_cart and session_cart.id != cart.id: # Don't merge is it's the same cart
-                #         self._merge_carts(session_cart, cart)
-                #         session_cart.delete() # Remove the session cart after merging
-
-                #         # Clear the session key reference to avoid stale references
-                #         request.session['cart_merged'] = True
                     
                 return cart
             else:
@@ -45,8 +36,8 @@ class CartView(GenericAPIView, BaseResponseMixin):
 
                 return cart
         except Exception as e:
-            # Log the error for debugging
-            print(f"Error in get_cart: {str(e)}")
+            logger.error(f"Error retrieving cart: {str(e)}")
+
             # Create a new cart as fallback
             if request.user.is_authenticated:
                 return Cart.objects.create(user=request.user)
@@ -157,7 +148,7 @@ class CartItemUpdateDeleteView(GenericAPIView, BaseResponseMixin):
             cart = self.get_cart(request)
             return get_object_or_404(CartItem, id=item_id, cart=cart)
         except Exception as e:
-            print(f"Error getting cart item: {str(e)}")
+            logger.error(f"Error getting cart item for update: {str(e)}")
             return None
         
 

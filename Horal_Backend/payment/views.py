@@ -20,6 +20,9 @@ from rest_framework.exceptions import ValidationError
 from users.authentication import CookieTokenAuthentication
 import uuid, os
 from wallet.models import Payout
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # Create your views here.
@@ -69,8 +72,32 @@ class InitializeTransaction(APIView):
         
         
         amount = int(order.total_amount * 100) # convert amount to kobo
-        reference = str(uuid.uuid4())
 
+        # --- Check if a transaction already exists for this order ---
+        existing_txn = PaystackTransaction.objects.filter(order=order).first()
+        if existing_txn:
+            if existing_txn.status == PaystackTransaction.StatusChoices.PENDING:
+                # Return existing pending transaction
+                return Response({
+                    "status": "success",
+                    "message": "Transaction already initialized",
+                    "data": {
+                        "authorization_url": existing_txn.authorization_url,
+                        "access_code": existing_txn.access_code,
+                        "reference": existing_txn.reference,
+                    }
+                })
+            else:
+                # If already completed or failed, optionally raise an error
+                return JsonResponse({
+                    "status": "error",
+                    "status_code": status.HTTP_400_BAD_REQUEST,
+                    "message": f"Transaction already {existing_txn.status.lower()} for this order"
+                }, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # Generate new reference
+            reference = str(uuid.uuid4())
+            
         # Step 1: Initialize payment with Paystack
         url = "https://api.paystack.co/transaction/initialize"
         headers = {
@@ -97,15 +124,17 @@ class InitializeTransaction(APIView):
                 "status_code": status.HTTP_400_BAD_REQUEST,
                 "message": "Paystack error"
             })
-
-        # Step 2: Save the transaction
-        PaystackTransaction.objects.create(
+        
+        # Save new transaction
+        existing_txn = PaystackTransaction.objects.create(
             reference=reference,
             user=request.user,
             email=email,
             amount=amount,
             order=order,
-            status=PaystackTransaction.StatusChoices.PENDING
+            status=PaystackTransaction.StatusChoices.PENDING,
+            access_code=res_data["data"]["access_code"],
+            authorization_url=res_data["data"]["authorization_url"]
         )
 
         return Response(res_data)
@@ -193,7 +222,6 @@ def transaction_webhook(request):
     if not "transfer" in event_type:
         reference = data.get('reference') or data.get("transaction_reference")
         if not reference:
-            print(f"[Webhook] Missing reference in payload: {json.dumps(event, indent=2)}")
             return JsonResponse({
                 "status": "error",
                 "status_code": 400,
@@ -203,7 +231,8 @@ def transaction_webhook(request):
         try:
             tx = PaystackTransaction.objects.get(reference=reference)
             order = tx.order
-        except PaystackTransaction.DoesNotExist:
+        except PaystackTransaction.DoesNotExist as e:
+            logger.error(f"Transaction with reference {reference} not found in webhook: {str(e)}")
             return JsonResponse({
                 "status": "error",
                 "status_code": status.HTTP_404_NOT_FOUND,
@@ -229,6 +258,7 @@ def transaction_webhook(request):
                     CartItem.objects.filter(cart__user=order.user).delete()
                     update_order_status(order, Order.Status.PAID)
             except Exception as e:
+                logger.error(f"Error updating order {order.id} on charge.success webhook: {str(e)}")
                 raise
                 # pass
     elif event_type == "charge.failed":
@@ -245,7 +275,8 @@ def transaction_webhook(request):
                         variant.save()
                         update_quantity(variant.product)
                     update_order_status(order, Order.Status.FAILED)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error updating order {order.id} on charge.failed webhook: {str(e)}")
                 pass
 
     elif event_type in ["transfer.success", "transfer.failed"]:
@@ -253,7 +284,6 @@ def transaction_webhook(request):
 
         if payout:
             if event_type == "transfer.success":
-                print(f"Event type: {event_type}")
                 payout.status = Payout.StatusChoices.SUCCESS
                 payout.save(update_fields=["status"])
             elif event_type == "transfer.failed":

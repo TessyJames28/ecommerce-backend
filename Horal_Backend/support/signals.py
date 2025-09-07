@@ -12,7 +12,9 @@ from notifications.tasks import send_email_task
 from notifications.models import Notification
 from users.models import CustomUser
 from django.conf import settings
-import re
+import re, logging
+
+logger = logging.getLogger(__name__)
 
 
 @receiver(post_save, sender=Support)
@@ -89,41 +91,59 @@ def send_support_email_signal(sender, instance, created, **kwargs):
     # Use this subject for the outgoing staff email
     subject_to_use = ref_subject
 
-    # Compose email body (only the new message)
-    body = f"Hello {name},\n\n" \
-           f"{instance.body}\n\n" \
-           "Our team will get back to you shortly.\n\n" \
-           "Note: All further correspondence should be on this email thread."
+    # Prepare the email content in the format the template expects
+    body_paragraphs = [              
+        instance.body 
+    ]
+
+    # Optional footer note
+    footer_note = "Our team will get back to you shortly.\n\nNote: All further correspondence should be on this email thread."
 
     # Send email asynchronously
     send_support_email.delay(
         to_email=email,
         subject=subject_to_use,
-        body=body,
-        ticket_type=ticket_type
+        template="notifications/emails/general_email.html",  # unchanged template
+        context={
+            "user": name,
+            "body_paragraphs": body_paragraphs,
+            "footer_note": footer_note,
+            "sender_name": "The Horal Team",
+            "ticket_type": ticket_type
+        }
     )
 
 
 @receiver(post_save, sender=Support)
 def send_support_received_email(sender, instance, created, **kwargs):
-    print("Triggered email sending")
     if created:
         if not instance.email:
-            print("No email found, skipping sending")
             return
         subject = generate_received_subject(instance)
         body = f"Hello {instance.customer.full_name if instance.customer else ''},\n\n" \
-               f"We have received your support request:\n\n{instance.body}\n\n" \
-               "Our team will get back to you shortly." \
+               "Thanks for reaching out!  Your request has been received.\n\n", \
+               "An agent will get back to you shortly."\
                "\n\nNote: All further correspondence should be on this email thread."
 
         from_email = f"support@{settings.MAILGUN_DOMAIN}"
         # Trigger async email
+        body_paragraphs = [
+            "Thanks for reaching out!  Your request has been received.",
+            "An agent will get back to you shortly."
+        ]
+        footer_note = "Note: All further correspondence will be via this email thread"
+
         send_email_task.delay(
             recipient=instance.email,
             subject=subject,
-            body=body,
-            from_email=f"Support <{from_email}>"
+            from_email=f"Horal Support <{from_email}>",
+            template_name="notifications/emails/general_email.html",
+            context={
+                "user": instance.customer.full_name,
+                "title": subject,
+                "body_paragraphs": body_paragraphs,
+                "footer_note": footer_note
+            }
         )
 
         # Get sender horal bot
@@ -148,14 +168,12 @@ def update_user_on_processing_status_email(sender, instance, created, **kwargs):
     Signal to update user on changes to their ticket
     Once the assigned team start processing the request
     """
-    print("Triggered email sending")
     if created or instance.status != Tickets.Status.PROCESSING:
         return
 
     # Access the related object via the GFK
     related_obj = instance.parent
     if not related_obj:
-        print(f"No related object found for ticket {instance.id}")
         return
 
     # Determine user info based on ticket type
@@ -163,27 +181,36 @@ def update_user_on_processing_status_email(sender, instance, created, **kwargs):
         user_obj = related_obj.order_item.order.user
         name = user_obj.full_name
         email = user_obj.email
-        from_email = f"Returns <returns@{settings.MAILGUN_DOMAIN}>"
+        from_email = f"Horal Returns <returns@{settings.MAILGUN_DOMAIN}>"
     elif instance.ticket_type == "support" and isinstance(related_obj, Support):
         user_obj = related_obj.customer if related_obj.customer else None
         name = user_obj.full_name if related_obj.customer else None
         email = related_obj.email
-        from_email = f"Support <support@{settings.MAILGUN_DOMAIN}>"
+        from_email = f"Horal Support <support@{settings.MAILGUN_DOMAIN}>"
     else:
         return
 
     # Send email asynchronously
     subject = generate_received_subject(instance)
-    body = f"Hello {name if name else ''},\n\n" \
-           f"Our team has picked up your ticket and will update you on the progress\n\n" \
-           "\n\nNote: All further correspondence should be on this email thread."
+    body_paragraphs = [
+        "Our team has picked up your ticket and will update you on the progress" 
+    ]
+
+    footer_note = "Note: All further correspondence will be via this email thread"
+
     send_email_task.delay(
         recipient=email,
         subject=subject,
-        body=body,
-        from_email=from_email
+        from_email=from_email,
+        template_name="notifications/emails/general_email.html",
+        context={
+            "user": name,
+            "title": subject,
+            "body_paragraphs": body_paragraphs,
+            "footer_note": footer_note
+        }
     )
-
+    
 
 @receiver(post_save, sender=Tickets)
 def create_notification(sender, created, instance, **kwargs):
@@ -201,7 +228,7 @@ def create_notification(sender, created, instance, **kwargs):
         type = Notification.Type.SUPPORT
     
 
-    notification = Notification.objects.create(
+    Notification.objects.create(
         user=user,
         type=type,
         channel=Notification.ChannelChoices.INAPP,
@@ -227,9 +254,8 @@ def update_support_returns_to_processing(sender, instance, **kwargs):
     # Access the related object via the GFK
     related_obj = instance.parent
 
-    # print(f"instance ticket type: {related_obj.ticket_type}")
     if not related_obj:
-        print(f"No related object found for ticket {instance.id}")
+        logger.error(f"No related object found for ticket {related_obj.id}")
         
     # Determine user info based on ticket type
     if instance.ticket_type == "returns" and isinstance(related_obj, OrderReturnRequest):
@@ -302,25 +328,29 @@ def update_returns_ticket_status_to_completion(sender, instance, **kwargs):
         subject = msg.subject
 
         if instance.status == OrderReturnRequest.Status.APPROVED:
-            body = f"Hello {name if name else ''},\n\n" \
-                f"Your order return request has been approve\n\n" \
-                f"We are currently processing payment. You will receive it with" \
-                f"7 business days." \
-                "\n\nThanks for shopping on Horal. We hope the next shopping experience" \
-                "Will be better."
+            body_paragraphs = [
+                "Your order return request has been approve",
+                "We are currently processing payment. You will receive it within 7 business days.",
+                "Thanks for shopping on Horal. We hope the next shopping experience will be better." 
+            ]
+
         elif instance.status == OrderReturnRequest.Status.REJECTED:
-            body = f"Hello {name if name else ''},\n\n" \
-                    f"We are sorry to inform you that order return request has been rejected\n\n" \
-                    f"Upon detail review from our team, we found out discrepancies which you" \
-                    f"failed to give plausible explanation." \
-                    "\n\nThanks for shopping on Horal. We hope the next shopping experience" \
-                    "Will be better."
+            body_paragraphs = [
+                "We are sorry to inform you that order return request has been rejected.",
+                "Upon detail review from our team, we found out discrepancies which you failed to give plausible explanation.",
+                "Thanks for shopping on Horal. We hope the next shopping experience will be better." 
+            ]
 
         send_email_task.delay(
             recipient=email,
             subject=subject,
-            body=body,
-            from_email=f"Returns <returns@{settings.MAILGUN_DOMAIN}>"
+            from_email=f"Horal Returns <returns@{settings.MAILGUN_DOMAIN}>",
+            template_name="notifications/emails/general_email.html",
+            context={
+                "user": name,
+                "title": subject,
+                "body_paragraphs": body_paragraphs
+            }
         )
         
         
@@ -366,15 +396,21 @@ def update_support_ticket_status_to_completion(sender, instance, **kwargs):
     # Send email asynchronously
     # subject = generate_received_subject(instance)
     subject = msg.subject
-    body = f"Hello {name if name else ''},\n\n" \
-           f"Your ticket has been marked resolved and completed\n\n" \
-           "\n\nPlease take a moment to rate your experience."
+    body_paragraphs = [
+        "Your ticket has been marked resolved and completed",
+        "Please take a moment to rate your experience."
+    ]
 
     send_email_task.delay(
         recipient=email,
         subject=subject,
-        body=body,
-        from_email=f"Support <support@{settings.MAILGUN_DOMAIN}>"
+        from_email=f"Horal Support <support@{settings.MAILGUN_DOMAIN}>",
+        template_name="notifications/emails/general_email.html",
+        context={
+            "user": name,
+            "title": subject,
+            "body_paragraphs": body_paragraphs
+        }
     )
 
     # Delete user if a temporary user after ticket resolution

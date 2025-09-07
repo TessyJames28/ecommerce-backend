@@ -63,6 +63,11 @@ class SizeOption:
         XXXXL = "XXXXL", "Quad Extra Large"
         XXXXXL = "XXXXXL", "Quint Extra Large"
 
+
+class LogisticSizeUnit(models.TextChoices):
+        KG = "KG", "Kilogram"
+        G = "G", "Gram"
+
     
 class AgeRecommendation(models.TextChoices):
     NEWBORN_0_3M = "0-3m", "0 - 3 Months"

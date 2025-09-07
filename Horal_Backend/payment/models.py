@@ -38,7 +38,7 @@ class PaystackTransaction(models.Model):
         FAILED = 'failed', 'Failed'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    reference = models.CharField(max_length=100, unique=True)
+    reference = models.CharField(max_length=100, unique=True, db_index=True)
     email = models.EmailField()
     order = models.ForeignKey(
         'orders.Order', # app_level.model_name
@@ -49,6 +49,8 @@ class PaystackTransaction(models.Model):
     amount = models.PositiveIntegerField(help_text="Amount in Kobo")
     status = models.CharField(max_length=10, choices=StatusChoices.choices, default=StatusChoices.PENDING)
     gateway_response = models.TextField(blank=True, null=True)
+    authorization_url = models.URLField(max_length=500, blank=True, null=True)
+    access_code= models.CharField(max_length=50, blank=True, null=True)
     paid_at = models.DateTimeField(blank=True, null=True)
     refund_attempted = models.BooleanField(default=False)
     refund_successful = models.BooleanField(default=False)

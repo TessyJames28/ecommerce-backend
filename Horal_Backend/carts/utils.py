@@ -9,7 +9,6 @@ def merge_user_cart(session_key, user):
         return
 
     anonymous_cart = Cart.objects.filter(session_key=session_key).first()
-    print(anonymous_cart)
     if not anonymous_cart:
         return
     user_cart, _ = Cart.objects.get_or_create(user=user)

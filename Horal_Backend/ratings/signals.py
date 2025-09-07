@@ -14,4 +14,3 @@ def update_order_on_product_review(sender, instance, **kwargs):
         item = instance.order_item # already an OrderItem object
         item.is_completed = True
         item.save(update_fields=["is_completed"])
-        print(f"Order item {instance.order_item} is marked completed.")

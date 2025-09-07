@@ -12,7 +12,6 @@ class GIGLogisticsAPI:
     """Base class for GIGL endpoint calls"""
     def __init__(self):
         self.token = self.authenticate()
-        print(f"GIGL token: {self.token}")
 
     def authenticate(self):
         """Fetch and return JWT token for api call authorization"""
@@ -22,13 +21,10 @@ class GIGLogisticsAPI:
             "password": f"{PASSWORD}",
             "sessionObj": ""
         }
-        print(f"USERNAME: {USERNAME}")
-        print(f"PASSWORD: {PASSWORD}")
         try:
             res = requests.post(url, json=data)
             res.raise_for_status()
             token = res.json()["data"]["token"]
-            print(f"GIGL token after authentication: {token}")
 
             return token
         except HTTPError as e:

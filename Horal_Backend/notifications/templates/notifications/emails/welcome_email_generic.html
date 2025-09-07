@@ -1,0 +1,44 @@
+{% extends "notifications/emails/base_email.html" %}
+
+{% block content %}
+<h3 style="color: #333">{{ title }}{% if user %}, {{ user }}{% endif %}! 👋</h3>
+
+{% if body_paragraphs %}
+  {% for paragraph in body_paragraphs %}
+    <p style="font-size: 14px; color: #555; line-height: 1.6">
+      {{ paragraph }}
+    </p>
+  {% endfor %}
+{% endif %}
+
+{% if cta %}
+<p style="text-align: center; margin: 30px auto">
+  <a href="{{ cta.url }}"
+     style="
+       background: {{ cta.bg_color|default:'#ff6b00' }};
+       color: {{ cta.text_color|default:'#fff' }};
+       padding: 7px 15px;
+       border-radius: 4px;
+       text-decoration: none;
+       font-size: 12px;
+     ">
+     {{ cta.text }}
+  </a>
+</p>
+{% endif %}
+
+{% if secondary_cta %}
+<p style="font-size: 14px; color: #555; line-height: 1.6">
+  {{ secondary_cta.text_before_link }}
+  <span>
+    <a style="color: {{ secondary_cta.link_color|default:'#2196f3' }}" href="{{ secondary_cta.url }}">
+      {{ secondary_cta.link_text }}
+    </a>
+  </span>
+  {{ secondary_cta.text_after_link|default:'' }}
+</p>
+{% endif %}
+
+<p style="font-size: 15px; color: #555; margin-top: 30px">Best Regards,</p>
+<p style="font-size: 15px; color: #555">{{ sender_name|default:"The Horal Team" }}</p>
+{% endblock %}

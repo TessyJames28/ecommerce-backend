@@ -139,7 +139,6 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
                 status=Payout.StatusChoices.PROCESSING,
                 reason=reason
             )
-        print(f"data: {data}")
 
         return transfer_code
     else:

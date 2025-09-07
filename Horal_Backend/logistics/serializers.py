@@ -13,7 +13,7 @@ class LogisticsSerializer(serializers.ModelSerializer):
     
 
     def validate_weight_measurement(self, value):
-        from products.textchoices import SizeOption
+        from products.textchoices import LogisticSizeUnit
         from products.serializers import normalize_choice
 
-        return normalize_choice(value, SizeOption.SizeUnit)
+        return normalize_choice(value, LogisticSizeUnit)

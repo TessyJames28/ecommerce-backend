@@ -158,7 +158,7 @@ class ProductRatingMixin(serializers.Serializer):
 
 class ProductCreateMixin:
     def create(self, validated_data):
-        from .utils import image_model_map
+        from .utils import image_model_map, validate_logistics_vs_variants
         from logistics.models import Logistics
         from logistics.serializers import LogisticsSerializer
 
@@ -169,7 +169,6 @@ class ProductCreateMixin:
 
         # Check variant logistics consistency
         variant_have_logistics = [v.get('logistics') is not None for v in variant_data]
-        print(f"Variant logistics: {variant_have_logistics}")
         if any(variant_have_logistics) and logistic_data:
             raise serializers.ValidationError(
                     "Logistics can either be at variant or product level not both"
@@ -184,6 +183,9 @@ class ProductCreateMixin:
                 raise serializers.ValidationError(
                     "No variant logistics provided, product-level is required if no variant logistics"
                 )
+        
+        # Ensure proper weight values are provided
+        validate_logistics_vs_variants(logistic_data, variant_data)
 
         # Now create the product safely
         instance = self.Meta.model.objects.create(**validated_data)
@@ -251,13 +253,13 @@ class ProductCreateMixin:
 
         # Check variant logistics consistency
         variant_have_logistics = [v.get('logistics') is not None for v in variant_data]
-        if any(variant_have_logistics):
+        if variant_data and any(variant_have_logistics):
             if not all(variant_have_logistics):
                 raise serializers.ValidationError(
                     "if any variant has logistics, all variant must have logistics"
                 )
-        else:
-            if not logistic_data:
+        elif logistic_data:
+            if not any(variant_have_logistics) and not logistic_data:
                 raise serializers.ValidationError(
                     "No variant logistics provided, product-level is required if no variant logistics"
                 )

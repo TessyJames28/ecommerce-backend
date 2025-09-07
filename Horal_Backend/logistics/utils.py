@@ -9,26 +9,35 @@ from django.utils.timezone import now
 from products.models import ProductIndex
 from .models import Station, GIGLWebhookCredentials, GIGLShipment, GIGLExperienceCentre
 from typing import Optional, Dict, Any
+from django.core.exceptions import ValidationError
 import base64, hashlib, json
-from station_addresses import stations
+from django.core.cache import cache
+from django.db.models import Q
 from Crypto.Cipher import AES
-import logging
+import logging, traceback
 
 logger = logging.getLogger(__name__)
 
 # initializing with the api key
-gmaps = googlemaps.Client(key=settings.GOOGLE_API_KEY)
+gmaps = googlemaps.Client(key=settings.GOOGLE_API_KEY)    
+
 
 def get_coordinates(address):
-    """
-    Function to return the latitude and longitude
-    Based on given address using google API Map
-    """
+    # Try to get coordinates from cache
+    cached = cache.get(address)
+    if cached:
+        return cached
+
     try:
         geocode_result = gmaps.geocode(address)
         if geocode_result:
             location = geocode_result[0]['geometry']['location']
-            return location['lat'], location['lng']
+            lat_lng = (location['lat'], location['lng'])
+
+            # Cache in Redis for 3 months
+            cache.set(address, lat_lng, timeout=7776000)
+            return lat_lng
+
         return None, None
     except Exception as e:
         logger.warning(f"Error fetching coordinates: {e}")
@@ -69,10 +78,12 @@ def _extract_weight_kg(item, default_kg: float=1.0) -> float:
 
     try:
         logistics = Logistics.objects.get(product_variant=item.variant)
-    except ObjectDoesNotExist:
+    except ObjectDoesNotExist as e:
+        logger.warning(f"Logistics entry not found for variant {item.variant.id}: {str(e)}")
         try:
             logistics = Logistics.objects.get(object_id=item.variant.object_id)
-        except ObjectDoesNotExist:
+        except ObjectDoesNotExist as e:
+            logger.warning(f"Logistics entry not found for product {item.variant.object_id}: {str(e)}")
             logistics = None  # or raise a validation error
     
     quantity = getattr(item, "quantity", 1)
@@ -92,10 +103,6 @@ def _extract_weight_kg(item, default_kg: float=1.0) -> float:
     conversion_to_kg = {
         "KG": 1,
         "G": 0.001,
-        "LB": 0.453592,
-        "OZ": 0.0283495,
-        "ML": 0.001,   # assuming water density
-        "L": 1.0,      # assuming water density
     }
 
     factor = conversion_to_kg.get(weight_unit)
@@ -131,7 +138,8 @@ def haversine_distance(coord1, coord2):
 def get_nearest_station_id(state_name: str) -> Optional[int]:
     """
     Return the first station_id for a given state.
-    If not found, use predefined fallback states for Kebbi and Yobe.
+    If not found, use predefined fallback states.
+    Raises ValidationError if no station is found.
     """
     
     fallback_states = {
@@ -140,14 +148,21 @@ def get_nearest_station_id(state_name: str) -> Optional[int]:
     }
     
     state_lookup = state_name.lower()
-    station = Station.objects.filter(state_name__iexact=state_lookup).first()
+
+    # Special handling for Abuja / Federal Capital Territory
+    if state_lookup in ["abuja", "fct", "federal capital territory"]:
+        station = Station.objects.filter(
+            Q(state_name__iexact="abuja") | Q(state_name__iexact="federal capital territory")
+        ).first()
+    else:
+        station = Station.objects.filter(state_name__iexact=state_lookup).first()
+        if not station and state_lookup in fallback_states:
+            station = Station.objects.filter(state_name__iexact=fallback_states[state_lookup]).first()
     
     if not station:
-        fallback_state = fallback_states.get(state_lookup)
-        if fallback_state:
-            station = Station.objects.filter(state_name__iexact=fallback_state).first()
+        raise ValidationError(f"No station found for state '{state_name}' and so cannot generate shipping cost")
     
-    return station.station_id if station else None
+    return station.station_id
     
 
 def build_gigl_payload_for_item(
@@ -325,7 +340,7 @@ def create_gigl_shipment_for_shipment(order_id):
                 else:
                     all_success = False
             else:
-                print(f"Shipment {shipment.id} already has tracking number {shipment.tracking_number}")
+                logger.info(f"Shipment {shipment.id} already has tracking number {shipment.tracking_number}, skipping creation.")   
         except Exception as e:
             logger.warning(f"Error creating shipment {shipment.id}: {e}")
             all_success = False
@@ -412,17 +427,8 @@ def get_experience_centers(state: str) -> str:
     Function that accepts a sellers states
     Returns all experience centers associated to the state
     """
-    address_list = []
-    centers = GIGLExperienceCentre.objects.filter(
-        state=state
-    )
-
-    for add in centers:
-        address_list.append(add.address)
-
-    addresses = "\n".join(address_list)
-    return addresses
-    
+    centers = GIGLExperienceCentre.objects.filter(state=state)
+    return [center.address for center in centers]    
 
 
 def calculate_shipping_for_order(order):
@@ -430,13 +436,16 @@ def calculate_shipping_for_order(order):
     Calculate and update shipping cost for every item in an order.
     Returns (items_shipping_total, updated_items_list)
     """
-    
     api = GIGLogisticsAPI()
     shipping_total = Decimal("0.00")
     updated_items = []
 
     # Create grouped shipment payloads
-    shipment_payloads = create_shipment_payload(order)
+    try:
+        shipment_payloads = create_shipment_payload(order)
+    except Exception as e:
+        logger.error(f"Error creating shipment payloads for order {order.id}: {str(e)}")
+        raise ValidationError(f"Error creating shipment payload for order: {str(e)}\n{str(traceback.format_exc())}")
 
     for shipment, payload in shipment_payloads:
         result = api.get_price(payload)
@@ -444,7 +453,8 @@ def calculate_shipping_for_order(order):
         try:
             price = Decimal(str(result.get("object", {}).get("deliveryPrice", 0)))
         except Exception as e:
-            price = Decimal("0.00")
+            logger.warning(f"Error parsing price for shipment {shipment.id}: {e}")
+            raise ValidationError("Error retrieving shipment price from GIGL")
 
         # Apply shipping price back to each shipment item
         shipment.shipping_cost = price
@@ -512,8 +522,7 @@ def sync_station_addresses(station_addresses: list):
             state=state_name,
             centre_name=station_name
         )
-    print(f"Done populating {GIGLExperienceCentre.objects.all().count()} Experience centers")
-
+    logger.info(f"Done populating {GIGLExperienceCentre.objects.all().count()} Experience centers")
 
 
 def decrypt_webhook_data(encrypted_data: str, secret: str) -> bytes:
