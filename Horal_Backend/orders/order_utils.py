@@ -1,7 +1,7 @@
 from django.utils.timezone import now
 from django.db import transaction
 
-from .models import Order, OrderItem
+from .models import Order, OrderItem, OrderShipment
 from products.models import ProductVariant
 from datetime import timedelta
 
@@ -38,15 +38,34 @@ def cancel_expired_pending_orders():
     print(f"✅ {len(orders_to_update)} expired orders processed.")
 
 
-def authomatic_order_completion():
+
+def automatic_order_completion():
     """
     Automatically complete delivered orders if buyers
-    Didn't review within 3 days
+    didn't review within 3 days
     """
     completion_time = now() - timedelta(days=3)
-    updated_count = OrderItem.objects.filter(
-        order__status=Order.Status.DELIVERED,
-        delivered_at__lte=completion_time
-    ).update(is_completed=True)
-    
-    print(f"{updated_count} order items automatically marked as completed.")
+
+    shipments = OrderShipment.objects.filter(
+        status__in=[
+            OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
+            OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
+            OrderShipment.Status.DELIVERED_TO_TERMINAL,
+        ],
+        delivered_at__lte=completion_time,
+        auto_completion=False,  # only process once
+    )
+
+    completed_items_count = 0
+
+    for shipment in shipments:
+        shipment.auto_completion = True
+        shipment.save(update_fields=["auto_completion"])
+
+        for item in shipment.items.filter(is_completed=False):
+            item.is_completed = True
+            item.save(update_fields=["is_completed"])
+            completed_items_count += 1
+
+    print(f"{completed_items_count} order items automatically marked as completed.")
+
