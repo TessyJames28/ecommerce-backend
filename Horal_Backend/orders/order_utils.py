@@ -1,9 +1,12 @@
 from django.utils.timezone import now
 from django.db import transaction
 
-from .models import Order, OrderItem, OrderShipment
+from .models import Order, OrderShipment
 from products.models import ProductVariant
 from datetime import timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def cancel_expired_pending_orders():
@@ -35,7 +38,7 @@ def cancel_expired_pending_orders():
         if orders_to_update:
             Order.objects.bulk_update(orders_to_update, ['status'])
 
-    print(f"✅ {len(orders_to_update)} expired orders processed.")
+    logger.info(f"{len(orders_to_update)} expired orders processed.")
 
 
 
@@ -67,5 +70,5 @@ def automatic_order_completion():
             item.save(update_fields=["is_completed"])
             completed_items_count += 1
 
-    print(f"{completed_items_count} order items automatically marked as completed.")
+    logger.info(f"{completed_items_count} order items automatically marked as completed.")
 

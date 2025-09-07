@@ -25,7 +25,10 @@ from support.utils import handle_mailgun_attachments, create_message_for_instanc
 from support.models import Message, SupportAttachment, Tickets
 from django.contrib.contenttypes.models import ContentType
 from notifications.models import Notification
-import re
+import re, logging
+import traceback
+
+logger = logging.getLogger(__name__)
 
 # Create your views here.
 
@@ -44,7 +47,6 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
         Post method to create an order based on user's cart
         """
         user = request.user
-        print(f"Checkout user: {user}")
         cart = Cart.objects.filter(user=user).first()
 
         if not cart or not cart.cart_item.exists():
@@ -59,15 +61,12 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                 # users to remove item from cart if them choose maybe because of shipping cost
                 # WIthout them abandoning the order
                 order = Order.objects.filter(user=user, status=Order.Status.PENDING).first()
-                print(f"Order: {order}")
-                if not order:   
-                    print("Entered here")     
+                if not order:       
                     # If no existing order, continue creating one and calculate total
                     total = cart.total_price
                     address = None
                     if hasattr(user, 'shipping_address'):
                         address = user.shipping_address
-                    print("Before creating order")
                     order, created = Order.objects.update_or_create(
                         user=user,
                         status="pending",
@@ -83,12 +82,9 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                             "created_at": now()
                         }
                     )
-                    print("Order created")
                     update_order_status(order, Order.Status.PENDING, user, force=True)
-                    print("Order updated")
                 # Clear existing order items to resync with cart
                 order.order_items.all().delete()
-                print(f"Order item deleted")
 
                 # Add order items
                 for item in cart.cart_item.all():
@@ -111,7 +107,6 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                         quantity=item.quantity,
                         unit_price=item.variant.price_override or item.variant.product.price,
                     )
-                    print("Order Item created")
 
                 #--------------------
                 # Create shipment first
@@ -119,7 +114,6 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                 # Clear old shipments if this a re-checkout
                 order.shipments.all().delete()
                 shipments = create_shipments_for_order(order)
-                print(f"Shipment for order: {shipments}")
 
                 #--------------------
                 # Calculate shipping
@@ -143,8 +137,7 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                 if order.discount_applied:
                     apply_coupon_discount(order)
 
-                # Get consistent order payload  
-                print("Before calling consistent payload")              
+                # Get consistent order payload              
                 shipments = get_consistent_checkout_payload(order)
 
                 return self.get_response(
@@ -166,23 +159,16 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                         },
                     },
                 )
-                # else:
-                #     serializer = self.get_serializer(order)
-
-                #     return self.get_response(
-                #         status.HTTP_201_CREATED,
-                #         "Order placed, Awaiting payment",
-                #         serializer.data
-                #     )
                 
         except ValidationError as e:
+            logger.warning(f"Validation error during checkout for user {user.id}: {str(e)}")
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
                 str(e)
             )
         
         except Exception as e:
-            print(e)
+            logger.error(f"Error during checkout for user {user.id}: {str(e)}")
             return self.get_response(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 str(e)
@@ -191,7 +177,6 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
 
     def put(self, request, *args, **kwargs):
         """Partial updates for user address during checkout"""
-        print(f"User updating shipping address: {request.user}")
         order = self.get_queryset().first()
 
         if not order:
@@ -203,9 +188,22 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
         serializer = self.get_serializer(order, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        print("About to calculate shipping cost")
-        shipping_total, items = calculate_shipping_for_order(order)
-        print(f"Calculated shipping cost:\n\tShipping Total: {shipping_total}\n\tItems: {items}")
+
+        try:
+            shipping_total, items = calculate_shipping_for_order(order)
+        except ValueError as e:
+            logger.error(f"Error calculating shipping for order {order.id}: {str(e)}\n{traceback.format_exc()}")
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"Error calculating shipping: {e}"
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error calculating shipping for order {order.id}: {str(e)}\n{traceback.format_exc()}")
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Unexpected error calculating shipping"
+            )
+
         product_total = sum(i.unit_price * i.quantity for i in order.order_items.all())
         grand_total = product_total + shipping_total
         
@@ -274,9 +272,6 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
         
         discount_amount = 3000
 
-        # Called to get the item for consistency
-        _, items = calculate_shipping_for_order(order)
-
         try:
             order = apply_coupon_discount(order, discount_amount)
             
@@ -303,12 +298,13 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                 },
             )
         except ValueError as e:
+            logger.warning(f"Validation error applying coupon for user {user.id}: {str(e)}")    
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
                 str(e)
             )
         except Exception as e:
-            print(e)
+            logger.error(f"Error applying coupon for user {user.id}: {str(e)}")
             return self.get_response(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 str(e)
@@ -430,7 +426,6 @@ class OrderReturnRequestView(GenericAPIView, BaseResponseMixin):
         order_item_id = request.data.get('order_item_id')
         reason = request.data.get('reason')
         attachments = request.data.get("attachments")
-        print(f"Attachment order view: {attachments}")
 
         if not order_item_id or not reason:
             return self.get_response(
@@ -509,7 +504,8 @@ class ApproveReturnView(APIView, BaseResponseMixin):
         
         try:
             req = OrderReturnRequest.objects.select_related('order_item').get(id=return_id)
-        except OrderReturnRequest.DoesNotExist:
+        except OrderReturnRequest.DoesNotExist as e:
+            logger.error(f"Return request not found for approval: {str(e)}")
             return self.get_response(
                 status.HTTP_404_NOT_FOUND,
                 "Return request not found"
@@ -525,7 +521,8 @@ class ApproveReturnView(APIView, BaseResponseMixin):
         # Find the transaction for this order
         try:
             tx = PaystackTransaction.objects.get(order=req.order_item.order, status="success")
-        except PaystackTransaction.DoesNotExist:
+        except PaystackTransaction.DoesNotExist as e:
+            logger.error(f"PaystackTransaction not found for return approval: {str(e)}")
             return self.get_response(
                 status.HTTP_404_NOT_FOUND,
                 "Associated payment transaction not found"
@@ -642,15 +639,14 @@ class ReturnsEmailWebhookView(APIView, BaseResponseMixin):
         # get user by email
         try:
             user = CustomUser.objects.get(email=sender)
-        except CustomUser.DoesNotExist:
+        except CustomUser.DoesNotExist as e:
+            logger.error(f"Customer not found for return email webhook: {str(e)}")
             return self.get_response(
                 status.HTTP_404_NOT_FOUND,
                 "Customer not found"
             )
 
         match = re.search(r"\[(SUP|RET)-[A-Z0-9]{8}\]", subject)
-        print(f"Match: {match}")
-        print(f"Subject: {subject}")
         if not match:
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
@@ -713,7 +709,8 @@ class ReturnsEmailWebhookView(APIView, BaseResponseMixin):
                         content_type=ContentType.objects.get_for_model(Message),
                         object_id=msg.id,
                     )
-        except Tickets.DoesNotExist:
+        except Tickets.DoesNotExist as e:
+            logger.info(f"No ticket found for return email webhook: {str(e)}")
             pass
 
         return Response({

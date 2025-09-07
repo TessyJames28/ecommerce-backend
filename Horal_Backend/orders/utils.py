@@ -42,10 +42,8 @@ def create_shipments_for_order(order):
     Group order items by seller and create OrderShipment records.
     Returns list of created shipments.
     """
-    print(f"Shipment creation function called: {order}")
     from .models import OrderShipment
     grouped = group_order_items_by_seller(order)
-    print(f"Order item grouping: {grouped}")
     shipments = []
 
     for seller, data in grouped.items():
@@ -67,7 +65,6 @@ def create_shipments_for_order(order):
         for item in items:
             shipment.items.add(item)
         shipments.append(shipment)
-    print(f"Shipment created: {shipments}")
 
     return shipments
 
@@ -93,6 +90,4 @@ def get_consistent_checkout_payload(order):
             ]
         }
         shipments.append(shipment_data)
-        print(f"shipment appended: {shipments}")
-    print(f"Consistent shipment payload: {shipments}")
     return shipments

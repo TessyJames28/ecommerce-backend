@@ -23,6 +23,9 @@ from sellers.models import SellerKYC, SellerKYCAddress
 from shops.models import Shop
 from .tasks import create_gigl_shipment_on_each_shipment
 from logistics.utils import calculate_shipping_for_order, get_experience_centers
+import logging
+
+logger = logging.getLogger(__name__)
 
 shipment_delivered = Signal()
 
@@ -108,8 +111,7 @@ def handle_shipment_delivered(sender, shipment, reminder=None, **kwargs):
         }
     )
 
-    print(f"Shipment email sent to user (reminder: {reminder})")
-
+    logger.info(f"Shipment email sent to user (reminder: {reminder})")
 
 
 @receiver(post_save, sender=OrderReturnRequest)
@@ -131,7 +133,6 @@ def send_return_received_email(sender, instance, created, **kwargs):
         )
 
         user = returns.order_item.order.user
-        print(f"User: {user}")
 
         from_email = f"returns@{settings.MAILGUN_DOMAIN}"
         # Trigger async email
@@ -174,24 +175,14 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
     and send a customized receipt email. If this is the user's first order, 
     add a special message.
     """
-    print("Shipment creation signal called")
 
     # Don't trigger on creation only update
     if created or instance.status != Order.Status.PAID:
         return
     
-    # Check if status just changed to PAID
-    # previous = Order.objects.get(pk=instance.pk)
-    # if previous.status == Order.Status.PAID:
-    #     return  # Already marked as paid before, skip
-    print("About to create shipment")
     create_gigl_shipment_on_each_shipment.delay(str(instance.id))
 
     from_email = f"Horal Order <{settings.DEFAULT_FROM_EMAIL}>"
-    print("Shipment created")
-
-    print("Preping customer email")
-    # Prepare a receipt-like order summary
     order_items = []
 
     for shipment_data in instance.shipments.all():
@@ -242,11 +233,8 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
         }
     )
 
-    print("Email sent for buyer")
-
     
     # ======== Email each seller once with all their items ========
-    print("In seller data section")
 
     # Group seller data
     sellers_data = defaultdict(lambda: {
@@ -279,9 +267,6 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
                 "price": f"₦{item.total_price}"
             })
 
-    print("About to send email to each seller")
-    print(f"Sellers data: {sellers_data}")
-
     # Send emails to each seller
     for seller_id, data in sellers_data.items():
         seller_subject = f"New order from {instance.user.full_name}"
@@ -304,7 +289,6 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
             }
         )
 
-        print("Email sent to seller")
 
 @receiver(post_delete, sender=OrderItem)
 def restore_reserved_stock(sender, instance, **kwargs):
@@ -326,14 +310,11 @@ def send_order_status_email(sender, instance, created, **kwargs):
     Send email notification to customers based on
     Shipment status updates.
     """
-    print("Signal for shipment status update called")
     if created:
         return
     
     status = instance.status
-    print(f"Instance status: {status}")
     recipient = instance.order.user.email
-    print(f"Recipient email: {recipient}")
     from_email = f"Horal Shipment <{settings.DEFAULT_FROM_EMAIL}>"
     # pickup_station = Station.objects.get(station_id=instance.buyer_station)
 
