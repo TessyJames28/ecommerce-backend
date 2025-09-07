@@ -7,25 +7,14 @@ from django.contrib.auth.signals import user_logged_in
 from carts.utils import merge_user_cart
 from products.utils import merge_recently_viewed_products
 from favorites.utils import merge_favorites_from_session_to_user
+import logging
 
+logger = logging.getLogger(__name__)
 
-# @receiver(post_save, sender=CustomUser)
-# def welcome_new_user(sender, instance, created, **kwargs):
-#     """Signal to welcome new user after successful registration"""
-#     if not created:
-#         return
-
-#     recipient = instance.email
-#     subject = "Welcome to Horal"
-#     body = f"Hello {instance.full_name}\n\n" \
-#             f"Welcome to Horal!!!"
-#     from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
-
-#     send_email_task.delay(recipient, subject, body, from_email)
 
 @receiver(post_save, sender=CustomUser)
 def welcome_new_user(sender, instance, created, **kwargs):
-    if not created:
+    if not created or instance.is_temporary:
         return
 
     send_email_task.delay(
@@ -76,11 +65,6 @@ def welcome_new_sellers(sender, instance, created, **kwargs):
     
     recipient = instance.email
     subject = "Welcome to Horal Seller Team"
-    # body = f"Hello {instance.full_name}\n\n" \
-    #         f"Welcome to Horal Seller Team!\n" \
-    #         f"Your new seller account is ready for you to start listing!\n\n" \
-    #         f"Happy Selling"
-    # from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
 
     send_email_task.delay(
         recipient=recipient,
@@ -100,8 +84,6 @@ def welcome_new_sellers(sender, instance, created, **kwargs):
         }
     )
 
-    
-    # send_email_task.delay(recipient, subject, body, from_email)
 
 
 @receiver(pre_save, sender=CustomUser)
@@ -116,10 +98,8 @@ def track_old_password(sender, instance, **kwargs):
 
 @receiver(post_save, sender=CustomUser)
 def password_change_alert(sender, instance, **kwargs):
-    print("signal for email change called")
     old_password = getattr(instance, "_old_password", None)
     if old_password and old_password != instance.password:
-        print("Password change detected, sending email...")
 
         subject = "Password Reset"
         user = instance.full_name
@@ -131,7 +111,6 @@ def password_change_alert(sender, instance, **kwargs):
             "text": "Reset Password",
             "url": "https://www.horal.ng/forgot-password/"
         }
-        print(f"Email: {instance.email}, User: {user}")
 
         send_email_task.delay(
             recipient=instance.email,
@@ -158,18 +137,16 @@ def merge_user_data(sender, request, user, **kwargs):
     try:
         merge_user_cart(session_key, user)
     except Exception as e:
-        print(f"Cart merge failed: {e}")
+        logger.error(f"Cart merge failed for user {user.id}: {e}")
 
     # merge recently viewed product
     try:
         merge_recently_viewed_products(session_key, user)
     except Exception as e:
-        print(f"Recently viewed product merge failed: {e}")
+        logger.error(f"Recently viewed products merge failed for user {user.id}: {e}")
 
     # merge favorites
     try:
         merge_favorites_from_session_to_user(session_key, user)
     except Exception as e:
-        print(f"Favorites merge failed: {e}")
-
-    
+        logger.error(f"Favorites merge failed for user {user.id}: {e}")

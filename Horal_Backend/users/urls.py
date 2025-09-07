@@ -14,7 +14,6 @@ from .views import(
     CookieTokenRefreshView,
     ResendRegistrationOTPView,
     get_csrf_token,
-    preview_generic_email
 )
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from django.conf import settings

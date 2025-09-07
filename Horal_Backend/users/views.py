@@ -173,7 +173,6 @@ class ConfirmRegistrationOTPView(GenericAPIView):
             secure=True, # Use True in production (HTTPS)
             samesite="None"
         )
-        print("ACCESS TOKEN COOKIE:", request.COOKIES.get("access_token"))
 
         return response
     
@@ -286,7 +285,6 @@ class UserLoginView(GenericAPIView):
             secure=True, # Use True in production (HTTPS)
             samesite="None"
         )
-        print("ACCESS TOKEN COOKIE:", request.COOKIES.get("access_token"))
         
         # Manually send log in signal
         user_logged_in.send(sender=user.__class__, request=request, user=user)
@@ -378,7 +376,6 @@ class GoogleLoginView(GenericAPIView):
                 user, created = CustomUser.objects.get_or_create(email=email)
 
                 if created:
-                    print("User created")
                     pass
                     
                 user.full_name = full_name
