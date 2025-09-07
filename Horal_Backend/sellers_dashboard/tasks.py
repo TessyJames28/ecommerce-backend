@@ -10,8 +10,6 @@ from .utils import (
     aggregate_sales_for_period,
     reconcile_raw_sales,
 )
-from .simulate_hourly_order import generate_hourly_orders
-from .process_hourly_order import process_hourly_orders
 from products.models import ProductIndex
 from django.db import connection
 from shops.models import Shop
@@ -113,13 +111,5 @@ def aggregate_all_sales():
 
 
 @shared_task
-def simulate_hourly_order():
-    generate_hourly_orders()
-
-@shared_task
 def invalidate_orders():
     reconcile_raw_sales()
-
-@shared_task
-def facilitate_hourly_order():
-    process_hourly_orders()
