@@ -50,6 +50,7 @@ class CartItemSerializer(serializers.ModelSerializer):
         return {
             'id': str(variant.id),
             'color': variant.color,
+            'size': variant.size,
             'custom_size_unit': variant.custom_size_unit,
             'custom_size': custom_size,
             'stock_quantity': variant.stock_quantity,
