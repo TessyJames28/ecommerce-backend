@@ -290,6 +290,7 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
         )
 
 
+
 @receiver(post_delete, sender=OrderItem)
 def restore_reserved_stock(sender, instance, **kwargs):
     """
@@ -297,11 +298,19 @@ def restore_reserved_stock(sender, instance, **kwargs):
     """
     variant = instance.variant
     if variant:
-        # Reduce reserved stock
-        variant.reserved_quantity -= instance.quantity
-        variant.stock_quantity += instance.quantity  # Deduct immediately upon reservation
+        # Prevent reserved_quantity from going negative
+        if variant.reserved_quantity >= instance.quantity:
+            variant.reserved_quantity -= instance.quantity
+        else:
+            # fallback: reset to 0 if bad data
+            variant.reserved_quantity = 0
+
+        # Always return the quantity to stock
+        variant.stock_quantity += instance.quantity
+
         variant.save()
         update_quantity(variant.product)
+
 
 
 @receiver(post_save, sender=OrderShipment)
