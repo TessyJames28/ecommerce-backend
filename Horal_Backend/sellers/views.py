@@ -6,7 +6,8 @@ from .serializers import (
     SellerSocialsSerializer,
     SellerKYCAddressSerializer,
     SellerKYCCACSerializer,
-    SellerKYCNINSerializer
+    SellerKYCNINSerializer,
+    SellerSerializer
 )
 from django.utils.timezone import now
 from rest_framework.response import Response
@@ -279,4 +280,29 @@ class SellerSocialsView(GenericAPIView):
             "message": "Social media links updated successfully",
             "data": serializer.data
         }, status=status.HTTP_200_OK)
+    
+
+class GetSellerKYCView(GenericAPIView, BaseResponseMixin):
+    """Get sellers kyc"""
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
+    serializer_class = SellerSerializer
+
+    def get(self, request, *args, **kwargs):
+        """Method to retrieve sellers kyc"""
+        try:
+            kyc = SellerKYC.objects.get(user=request.user)
+        except SellerKYC.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "There is no kyc for this seller"
+            )
+        
+        serializer = self.get_serializer(kyc)
+
+        return self.get_response(
+            status.HTTP_200_OK,
+            "Seller kyc retrieved successfully",
+            serializer.data
+        )
     
