@@ -160,7 +160,7 @@ def get_nearest_station_id(state_name: str) -> Optional[int]:
             station = Station.objects.filter(state_name__iexact=fallback_states[state_lookup]).first()
     
     if not station:
-        raise ValidationError(f"No station found for state '{state_name}' and so cannot generate shipping cost")
+        raise ValueError(f"No station found for state '{state_name}' and so cannot generate shipping cost")
     
     return station.station_id
     
