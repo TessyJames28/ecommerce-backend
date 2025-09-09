@@ -167,6 +167,12 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                 status.HTTP_400_BAD_REQUEST,
                 str(e)
             )
+        except ValueError as e:
+            logger.error(f"Error during checkout for user {user.id}: {str(e)}")
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                str(e)
+            )
         
         except Exception as e:
             logger.error(f"Error during checkout for user {user.id}: {str(e)}")
