@@ -93,7 +93,7 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                     # Check if requested quantity can be reserved
                     if item.quantity > variant.stock_quantity:
                         raise ValidationError(
-                            f"Only {variant.available_stock} items available for {variant}"
+                            f"Only {variant.stock_quantity} items available for {variant}"
                         )
                     # Reserve the stock
                     variant.reserved_quantity += item.quantity
