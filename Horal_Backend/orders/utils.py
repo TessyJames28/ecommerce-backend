@@ -71,6 +71,7 @@ def create_shipments_for_order(order):
 
 def get_consistent_checkout_payload(order):
     """Ensure consistent checkout payload"""
+    from products.models import ProductIndex
     shipments = []
 
     for shipment in order.shipments.all():
@@ -84,12 +85,11 @@ def get_consistent_checkout_payload(order):
         for item in shipment.items.all():
             variant_obj = item.variant
             product_title = getattr(getattr(variant_obj, "product", None), "title", str(variant_obj))
-            product_image = getattr(getattr(variant_obj, "product", None), "image", str(variant_obj))
-
+            product = ProductIndex.objects.get(id=variant_obj.object_id)
             shipment_data["items"].append({
                 "item_id": str(item.id),
                 "product": product_title,
-                "image": product_image,
+                "image": product.image,
                 "unit_price": str(item.unit_price),
                 "quantity": item.quantity,
             })
