@@ -154,6 +154,7 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                             "street": order.street_address,
                             "local_govt": order.local_govt,
                             "state": order.state,
+                            "landmark": order.landmark,
                             "country": order.country,
                             "phone_number": order.phone_number,
                         },
