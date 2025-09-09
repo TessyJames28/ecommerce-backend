@@ -285,6 +285,7 @@ class SellerSocialsView(GenericAPIView):
 class GetSellerKYCView(GenericAPIView, BaseResponseMixin):
     """Get sellers kyc"""
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
     serializer_class = SellerSerializer
 
     def get(self, request, *args, **kwargs):
