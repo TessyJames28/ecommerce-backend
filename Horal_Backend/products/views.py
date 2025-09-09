@@ -37,21 +37,27 @@ class ProductBySubcategoryView(GenericAPIView, BaseResponseMixin):
 
     def get(self, request, subcategory_id):
         """Get all products associated with the subcategory"""
-        subcategory = get_object_or_404(SubCategory, id=subcategory_id)
+        try:
+            subcategory = get_object_or_404(SubCategory, id=subcategory_id)
 
-        # Dynamically search all product models
-        product_data = []
-        for model, serializer_class, _ in product_models:
-            if 'sub_category' in [f.name for f in model._meta.fields]:
-                products = model.published.filter(sub_category=subcategory)
-                serializer = serializer_class(products, many=True)
-                product_data.extend(serializer.data)
+            # Dynamically search all product models
+            product_data = []
+            for model, serializer_class, _ in product_models:
+                if 'sub_category' in [f.name for f in model._meta.fields]:
+                    products = model.published.filter(sub_category=subcategory)
+                    serializer = serializer_class(products, many=True)
+                    product_data.extend(serializer.data)
 
-        return self.get_response(
-            status.HTTP_200_OK,
-            f"Products under subcategory {subcategory.name} retrieved successfully",
-            product_data
-        )
+            return self.get_response(
+                status.HTTP_200_OK,
+                f"Products under subcategory {subcategory.name} retrieved successfully",
+                product_data
+            )
+        except Exception as e:
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"An error occurred while retrieving products under subcategory: {str(e)}"
+            )
 
 
 class ProductCreateView(GenericAPIView, BaseResponseMixin):
@@ -73,49 +79,55 @@ class ProductCreateView(GenericAPIView, BaseResponseMixin):
 
     def post(self, request, category_name, *args, **kwargs):
         """Create a new product"""
-        user = request.user
-        # Check if user is a seller or admin/superadmin
-        if not (request.user.is_seller or request.user.is_staff or request.user.is_superuser):
+        try:
+            user = request.user
+            # Check if user is a seller or admin/superadmin
+            if not (request.user.is_seller or request.user.is_staff or request.user.is_superuser):
+                return self.get_response(
+                    status.HTTP_403_FORBIDDEN,
+                    "You do not have permission to create products"
+                )
+            
+            category_name = self.kwargs.get('category_name')
+            category_name = category_name.replace("-", " ").replace("_", " ").strip().lower()
+            
+            # Get the category
+            category = get_object_or_404(Category, name__iexact=category_name)
+
+            # Get seller's shop internally (skip request.data.get('shop'))
+            if user.is_seller:
+                seller_kyc = get_object_or_404(SellerKYC, user=user)
+                shop = get_object_or_404(Shop, owner=seller_kyc)
+            else:
+                shop_id = request.data.get('shop')
+                if not shop_id:
+                    return self.get_response(
+                        status.HTTP_400_BAD_REQUEST,
+                        "Admin must specify a shop ID"
+                    )
+                shop = get_object_or_404(Shop, id=shop_id)
+
+            # Add data value internally
+            data = request.data.copy()
+            data['category'] = str(category.id)
+            data['shop'] = str(shop.id)
+
+            # Serialize and save
+            serializer = self.get_serializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
             return self.get_response(
-                status.HTTP_403_FORBIDDEN,
-                "You do not have permission to create products"
+                status.HTTP_201_CREATED,
+                f"{category_name} product created successfully",
+                serializer.data
+            )
+        except Exception as e:
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"An error occurred while creating products: {str(e)}"
             )
         
-        category_name = self.kwargs.get('category_name')
-        category_name = category_name.replace("-", " ").replace("_", " ").strip().lower()
-        
-        # Get the category
-        category = get_object_or_404(Category, name__iexact=category_name)
-
-        # Get seller's shop internally (skip request.data.get('shop'))
-        if user.is_seller:
-            seller_kyc = get_object_or_404(SellerKYC, user=user)
-            shop = get_object_or_404(Shop, owner=seller_kyc)
-        else:
-            shop_id = request.data.get('shop')
-            if not shop_id:
-                return self.get_response(
-                    status.HTTP_400_BAD_REQUEST,
-                    "Admin must specify a shop ID"
-                )
-            shop = get_object_or_404(Shop, id=shop_id)
-
-        # Add data value internally
-        data = request.data.copy()
-        data['category'] = str(category.id)
-        data['shop'] = str(shop.id)
-
-        # Serialize and save
-        serializer = self.get_serializer(data=data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-
-        return self.get_response(
-            status.HTTP_201_CREATED,
-            f"{category_name} product created successfully",
-            serializer.data
-        )
-    
 
 class SingleProductDetailView(GenericAPIView, BaseResponseMixin):
     """Class to retrieve a single product per id"""
@@ -126,61 +138,68 @@ class SingleProductDetailView(GenericAPIView, BaseResponseMixin):
 
     def get(self, request, slug, *args, **kwargs):
         """Get a product by slug"""
-        product = None
-
-        for model in product_models_list:
-            product = model.objects.filter(slug=slug).first()
-            if product:
-                break
-        
-        if not product:
-            raise NotFound({
-                "status": "error",
-                "status_code": status.HTTP_404_NOT_FOUND,
-                "message": "Product not found"
-            })
-        
-        # Get index to resolve category and model
         try:
-            index = ProductIndex.objects.get(object_id=product.id)
-        except ProductIndex.DoesNotExist:
-            raise NotFound({
-                "status": "error",
-                "status_code": status.HTTP_404_NOT_FOUND,
-                "message": "Product index not found"
-            })
-        
-        # get the product model based on category
-        category_name = index.category
-        product_model = self.get_product_model_by_category(category_name)
-        if not product_model:
-            return None, self.get_response(
-                status.HTTP_400_BAD_REQUEST,
-                f"Invalid category: {category_name}"
-            )
-        
-        # Serialize product
-        serializer = self.get_serializer(product)
+            product = None
 
-        # Serialize seller profile
-        seller = product.shop.owner.user
-        seller_profile_serializer = SellerProfileSerializer(seller.user_profile)
-        
-        # serialize product review
-        reviews = UserRating.objects.filter(product=product.id)
-        product_rating = UserRatingSerializer(reviews, many=True)
-        
-        # Track recently viewed product
-        track_recently_viewed_product(request, index)
+            for model in product_models_list:
+                product = model.objects.filter(slug=slug).first()
+                if product:
+                    break
+            
+            if not product:
+                raise NotFound({
+                    "status": "error",
+                    "status_code": status.HTTP_404_NOT_FOUND,
+                    "message": "Product not found"
+                })
+            
+            # Get index to resolve category and model
+            try:
+                index = ProductIndex.objects.get(object_id=product.id)
+            except ProductIndex.DoesNotExist:
+                raise NotFound({
+                    "status": "error",
+                    "status_code": status.HTTP_404_NOT_FOUND,
+                    "message": "Product index not found"
+                })
+            
+            # get the product model based on category
+            category_name = index.category
+            product_model = self.get_product_model_by_category(category_name)
+            if not product_model:
+                return None, self.get_response(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Invalid category: {category_name}"
+                )
+            
+            # Serialize product
+            serializer = self.get_serializer(product)
 
-        return Response({
-            "status": "success",
-            "status_codes": status.HTTP_200_OK,
-            "message": "Product retrieved successfully",
-            "product": serializer.data,
-            "seller_data": seller_profile_serializer.data,
-            "product_review": product_rating.data
-        }, status=status.HTTP_200_OK)    
+            # Serialize seller profile
+            seller = product.shop.owner.user
+            seller_profile_serializer = SellerProfileSerializer(seller.user_profile)
+            
+            # serialize product review
+            reviews = UserRating.objects.filter(product=product.id)
+            product_rating = UserRatingSerializer(reviews, many=True)
+            
+            # Track recently viewed product
+            track_recently_viewed_product(request, index)
+
+            return Response({
+                "status": "success",
+                "status_codes": status.HTTP_200_OK,
+                "message": "Product retrieved successfully",
+                "product": serializer.data,
+                "seller_data": seller_profile_serializer.data,
+                "product_review": product_rating.data
+            }, status=status.HTTP_200_OK)  
+        except Exception as e:
+            # Catch unexpected errors and return standardized API response
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"An error occurred while retrieving the product: {str(e)}"
+            )  
 
 
 class ProductDetailView(GenericAPIView, BaseResponseMixin):
@@ -269,19 +288,31 @@ class ProductDetailView(GenericAPIView, BaseResponseMixin):
 
     def put(self, request, pk, category_name, *args, **kwargs):
         """Method for product update"""
-
-        product, error_response = self.get_product_and_check_permissions(pk, category_name)
-        if error_response:
-            return error_response
-        return self.update_product(request, product, category_name, partial=False)
+        try:
+            product, error_response = self.get_product_and_check_permissions(pk, category_name)
+            if error_response:
+                return error_response
+            return self.update_product(request, product, category_name, partial=False)
+        except Exception as e:
+            # Catch all unexpected errors
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"An error occurred while updating the product: {str(e)}"
+            )
 
     def patch(self, request, pk, category_name, *args, **kwargs):
         """Method for partial product update"""
-
-        product, error_response = self.get_product_and_check_permissions(pk, category_name)
-        if error_response:
-            return error_response
-        return self.update_product(request, product, category_name, partial=True)
+        try:
+            product, error_response = self.get_product_and_check_permissions(pk, category_name)
+            if error_response:
+                return error_response
+            return self.update_product(request, product, category_name, partial=True)
+        except Exception as e:
+            # Catch all unexpected errors
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"An error occurred while partially updating the product: {str(e)}"
+            )
 
     def delete(self, request, pk, category_name, *args, **kwargs):
         """Method to delete product perform by only staff and superuser"""
@@ -309,83 +340,89 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
 
     def get(self, request, *args, **kwargs):
         """Get all products with optional filtering"""
-        # Get query parameters
-        category = request.query_params.get('category')
-        shop_id = request.query_params.get('shop')
-        search_query = request.query_params.get('search')
+        try:
+            # Get query parameters
+            category = request.query_params.get('category')
+            shop_id = request.query_params.get('shop')
+            search_query = request.query_params.get('search')
 
-        # Advanced filters
-        brand = request.query_params.get('brand')
-        state = request.query_params.get('state')
-        local_govt = request.query_params.get('local_govt')
-        price_min = request.query_params.get('price_min')
-        price_max = request.query_params.get('price_max')
-        rating = request.query_params.get('rating')
-        sub_category = request.query_params.get('sub_category')
+            # Advanced filters
+            brand = request.query_params.get('brand')
+            state = request.query_params.get('state')
+            local_govt = request.query_params.get('local_govt')
+            price_min = request.query_params.get('price_min')
+            price_max = request.query_params.get('price_max')
+            rating = request.query_params.get('rating')
+            sub_category = request.query_params.get('sub_category')
 
-        queryset = self.get_queryset()
+            queryset = self.get_queryset()
 
-        query = Q()
+            query = Q()
 
-        if category:
-            query &= Q(category__iexact=category)
-    
+            if category:
+                query &= Q(category__iexact=category)
         
-        if shop_id:
-            query &= Q(shop__id=shop_id)
+            
+            if shop_id:
+                query &= Q(shop__id=shop_id)
 
-        if search_query:
-            query &= (
-                Q(title__icontains=search_query) |
-                Q(description__icontains=search_query) |
-                Q(brand__icontains=search_query) |
-                Q(specifications__icontains=search_query)
+            if search_query:
+                query &= (
+                    Q(title__icontains=search_query) |
+                    Q(description__icontains=search_query) |
+                    Q(brand__icontains=search_query) |
+                    Q(specifications__icontains=search_query)
+                )
+
+            if brand:
+                query &= Q(brand__icontains=brand)
+
+            if state:
+                query &= Q(state__iexact=state)
+
+            if local_govt:
+                query &= Q(local_govt__icontains=local_govt)
+
+            if price_min:
+                query &= Q(price__gte=price_min)
+
+            if price_max:
+                query &= Q(price__lte=price_max)
+
+            if sub_category:
+                query &= Q(sub_category__iexact=sub_category)
+
+            # Apply the filter only to the correct model manager
+            products = queryset.filter(query)
+
+            if rating:
+                rating = float(rating)
+                # Only include products with avg rating >= requested rating
+                products = products.annotate(
+                    avg_rating=Coalesce(Avg("product__rating"), Value(0.0)) 
+                ).filter(avg_rating__gte=rating)
+
+
+            page = self.paginate_queryset(products)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                paginated_response = self.get_paginated_response(serializer.data)
+                paginated_response.data["status"] = "success"
+                paginated_response.data["status_code"] = status.HTTP_200_OK
+                paginated_response.data["message"] = "Products retrieved successfully"
+                return paginated_response
+            
+            serializer = ProductIndexSerializer(products, many=True)
+            return self.get_response(
+                status.HTTP_200_OK,
+                "Products retrieved successfully",
+                serializer.data
             )
-
-        if brand:
-            query &= Q(brand__icontains=brand)
-
-        if state:
-            query &= Q(state__iexact=state)
-
-        if local_govt:
-            query &= Q(local_govt__icontains=local_govt)
-
-        if price_min:
-            query &= Q(price__gte=price_min)
-
-        if price_max:
-            query &= Q(price__lte=price_max)
-
-        if sub_category:
-            query &= Q(sub_category__iexact=sub_category)
-
-        # Apply the filter only to the correct model manager
-        products = queryset.filter(query)
-
-        if rating:
-            rating = float(rating)
-            # Only include products with avg rating >= requested rating
-            products = products.annotate(
-                avg_rating=Coalesce(Avg("product__rating"), Value(0.0)) 
-            ).filter(avg_rating__gte=rating)
-
-
-        page = self.paginate_queryset(products)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            paginated_response = self.get_paginated_response(serializer.data)
-            paginated_response.data["status"] = "success"
-            paginated_response.data["status_code"] = status.HTTP_200_OK
-            paginated_response.data["message"] = "Products retrieved successfully"
-            return paginated_response
-        
-        serializer = ProductIndexSerializer(products, many=True)
-        return self.get_response(
-            status.HTTP_200_OK,
-            "Products retrieved successfully",
-            serializer.data
-        )
+        except Exception as e:
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"An error occurred while retrieving products: {str(e)}"
+            )
 
 
 class TopSellingProductListView(GenericAPIView, BaseResponseMixin):
@@ -411,77 +448,83 @@ class TopSellingProductListView(GenericAPIView, BaseResponseMixin):
 
     def get(self, request, *args, **kwargs):
         """Return top selling products"""
-        category = request.query_params.get('category')
-        shop_id = request.query_params.get('shop')
-        search_query = request.query_params.get('search')
-        brand = request.query_params.get('brand')
-        state = request.query_params.get('state')
-        local_govt = request.query_params.get('local_govt')
-        price_min = request.query_params.get('price_min')
-        price_max = request.query_params.get('price_max')
-        rating = request.query_params.get('rating')
-        sub_category = request.query_params.get('sub_category')
+        try:
+            category = request.query_params.get('category')
+            shop_id = request.query_params.get('shop')
+            search_query = request.query_params.get('search')
+            brand = request.query_params.get('brand')
+            state = request.query_params.get('state')
+            local_govt = request.query_params.get('local_govt')
+            price_min = request.query_params.get('price_min')
+            price_max = request.query_params.get('price_max')
+            rating = request.query_params.get('rating')
+            sub_category = request.query_params.get('sub_category')
 
-        queryset = self.get_queryset()
+            queryset = self.get_queryset()
 
-        query = Q()
+            query = Q()
 
-        if shop_id:
-            query &= Q(shop__id=shop_id)
+            if shop_id:
+                query &= Q(shop__id=shop_id)
 
-        if category:
-            query &= Q(category__iexact=category)
+            if category:
+                query &= Q(category__iexact=category)
 
-        if search_query:
-            query &= (
-                Q(title__icontains=search_query) |
-                Q(description__icontains=search_query) |
-                Q(brand__icontains=search_query) |
-                Q(specifications__icontains=search_query)
+            if search_query:
+                query &= (
+                    Q(title__icontains=search_query) |
+                    Q(description__icontains=search_query) |
+                    Q(brand__icontains=search_query) |
+                    Q(specifications__icontains=search_query)
+                )
+
+            if brand:
+                query &= Q(brand__icontains=brand)
+
+            if state:
+                query &= Q(state__iexact=state)
+
+            if local_govt:
+                query &= Q(local_govt__icontains=local_govt)
+
+            if price_min:
+                query &= Q(price__gte=price_min)
+
+            if price_max:
+                query &= Q(price__lte=price_max)
+
+            if sub_category:
+                query &= Q(sub_category__iexact=sub_category)
+
+            products = queryset.filter(query)
+
+            if rating:
+                rating = float(rating)
+                # Only include products with avg rating >= requested rating
+                products = products.annotate(
+                    avg_rating=Coalesce(Avg("product__rating"), Value(0.0)) 
+                ).filter(avg_rating__gte=rating)
+
+            page = self.paginate_queryset(products)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                paginated_response = self.get_paginated_response(serializer.data)
+                paginated_response.data["status"] = "success"
+                paginated_response.data["status_code"] = status.HTTP_200_OK
+                paginated_response.data["message"] = "Top selling products retrieved successfully"
+                return paginated_response
+
+            serializer = self.get_serializer(products, many=True)
+            return self.get_response(
+                status.HTTP_200_OK,
+                "top selling products retrieved successfully",
+                products_data
             )
-
-        if brand:
-            query &= Q(brand__icontains=brand)
-
-        if state:
-            query &= Q(state__iexact=state)
-
-        if local_govt:
-            query &= Q(local_govt__icontains=local_govt)
-
-        if price_min:
-            query &= Q(price__gte=price_min)
-
-        if price_max:
-            query &= Q(price__lte=price_max)
-
-        if sub_category:
-            query &= Q(sub_category__iexact=sub_category)
-
-        products = queryset.filter(query)
-
-        if rating:
-            rating = float(rating)
-            # Only include products with avg rating >= requested rating
-            products = products.annotate(
-                avg_rating=Coalesce(Avg("product__rating"), Value(0.0)) 
-            ).filter(avg_rating__gte=rating)
-
-        page = self.paginate_queryset(products)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            paginated_response = self.get_paginated_response(serializer.data)
-            paginated_response.data["status"] = "success"
-            paginated_response.data["status_code"] = status.HTTP_200_OK
-            paginated_response.data["message"] = "Top selling products retrieved successfully"
-            return paginated_response
-
-        serializer = self.get_serializer(products, many=True)
-        return self.get_response(
-            status.HTTP_200_OK,
-            "top selling products retrieved successfully",
-            products_data
-        )
+        except Exception as e:
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"An error occurred while retrieving topselling products: {str(e)}"
+            )
 
     
 
@@ -585,38 +628,44 @@ class RecentlyViewedProductView(GenericAPIView, BaseResponseMixin):
 
     def get(self, request, *args, **kwargs):
         """Retrieve users recently viewed products"""
-        user = request.user
-        session_key = request.session.session_key
-        
-
-        if not session_key:
-            request.session['init'] = True
-            request.session.save()
+        try:
+            user = request.user
             session_key = request.session.session_key
             
 
-        # fetched viewed items for user or anonymous users
-        if user.is_authenticated:
-            views = RecentlyViewedProduct.objects.filter(user=user)
-        else:
-            views = RecentlyViewedProduct.objects.filter(session_key=session_key)
+            if not session_key:
+                request.session['init'] = True
+                request.session.save()
+                session_key = request.session.session_key
+                
 
-        views = views.select_related('product_index')[:20]
+            # fetched viewed items for user or anonymous users
+            if user.is_authenticated:
+                views = RecentlyViewedProduct.objects.filter(user=user)
+            else:
+                views = RecentlyViewedProduct.objects.filter(session_key=session_key)
 
-        # Create mapping: product_index_id -> position in views
-        position_map = {v.product_index.id: i for i, v in enumerate(views)}
+            views = views.select_related('product_index')[:20]
 
-        product_indexes = [v.product_index for v in views]
+            # Create mapping: product_index_id -> position in views
+            position_map = {v.product_index.id: i for i, v in enumerate(views)}
 
-        # Sort safely, fallback to large number if not found
-        product_sorted = sorted(
-            product_indexes,
-            key=lambda p: position_map.get(p.id, 9999)
-        )
-        serializer = self.get_serializer(product_sorted, many=True)
+            product_indexes = [v.product_index for v in views]
 
-        return self.get_response(
-            status.HTTP_200_OK,
-            "Recently viewd products retrieved successfully",
-            serializer.data
-        )
+            # Sort safely, fallback to large number if not found
+            product_sorted = sorted(
+                product_indexes,
+                key=lambda p: position_map.get(p.id, 9999)
+            )
+            serializer = self.get_serializer(product_sorted, many=True)
+
+            return self.get_response(
+                status.HTTP_200_OK,
+                "Recently viewd products retrieved successfully",
+                serializer.data
+            )
+        except Exception as e:
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"An error occurred while retrieving recently viewed products: {str(e)}"
+            )
