@@ -4,13 +4,14 @@ from .models import (
     SellerKYCCAC, SellerKYCAddress, KYCStatus
 )
 from django.db.models.signals import post_save
+from users.serializers import CustomUserSerializer
 
 
 class SellerKYCCACSerializer(serializers.ModelSerializer):
     """Serializer for CAC data"""
     class Meta:
         model = SellerKYCCAC
-        fields = ['rc_number', 'company_type', 'status', 'cac_verified']
+        fields = ['rc_number', 'company_type', 'company_name', 'status', 'cac_verified']
 
 
     def create_or_update(self, validated_data):
@@ -173,6 +174,7 @@ class SellerSerializer(serializers.ModelSerializer):
     cac = SellerKYCCACSerializer()
     address = SellerKYCAddressSerializer()
     socials = SellerSocialsSerializer()
+    user = CustomUserSerializer()
 
     class Meta:
         model = SellerKYC
