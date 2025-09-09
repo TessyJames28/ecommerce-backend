@@ -126,6 +126,12 @@ class KYCIDVerificationWebhook(GenericAPIView, BaseResponseMixin):
                 "message": "KYC verification failed.",
             }, status=status.HTTP_200_OK)
         
+        # Fallback return
+        return Response({
+            "status": "ignored",
+            "message": "Webhook received but did not meet completion conditions"
+        }, status=status.HTTP_200_OK)
+        
 
 
 class SellerAddressCreateView(GenericAPIView, BaseResponseMixin):
