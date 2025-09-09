@@ -52,6 +52,7 @@ class FavoriteItemSerializer(serializers.ModelSerializer):
         return {
             'id': str(product.id),
             'title': product.title,
+            'slug': product.slug,
             'price': str(product.price),
             'category': product.category.name if hasattr(product, 'category') else None,
             'subcategory': product.sub_category.name if hasattr(product, 'sub_category') else None,
