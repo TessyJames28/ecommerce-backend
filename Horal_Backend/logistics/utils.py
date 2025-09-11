@@ -444,8 +444,8 @@ def calculate_shipping_for_order(order):
     try:
         shipment_payloads = create_shipment_payload(order)
     except Exception as e:
-        logger.error(f"Error creating shipment payloads for order {order.id}: {str(e)}")
-        raise ValidationError(f"Error creating shipment payload for order: {str(e)}\n{str(traceback.format_exc())}")
+        logger.error(f"Error creating shipment payloads for order {order.id}: {str(e)}\n{str(traceback.format_exc())}")
+        raise ValidationError(f"Error creating shipment payload for order: {str(e)}")
 
     for shipment, payload in shipment_payloads:
         result = api.get_price(payload)
@@ -454,7 +454,7 @@ def calculate_shipping_for_order(order):
             price = Decimal(str(result.get("object", {}).get("deliveryPrice", 0)))
         except Exception as e:
             logger.warning(f"Error parsing price for shipment {shipment.id}: {e}")
-            raise ValidationError("Error retrieving shipment price from GIGL")
+            raise ValueError(f"Error retrieving shipment price from GIGL: {str(e)}")
 
         # Apply shipping price back to each shipment item
         shipment.shipping_cost = price

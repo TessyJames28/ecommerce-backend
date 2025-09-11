@@ -36,6 +36,7 @@ class PaystackTransaction(models.Model):
         PENDING = 'pending', 'Pending'
         SUCCESS = 'success', 'Success'
         FAILED = 'failed', 'Failed'
+        CANCELLED = 'cancelled', 'Cancelled'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     reference = models.CharField(max_length=100, unique=True, db_index=True)
