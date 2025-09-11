@@ -77,23 +77,23 @@ class InitializeTransaction(APIView):
         existing_txn = PaystackTransaction.objects.filter(order=order).first()
         if existing_txn:
             if existing_txn.status == PaystackTransaction.StatusChoices.PENDING:
-                # Return existing pending transaction
-                return Response({
-                    "status": "success",
-                    "message": "Transaction already initialized",
-                    "data": {
-                        "authorization_url": existing_txn.authorization_url,
-                        "access_code": existing_txn.access_code,
-                        "reference": existing_txn.reference,
-                    }
-                })
-            else:
-                # If already completed or failed, optionally raise an error
-                return JsonResponse({
-                    "status": "error",
-                    "status_code": status.HTTP_400_BAD_REQUEST,
-                    "message": f"Transaction already {existing_txn.status.lower()} for this order"
-                }, status=status.HTTP_400_BAD_REQUEST)
+                if existing_txn.amount == amount:
+                    # Return existing pending transaction
+                    return Response({
+                        "status": "success",
+                        "message": "Transaction already initialized",
+                        "data": {
+                            "authorization_url": existing_txn.authorization_url,
+                            "access_code": existing_txn.access_code,
+                            "reference": existing_txn.reference,
+                        }
+                    })
+                else:
+                    existing_txn.status = PaystackTransaction.StatusChoices.CANCELLED
+                    existing_txn.save(update_fields=["status"])
+                    
+            # generate a new ref for existing but cancelled
+            reference = str(uuid.uuid4())
         else:
             # Generate new reference
             reference = str(uuid.uuid4())
