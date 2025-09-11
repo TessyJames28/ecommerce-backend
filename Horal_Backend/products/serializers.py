@@ -755,7 +755,7 @@ class ProductIndexSerializer(serializers.ModelSerializer):
             "id", "title", "slug", "price", "image", "brand",
             "state", "local_govt", "condition", "description",
             "category", "sub_category", "shop", "is_published", "specifications",
-            "average_rating", "total_reviews",
+            "average_rating", "total_reviews", 'created_at',
         ]
 
 

@@ -40,7 +40,12 @@ class ProfileSerializer(serializers.ModelSerializer):
         validated_data.pop('confirm_password', None)
         image_url = validated_data.pop("image", None)
         location = self.initial_data.get("location")
-        phone_number = validated_data.pop("user", None).get("phone_number")
+
+        # Handle nested user.phone_number safely
+        user_data = validated_data.pop("user", None)  # remove it from profile update
+        phone_number = None
+        if user_data:
+            phone_number = user_data.pop("phone_number", None)
 
         user = instance.user
 

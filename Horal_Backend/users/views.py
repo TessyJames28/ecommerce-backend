@@ -372,16 +372,22 @@ class GoogleLoginView(GenericAPIView):
 
                 # You can also extract other fields like 'picture' if needed
 
-                # Check if user already exists
-                user, created = CustomUser.objects.get_or_create(email=email)
+                # Check if user already exists, or create a new one
+                user, created = CustomUser.objects.get_or_create(
+                    email=email,
+                    defaults={
+                        "full_name": full_name,
+                        "is_active": True,
+                        "last_login": now()
+                    }
+                )
 
-                if created:
-                    pass
-                    
-                user.full_name = full_name
-                user.is_active = True  # Assuming Google login means the user is verified
-                user.last_login = now()  # Update last login time
-                user.save()
+                if not created:
+                    # Update only if the user already existed
+                    user.full_name = full_name
+                    user.is_active = True
+                    user.last_login = now()
+                    user.save()
                 
                 serializer = LoginSerializer()
                 response_data = {
