@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q, Avg, Value
 from django.db.models.functions import Coalesce
 from django.core.exceptions import PermissionDenied
+from django.utils.dateparse import parse_date
 from sellers.models import SellerKYC
 from sellers_dashboard.serializers import SellerProfileSerializer
 from ratings.serializers import UserRatingSerializer
@@ -354,6 +355,7 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
             price_max = request.query_params.get('price_max')
             rating = request.query_params.get('rating')
             sub_category = request.query_params.get('sub_category')
+            created_at = request.query_params.get('created_at')
 
             queryset = self.get_queryset()
 
@@ -391,6 +393,9 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
 
             if sub_category:
                 query &= Q(sub_category__iexact=sub_category)
+
+            if created_at:
+                query &= Q(created_at__date=parse_date(created_at)) 
 
             # Apply the filter only to the correct model manager
             products = queryset.filter(query)
