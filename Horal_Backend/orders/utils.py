@@ -1,6 +1,7 @@
 from django.utils import timezone
 from django.db import transaction
 from products.utils import update_quantity
+from products.models import ProductVariant
 from payment.utils import update_order_status
 from payment.models import OrderStatusLog
 from logistics.utils import group_order_items_by_seller
@@ -97,4 +98,22 @@ def get_consistent_checkout_payload(order):
         shipments.append(shipment_data)
 
     return shipments
+
+
+def format_variant(variant: ProductVariant):
+    """Return a string describing the variant details (color, size, etc.)."""
+    details = []
+
+    if variant.color:
+        details.append(f"Color: {variant.color}")
+
+    if variant.standard_size:
+        details.append(f"Size: {variant.standard_size}")
+    elif variant.size:
+        details.append(f"Size: {variant.size}")
+
+    if variant.custom_size_unit and variant.custom_size_value:
+        details.append(f"Custom Size: {variant.custom_size_value}{variant.custom_size_unit}")
+
+    return ", ".join(details) if details else "Default"
 

@@ -11,6 +11,7 @@ from .serializers import (
     SellerProductRatingsSerializer,
     SellerProductOrdersSerializer,
     SellerProfileSerializer,
+    SellerOrderItemSerializer
 )
 from users.authentication import CookieTokenAuthentication
 from .utils import (
@@ -175,6 +176,44 @@ class SellerOrderListView(GenericAPIView, BaseResponseMixin):
             "Sellers order retrieved successfully",
             serializer.data
         )
+    
+
+class SellerOrderDetailView(GenericAPIView, BaseResponseMixin):
+    """
+    Class that handles the retrieval of a single order item details
+    from sellers order
+    """
+    serializer_class = SellerOrderItemSerializer
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
+
+    def get(self, request, order_item_id):
+        """
+        Retrieve a single order item
+        """
+        if not order_item_id:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Provide the order item id to view the details"
+            )
+        
+        try:
+            order_item = OrderItem.objects.get(id=order_item_id)
+        except OrderItem.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "Order item with this id not found"
+            )
+        
+        serializer = self.get_serializer(order_item)
+
+        return self.get_response(
+            status.HTTP_200_OK,
+            "Order item details retrieved successfully",
+            serializer.data
+        )
+
+        
     
 
 class SellerProfileView(GenericAPIView):

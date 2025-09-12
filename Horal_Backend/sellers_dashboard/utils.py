@@ -424,7 +424,7 @@ def attach_category_and_first_image(products_data):
             logger.warning(f"Error occurred when attaching cat and first img: {e}")
             continue
 
-        category_name = product_index.category_name.lower()
+        category_name = product_index.category.lower()
         
         # Get image from appropriate model using mapping
         model_class = CATEGORY_MODEL_MAP.get(category_name)
