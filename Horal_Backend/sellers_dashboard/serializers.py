@@ -3,6 +3,7 @@ from rest_framework.exceptions import ValidationError
 from .models import ProductRatingSummary
 from shops.serializers import ShopSerializer
 from orders.models import OrderItem
+from products.serializers import ProductVariantSerializer
 from sellers.models import SellerKYC
 from sellers.serializers import SellerSerializer
 from users.serializers import ShippingAddressSerializer
@@ -60,15 +61,19 @@ class SellerOrderItemSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
     buyer = serializers.CharField(source="order.user.full_name")
     order_id = serializers.UUIDField(source="order.id")
+    shipment_id = serializers.UUIDField(source="shipment.id")
     price = serializers.SerializerMethodField()
     order_date = serializers.DateTimeField(source='order.created_at')
-    status = serializers.CharField(source='order.status')
+    order_status = serializers.CharField(source='order.status')
+    shipment_status = serializers.CharField(source='shipment.status')
+    variant = ProductVariantSerializer()
+
 
     class Meta:
         model = OrderItem
         fields = [
-            'title', 'image', 'buyer', 'order_id', 'price',
-            'order_date', 'status'
+            'id', 'title', 'image', 'buyer', 'order_id', 'shipment_id', 'price',
+            'order_date', 'order_status', 'shipment_status', 'variant'
         ]
 
     def get_title(self, obj):
