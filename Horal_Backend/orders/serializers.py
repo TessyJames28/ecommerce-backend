@@ -1,6 +1,6 @@
 from rest_framework import serializers
-from .models import Order, OrderItem, OrderReturnRequest
-from users.serializers import ShippingAddressSerializer
+from .models import Order, OrderItem, OrderReturnRequest, OrderShipment
+from users.serializers import CustomUserSerializer, ShippingAddressSerializer
 from users.models import ShippingAddress
 
 
@@ -62,7 +62,41 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     def get_total_price(self, obj):
         return obj.total_price
+
+class OrderShipmentSerializer(serializers.ModelSerializer):
+    """Serializer for order shipment"""
+    order_items = OrderItemSerializer(many=True, read_only=True, source="items")
+    seller = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderShipment
+        fields = "__all__"
+
+
+    def get_seller(self, obj):
+        # from sellers.models import SellerKYC
+        kyc = obj.seller
+
+        return {
+            "full_name": kyc.user.full_name,
+            "shop": [shop.id for shop in kyc.owner.all()]
+        }
+
+
     
+class OrderWithShipmentSerializer(serializers.ModelSerializer):
+    """Serializer for order model"""
+    shipments = OrderShipmentSerializer(many=True, read_only=True)
+    shipping_address = serializers.DictField(write_only=True, required=False)
+
+    class Meta:
+        model = Order
+        fields = [
+            'id', 'user', 'created_at', 'updated_at', 'status',
+            'product_total', 'shipping_total', 'total_amount', 'shipments', 'shipping_address'
+        ]
+        read_only_fields = ['user', 'product_total', 'shipping_cost', 'total_amount', 'status', 'created_at', 'shipments']
+
 
 class OrderSerializer(serializers.ModelSerializer):
     """Serializer for order model"""
@@ -82,7 +116,6 @@ class OrderSerializer(serializers.ModelSerializer):
         return obj.user.email
 
     
-
     def to_representation(self, instance):
         data = super().to_representation(instance)
 

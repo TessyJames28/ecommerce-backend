@@ -9,7 +9,7 @@ from users.authentication import CookieTokenAuthentication
 from .models import UserRating
 from .serializers import UserRatingSerializer
 from products.utils import BaseResponseMixin, IsAdminOrSuperuser
-from orders.models import Order, OrderItem
+from orders.models import Order, OrderItem, OrderShipment
 from products.models import ProductIndex, ProductVariant
 
 # Create your views here.
@@ -32,7 +32,16 @@ class UserRatingCreateView(GenericAPIView, BaseResponseMixin):
             )
         
         # Get all delivered or paid orders by the user
-        eligible_orders = Order.objects.filter(user=user, status__in=['paid', 'delivered'])
+        eligible_orders = Order.objects.filter(user=user, status=Order.Status.PAID)
+
+        delivered_shipments = OrderShipment.objects.filter(
+            order__in=eligible_orders,
+            status__in=[
+                OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
+                OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
+                OrderShipment.Status.DELIVERED_TO_TERMINAL
+            ]
+        )
 
         # Get all variants related to this product
         variants_of_product = ProductVariant.objects.filter(object_id=product_index.id)
@@ -40,13 +49,14 @@ class UserRatingCreateView(GenericAPIView, BaseResponseMixin):
         # Check if user purchased any of those variants
         has_purchased = OrderItem.objects.filter(
             order__in=eligible_orders,
-            variant__in=variants_of_product
+            variant__in=variants_of_product,
+            shipment__in=delivered_shipments
         ).first()
 
         if not has_purchased:
             raise PermissionDenied("You can only review products you have purchased")
 
-        existing_review = UserRating.objects.filter(user=user, product=product_index, order_item=has_purchased).first()
+        existing_review = UserRating.objects.filter(user=user, product=product_index).first()
         if existing_review:
             raise ValidationError("You have already reviewed this product.")
 

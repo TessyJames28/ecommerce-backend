@@ -20,6 +20,9 @@ ENV
 !**/migrations/__init__.pyc
 !**/migrations/__init__.pyo
 
+# Log folder
+logs
+
 # Distribution / packaging
 .Python
 build/
