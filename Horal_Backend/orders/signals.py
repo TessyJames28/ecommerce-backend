@@ -12,8 +12,8 @@ from support.utils import (
 )
 from logistics.models import Station
 from collections import defaultdict
-from .utils import update_quantity
-from products.models import ProductIndex
+from .utils import update_quantity, format_variant
+from products.models import ProductIndex, ProductVariant
 from notifications.tasks import send_email_task
 from django.conf import settings
 from django.utils.timezone import now
@@ -188,10 +188,12 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
     for shipment_data in instance.shipments.all():
         for item in shipment_data.items.all(): 
             product = ProductIndex.objects.get(id=item.variant.object_id)
+            variant = ProductVariant.objects.get(id=item.variant.id)
             order_items.append({
                 "name": product.title,
                 "quantity": item.quantity,
-                "price": item.total_price
+                "price": item.total_price,
+                "variant": format_variant(variant),
             })
 
     totals = {
@@ -261,10 +263,12 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
         # Add shipment items
         for item in shipment.items.all():
             product = ProductIndex.objects.get(id=item.variant.object_id)
+            variant = ProductVariant.objects.get(id=item.variant.id)
             sellers_data[seller_id]["items"].append({
                 "name": product.title,
                 "quantity": item.quantity,
-                "price": f"₦{item.total_price}"
+                "price": f"₦{item.total_price}",
+                "variant": format_variant(variant),
             })
 
     # Send emails to each seller
