@@ -14,7 +14,11 @@ from users.models import CustomUser
 from .discounts import apply_coupon_discount
 from .utils import approve_return, create_shipments_for_order, get_consistent_checkout_payload
 from .models import Order, OrderItem, OrderShipment
-from .serializers import OrderReturnRequest, OrderSerializer, OrderReturnRequestSerializer
+from .serializers import (
+    OrderReturnRequest, OrderSerializer,
+    OrderReturnRequestSerializer, OrderShipmentSerializer,
+    OrderWithShipmentSerializer
+)
 from carts.models import Cart
 from users.authentication import CookieTokenAuthentication
 from logistics.utils import calculate_shipping_for_order
@@ -400,7 +404,7 @@ class OrderDetailView(GenericAPIView, BaseResponseMixin):
     """Class to view order details"""
     permission_classes = [IsAuthenticated]
     authentication_classes = [CookieTokenAuthentication]
-    serializer_class = OrderSerializer
+    serializer_class = OrderWithShipmentSerializer
 
     def get(self, request, order_id):
         if request.user.is_staff or request.user.is_superuser:
@@ -726,4 +730,37 @@ class ReturnsEmailWebhookView(APIView, BaseResponseMixin):
             "status": "ok",
             "message_id": msg.id,
         }, status=status.HTTP_201_CREATED)
+
+
+class ShipmentListView(GenericAPIView, BaseResponseMixin):
+    """
+    Class to display order shipment details
+    Used by both buyers and sellers
+    """
+    serializer_class = OrderShipmentSerializer
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
+
+    def get_queryset(self, request, *args, **kwargs):
+        return get_object_or_404(
+            OrderShipment, order=kwargs["order_id"],
+            order__user=request.user
+        )
+    
+    def get(self, request, order_id, *args, **kwargs):
+        """Retrieve buyers shipment details"""
+        if not order_id:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Please provide the order_id"
+            )
+        queryset = self.get_queryset(request, *args, **kwargs)
+
+        serializer = self.get_serializer(queryset)
+
+        return self.get_response(
+            status.HTTP_200_OK,
+            "Shipment data returned successfully",
+            serializer.data
+        )
 
