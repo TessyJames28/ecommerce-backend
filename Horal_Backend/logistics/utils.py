@@ -292,12 +292,12 @@ def group_order_items_by_seller(order):
 
     for item in order.order_items.all():
         shop = item.variant.shop
-        weight = 0
         seller = SellerKYC.objects.get(user=shop.owner.user)
         seller_kyc = SellerKYCAddress.objects.get(id=seller.address.id)
         
         # Extract weight
-        weight += _extract_weight_kg(item)
+        item_weight = _extract_weight_kg(item)
+        print(f"Weight returned: {item_weight}")
 
         # Get seller address and nearest station
         # seller_address, seller_state = _seller_full_address(seller_kyc)
@@ -308,7 +308,8 @@ def group_order_items_by_seller(order):
         # Store order info
         seller_orders[seller]["items"].append(item)
         # seller_orders[seller]["station"] = station.address
-        seller_orders[seller]["weight"] = weight
+        seller_orders[seller]["weight"] += item_weight
+        print(f"Weight saved for seller: {seller_orders[seller]["weight"]}")
     
     
     return seller_orders
