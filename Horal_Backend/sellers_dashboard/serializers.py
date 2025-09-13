@@ -72,8 +72,9 @@ class SellerOrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = [
-            'id', 'title', 'image', 'buyer', 'order_id', 'shipment_id', 'price',
-            'order_date', 'order_status', 'shipment_status', 'variant'
+            'id', 'title', 'image', 'buyer', 'order_id', 'shipment_id', 'unit_price', 'price',
+            'order_date', 'order_status', 'shipment_status', 'quantity', 'is_returned',
+            'is_return_requested', 'is_completed', 'delivered_at', 'variant'
         ]
 
     def get_title(self, obj):
