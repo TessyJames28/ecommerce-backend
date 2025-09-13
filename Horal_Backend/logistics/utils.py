@@ -111,7 +111,7 @@ def _extract_weight_kg(item, default_kg: float=1.0) -> float:
         "G": 0.001,
     }
 
-    if weight_unit not in conversion_to_kg:
+    if weight_unit != "KG":
         factor = conversion_to_kg.get(weight_unit)
         total_weight_kg = float(weight_value) * quantity * factor
     else:
