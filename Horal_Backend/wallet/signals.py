@@ -118,7 +118,7 @@ def notify_seller_of_initiated_withdrawal(sender, instance, **kwargs):
     recipient = instance.seller.email
     seller_name = instance.seller.full_name
     amount = instance.amount_naira
-    transaction_id = instance.transaction_id
+    transaction_id = instance.id
     bank_name = bank_details.bank_name
     expected_arrival = "Within 1-2 business days"
 
