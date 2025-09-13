@@ -104,20 +104,19 @@ def _extract_weight_kg(item, default_kg: float=1.0) -> float:
         print(f"Weight after calculation: {weight}")
         return weight
     
-    # weight_unit = weight_unit.upper()
+    weight_unit = weight_unit.upper()
 
     # Conversion factors to KG
     conversion_to_kg = {
-        "KG": 1,
         "G": 0.001,
     }
 
-    factor = conversion_to_kg.get(weight_unit)
-    if factor is None:
-        return default_kg * quantity
-    
-    # Multiply by quantity first, then convert to kg
-    total_weight_kg = float(weight_value) * quantity * factor
+    if weight_unit not in conversion_to_kg:
+        factor = conversion_to_kg.get(weight_unit)
+        total_weight_kg = float(weight_value) * quantity * factor
+    else:
+        # Multiply by quantity first, then convert to kg
+        total_weight_kg = float(weight_value) * quantity
     print(f"Total weight after conversion: {total_weight_kg}")
 
     return total_weight_kg
