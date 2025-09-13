@@ -9,9 +9,13 @@ import uuid
 from sellers_dashboard.utils import get_withdrawable_revenue
 from django.utils.timezone import now
 from decimal import Decimal
-import os, random
+import os, random, logging
+
+logger = logging.getLogger(__name__)
 
 
+def balance_topup():
+    pass
 
 def verify_bank_account(account_number, bank_code):
     """
@@ -101,12 +105,13 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
         commission = (withdrawable * Decimal("0.05")).quantize(Decimal("0.01"))
         amount_naira = withdrawable - commission
 
+    reference = payout.reference_id if payout else str(uuid.uuid4())  # custom reference
     payload = {
         "source": "balance",
         "amount": int(amount_naira * 100),
         "recipient": recipient_code,
         "reason": reason,
-        "reference": payout.reference_id if payout else str(uuid.uuid4())  # custom reference
+        "reference": reference
     }
 
     try:
@@ -115,9 +120,13 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
     except Exception as e:
         raise Exception(f"Error initializing payout: {e}")
 
-    amount = data.get("data", {}).get("amount")
+    data_obj = data.get("data") or {}
+    transfer_code = data_obj.get("transfer_code")
+    response_ref = data_obj.get("reference") or reference
+    amount = data_obj.get("amount")
+    amount_value = amount / 100 if amount else amount_naira
+
     if data.get("status") is True:
-        transfer_code = data["data"]["transfer_code"]
 
         # Check if its a retry
         if payout:
@@ -127,12 +136,14 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
             payout.save(update_fields=[
                 "paystack_transfer_code", "last_retry_at"
             ])
+
+            return transfer_code
         else:
             # Save payout record
-            Payout.objects.get_or_create(
+            payout, _ = Payout.objects.get_or_create(
                 seller=seller,
-                reference_id=data["data"]["reference"],
-                amount_naira=amount / 100,
+                reference_id=response_ref,
+                amount_naira=amount_value,
                 paystack_transfer_code=transfer_code,
                 total_withdrawable=withdrawable,
                 commission=commission,
@@ -140,6 +151,29 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
                 reason=reason
             )
 
-        return transfer_code
+            return payout
+    elif data.get("status") is False and data.get("code") == "insufficient_balance":
+
+        # Save payout record
+        payout, _ = Payout.objects.get_or_create(
+            seller=seller,
+            reference_id=response_ref,
+            amount_naira=amount_value,
+            total_withdrawable=withdrawable,
+            commission=commission,
+            status=Payout.StatusChoices.PROCESSING,
+            reason=reason
+        )
+
+        balance_topup(
+            amount=amount_value,
+            message="Insufficient Balance for paystack Transfer",
+            seller=seller.full_name,
+            reference_id=response_ref
+        )
+        logger.warning(f"Paystack transfer because of insufficient fund: {data}")
+        return payout
+
     else:
+        logger.warning(f"Paystack transfer initiation failed: {data}")
         raise ValidationError(f"Paystack tranfer initiation failed: {data}")
