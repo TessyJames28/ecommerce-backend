@@ -104,22 +104,22 @@ def _extract_weight_kg(item, default_kg: float=1.0) -> float:
         print(f"Weight after calculation: {weight}")
         return weight
     
-    weight_unit = str(weight_unit).upper()
+    # weight_unit = str(weight_unit).upper()
 
     # Conversion factors to KG
     conversion_to_kg = {
-        "G": 0.001,
+        "g": 0.001,
+        "kg": 1,
     }
 
-    if weight_unit != "KG":
-        factor = conversion_to_kg.get(weight_unit)
-        total_weight_kg = float(weight_value) * quantity * factor
-    else:
-        # Multiply by quantity first, then convert to kg
-        total_weight_kg = float(weight_value) * quantity
-    print(f"Total weight after conversion: {total_weight_kg}")
+    # Ensure consistent lowercase
+    weight_unit = str(weight_unit).lower()
 
+    total_weight_kg = float(weight_value) * quantity * conversion_to_kg[weight_unit]
+
+    print(f"Total weight after conversion: {total_weight_kg}")
     return total_weight_kg
+
 
 
 def haversine_distance(coord1, coord2):
