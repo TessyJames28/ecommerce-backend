@@ -9,8 +9,35 @@ import uuid
 from sellers_dashboard.utils import get_withdrawable_revenue
 from django.utils.timezone import now
 from decimal import Decimal
-import os, random
+from django.conf import settings
+from notifications.tasks import send_email_task
+import os, random, logging
 
+logger = logging.getLogger(__name__)
+
+
+def balance_topup(amount, seller, reference_id):
+    subject = "Action Required: Insufficient Balance for Transfer"
+
+    context = {
+        "user": "Mr. Emeka",
+        "body_paragraphs": [
+            f"We attempted to process a transfer of ₦{amount:,} for seller {seller}, but the wallet balance was insufficient.",
+            f"Reference ID: {reference_id}",
+            "Please top up Paystack balance to avoid disruptions of sellers payout."
+        ],
+        "footer_note": "This is an automated notification. If you have already topped up, you can ignore this message.",
+        "sender_name": "Horal Payout"
+    }
+    from_email = f"Horal Payout <{settings.DEFAULT_FROM_EMAIL}>"
+
+    send_email_task.delay(
+        recipient="horal@horal.ng",   # Or seller.email
+        subject=subject,
+        from_email=from_email,
+        template_name="notifications/emails/general_email.html",
+        context=context
+    )
 
 
 def verify_bank_account(account_number, bank_code):
@@ -101,12 +128,13 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
         commission = (withdrawable * Decimal("0.05")).quantize(Decimal("0.01"))
         amount_naira = withdrawable - commission
 
+    reference = payout.reference_id if payout else str(uuid.uuid4())  # custom reference
     payload = {
         "source": "balance",
         "amount": int(amount_naira * 100),
         "recipient": recipient_code,
         "reason": reason,
-        "reference": payout.reference_id if payout else str(uuid.uuid4())  # custom reference
+        "reference": reference
     }
 
     try:
@@ -115,9 +143,13 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
     except Exception as e:
         raise Exception(f"Error initializing payout: {e}")
 
-    amount = data.get("data", {}).get("amount")
+    data_obj = data.get("data") or {}
+    transfer_code = data_obj.get("transfer_code")
+    response_ref = data_obj.get("reference") or reference
+    amount = data_obj.get("amount")
+    amount_value = amount / 100 if amount else amount_naira
+
     if data.get("status") is True:
-        transfer_code = data["data"]["transfer_code"]
 
         # Check if its a retry
         if payout:
@@ -127,12 +159,14 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
             payout.save(update_fields=[
                 "paystack_transfer_code", "last_retry_at"
             ])
+
+            return transfer_code
         else:
             # Save payout record
-            Payout.objects.get_or_create(
+            payout, _ = Payout.objects.get_or_create(
                 seller=seller,
-                reference_id=data["data"]["reference"],
-                amount_naira=amount / 100,
+                reference_id=response_ref,
+                amount_naira=amount_value,
                 paystack_transfer_code=transfer_code,
                 total_withdrawable=withdrawable,
                 commission=commission,
@@ -140,6 +174,28 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
                 reason=reason
             )
 
-        return transfer_code
+            return payout
+    elif data.get("status") is False and data.get("code") == "insufficient_balance":
+
+        # Save payout record
+        payout, _ = Payout.objects.get_or_create(
+            seller=seller,
+            reference_id=response_ref,
+            amount_naira=amount_value,
+            total_withdrawable=withdrawable,
+            commission=commission,
+            status=Payout.StatusChoices.PROCESSING,
+            reason=reason
+        )
+
+        balance_topup(
+            amount=amount_value,
+            seller=seller.full_name,
+            reference_id=response_ref
+        )
+        logger.warning(f"Paystack transfer because of insufficient fund: {data}")
+        return payout
+
     else:
-        raise ValidationError(f"Paystack tranfer initiation failed: {data}")
+        logger.warning(f"Paystack transfer initiation failed: {data}")
+        raise ValidationError(f"Error processing payment. Please try again in a few hours.")

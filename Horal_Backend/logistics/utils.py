@@ -95,24 +95,25 @@ def _extract_weight_kg(item, default_kg: float=1.0) -> float:
     weight_unit = getattr(logistics, "total_weight", None)
 
     if not weight_value or not weight_unit:
-        return default_kg * quantity
+        weight = default_kg * quantity
+
+        return weight
     
-    # weight_unit = weight_unit.upper()
+    # weight_unit = str(weight_unit).upper()
 
     # Conversion factors to KG
     conversion_to_kg = {
-        "KG": 1,
-        "G": 0.001,
+        "g": 0.001,
+        "kg": 1,
     }
 
-    factor = conversion_to_kg.get(weight_unit)
-    if factor is None:
-        return default_kg * quantity
-    
-    # Multiply by quantity first, then convert to kg
-    total_weight_kg = float(weight_value) * quantity * factor
+    # Ensure consistent lowercase
+    weight_value = str(weight_value).lower()
+
+    total_weight_kg = float(weight_unit) * quantity * conversion_to_kg[weight_value]
 
     return total_weight_kg
+
 
 
 def haversine_distance(coord1, coord2):
@@ -280,16 +281,15 @@ def group_order_items_by_seller(order):
     Function to group order items by seller to lessen shipping
     cost for buyers purchasing from a single seller
     """
-    seller_orders = defaultdict(lambda: {"items": [], "station": None})
-
+    seller_orders = defaultdict(lambda: {"items": [], "station": None, "weight": 0.0, "seller": None})
+    # item_weight = 0
     for item in order.order_items.all():
         shop = item.variant.shop
-        weight = 0
         seller = SellerKYC.objects.get(user=shop.owner.user)
         seller_kyc = SellerKYCAddress.objects.get(id=seller.address.id)
         
         # Extract weight
-        weight += _extract_weight_kg(item)
+        item_weight = _extract_weight_kg(item)
 
         # Get seller address and nearest station
         # seller_address, seller_state = _seller_full_address(seller_kyc)
@@ -300,8 +300,8 @@ def group_order_items_by_seller(order):
         # Store order info
         seller_orders[seller]["items"].append(item)
         # seller_orders[seller]["station"] = station.address
-        seller_orders[seller]["weight"] = weight
-    
+        seller_orders[seller]["weight"] += item_weight
+        seller_orders[seller]["seller"] = seller
     
     return seller_orders
 

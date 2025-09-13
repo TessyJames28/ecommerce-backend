@@ -148,10 +148,9 @@ class ConfirmWithdrawalView(APIView, BaseResponseMixin):
                 "Seller does not have a recipient code. Please verify your bank details"
             )
 
-        transfer_code = initiate_payout(seller_bank.recipient_code, seller_id)
-        
-        payout = Payout.objects.get(seller=seller_id, paystack_transfer_code=transfer_code)
-        # Get back data
+        payout = initiate_payout(seller_bank.recipient_code, seller_id)
+
+       
         bank_data = PayoutSerializer(payout).data
 
         data = {
