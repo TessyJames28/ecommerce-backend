@@ -47,7 +47,7 @@ def handle_shipment_delivered(sender, shipment, reminder=None, **kwargs):
             "image": product.image if product.image else None,
             "name": product.title,
             "seller": shipment.seller.user.full_name,
-            "review_url": f"https://www.horal.ng/products/{product.slug}",
+            "review_url": f"https://www.horal.ng/product/{product.slug}",
         })
 
     recipient = shipment.order.user.email
@@ -295,25 +295,25 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
 
 
 
-@receiver(post_delete, sender=OrderItem)
-def restore_reserved_stock(sender, instance, **kwargs):
-    """
-    Restore reserved stock when an OrderItem is deleted
-    """
-    variant = instance.variant
-    if variant:
-        # Prevent reserved_quantity from going negative
-        if variant.reserved_quantity >= instance.quantity:
-            variant.reserved_quantity -= instance.quantity
-        else:
-            # fallback: reset to 0 if bad data
-            variant.reserved_quantity = 0
+# @receiver(post_delete, sender=OrderItem)
+# def restore_reserved_stock(sender, instance, **kwargs):
+#     """
+#     Restore reserved stock when an OrderItem is deleted
+#     """
+#     variant = instance.variant
+#     if variant:
+#         # Prevent reserved_quantity from going negative
+#         if variant.reserved_quantity >= instance.quantity:
+#             variant.reserved_quantity -= instance.quantity
+#         else:
+#             # fallback: reset to 0 if bad data
+#             variant.reserved_quantity = 0
 
-        # Always return the quantity to stock
-        variant.stock_quantity += instance.quantity
+#         # Always return the quantity to stock
+#         variant.stock_quantity += instance.quantity
 
-        variant.save()
-        update_quantity(variant.product)
+#         variant.save()
+#         update_quantity(variant.product)
 
 
 
