@@ -5,7 +5,7 @@
 
 {% if body_paragraphs %}
   {% for paragraph in body_paragraphs %}
-    <p style="font-size: 14px; color: #555; line-height: 1.6; text-align: center;">
+    <p style="font-size: 14px; color: #555; line-height: 1.6;">
       {{ paragraph }}
     </p>
   {% endfor %}
@@ -53,10 +53,10 @@
 {% endif %}
 
 {% if addresses %}
-  <p style="font-size: 14px; color: #555; text-align: left; margin-top: 20px;">
+  <p style="font-size: 14px; color: #555; margin-top: 20px;">
     Please get these items ready for shipment and drop them at any of the following location(s):
   </p>
-  <ul style="list-style: none; padding: 0; font-family: monospace; text-align: left;">
+  <ul style="list-style-type: disc; padding-left: 20px; font-family: monospace;"></ul>
     {% for address in addresses %}
       <li style="margin: 5px 0;">{{ address }}</li>
     {% endfor %}
@@ -79,6 +79,6 @@
 </p>
 {% endif %}
 
-<p style="font-size: 15px; color: #555; margin-top: 30px; text-align: center;">Best Regards,</p>
-<p style="font-size: 15px; color: #555; text-align: center;">{{ sender_name|default:"The Horal Team" }}</p>
+<p style="font-size: 15px; color: #555; margin-top: 30px;">Best Regards,</p>
+<p style="font-size: 15px; color: #555;">{{ sender_name|default:"The Horal Team" }}</p>
 {% endblock %}
