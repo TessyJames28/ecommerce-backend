@@ -122,7 +122,6 @@ def _extract_weight_kg(item, default_kg: float=1.0) -> float:
 
 
 
-
 def haversine_distance(coord1, coord2):
     """
     coord1, coord2: tuples (lat, lng) in decimal degrees
@@ -288,8 +287,8 @@ def group_order_items_by_seller(order):
     Function to group order items by seller to lessen shipping
     cost for buyers purchasing from a single seller
     """
-    seller_orders = defaultdict(lambda: {"items": [], "station": None})
-
+    seller_orders = defaultdict(lambda: {"items": [], "station": None, "weight": 0.0, "seller": None})
+    # item_weight = 0
     for item in order.order_items.all():
         shop = item.variant.shop
         seller = SellerKYC.objects.get(user=shop.owner.user)
@@ -306,9 +305,11 @@ def group_order_items_by_seller(order):
         # station = Station.objects.get(station_id=seller_station_id)
         
         # Store order info
+        print(f"Seller data: {seller}")
         seller_orders[seller]["items"].append(item)
         # seller_orders[seller]["station"] = station.address
         seller_orders[seller]["weight"] += item_weight
+        seller_orders[seller]["seller"] = seller
         print(f"Weight saved for seller: {seller_orders[seller]["weight"]}")
     
     
