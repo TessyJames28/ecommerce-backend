@@ -9,13 +9,36 @@ import uuid
 from sellers_dashboard.utils import get_withdrawable_revenue
 from django.utils.timezone import now
 from decimal import Decimal
+from django.conf import settings
+from notifications.tasks import send_email_task
 import os, random, logging
 
 logger = logging.getLogger(__name__)
 
 
-def balance_topup():
-    pass
+def balance_topup(amount, seller, reference_id):
+    subject = "Action Required: Insufficient Balance for Transfer"
+
+    context = {
+        "user": "Mr. Emeka",
+        "body_paragraphs": [
+            f"We attempted to process a transfer of ₦{amount:,} for seller {seller}, but the wallet balance was insufficient.",
+            f"Reference ID: {reference_id}",
+            "Please top up Paystack balance to avoid disruptions of sellers payout."
+        ],
+        "footer_note": "This is an automated notification. If you have already topped up, you can ignore this message.",
+        "sender_name": "Horal Payout"
+    }
+    from_email = f"Horal Payout <{settings.DEFAULT_FROM_EMAIL}>"
+
+    send_email_task.delay(
+        recipient="horal@horal.ng",   # Or seller.email
+        subject=subject,
+        from_email=from_email,
+        template_name="notifications/emails/general_email.html",
+        context=context
+    )
+
 
 def verify_bank_account(account_number, bank_code):
     """
@@ -167,7 +190,6 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
 
         balance_topup(
             amount=amount_value,
-            message="Insufficient Balance for paystack Transfer",
             seller=seller.full_name,
             reference_id=response_ref
         )
@@ -176,4 +198,4 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
 
     else:
         logger.warning(f"Paystack transfer initiation failed: {data}")
-        raise ValidationError(f"Paystack tranfer initiation failed: {data}")
+        raise ValidationError(f"Error processing payment. Please try again in a few hours.")
