@@ -23,6 +23,7 @@ from carts.models import Cart
 from users.authentication import CookieTokenAuthentication
 from logistics.utils import calculate_shipping_for_order
 from products.utils import BaseResponseMixin, update_quantity
+from products.models import ProductVariant
 from django.utils.timezone import now
 from support.serializers import MessageSerializer
 from support.utils import handle_mailgun_attachments, create_message_for_instance
@@ -87,12 +88,27 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                         }
                     )
                     update_order_status(order, Order.Status.PENDING, user, force=True)
+
+                # Release stock for existing order items
+                for order_item in order.order_items.select_related("variant").all():
+                    variant = (
+                        ProductVariant.objects.select_for_update()
+                        .get(pk=order_item.variant.pk)
+                    )
+                    variant.reserved_quantity -= order_item.quantity
+                    variant.stock_quantity += order_item.quantity
+                    variant.save()
+                    update_quantity(variant.product)
+
                 # Clear existing order items to resync with cart
                 order.order_items.all().delete()
 
                 # Add order items
                 for item in cart.cart_item.all():
-                    variant = item.variant
+                    variant = (
+                        ProductVariant.objects.select_for_update()
+                        .get(pk=item.variant.pk)
+                    )
 
                     # Check if requested quantity can be reserved
                     if item.quantity > variant.stock_quantity:
