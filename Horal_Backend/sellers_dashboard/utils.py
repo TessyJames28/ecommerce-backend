@@ -388,7 +388,7 @@ def get_topselling_product_sql(shop, from_date):
             product_index = ProductIndex.objects.get(id=row['product_index_id'])
             product_id = product_index.object_id
 
-            model_class = CATEGORY_MODEL_MAP.get(product_index.category_name)
+            model_class = CATEGORY_MODEL_MAP.get(product_index.category)
             if model_class:
                 product = model_class.objects.get(id=product_id)
                 row['title'] = getattr(product, 'title', None)
@@ -419,7 +419,7 @@ def attach_category_and_first_image(products_data):
 
         # Fetch the category from ProductIndex
         try:
-            product_index = ProductIndex.objects.only("category_name").get(id=product_id)
+            product_index = ProductIndex.objects.only("category").get(id=product_id)
         except ProductIndex.DoesNotExist as e:
             logger.warning(f"Error occurred when attaching cat and first img: {e}")
             continue
