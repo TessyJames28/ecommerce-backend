@@ -113,12 +113,13 @@ def _extract_weight_kg(item, default_kg: float=1.0) -> float:
     }
 
     # Ensure consistent lowercase
-    weight_unit = str(weight_unit).lower()
+    weight_value = str(weight_value).lower()
 
-    total_weight_kg = float(weight_value) * quantity * conversion_to_kg[weight_unit]
+    total_weight_kg = float(weight_unit) * quantity * conversion_to_kg[weight_value]
 
     print(f"Total weight after conversion: {total_weight_kg}")
     return total_weight_kg
+
 
 
 
