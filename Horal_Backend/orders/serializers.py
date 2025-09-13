@@ -87,7 +87,7 @@ class OrderShipmentSerializer(serializers.ModelSerializer):
 class OrderWithShipmentSerializer(serializers.ModelSerializer):
     """Serializer for order model"""
     shipments = OrderShipmentSerializer(many=True, read_only=True)
-    shipping_address = serializers.DictField(write_only=True, required=False)
+    shipping_address = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -97,6 +97,17 @@ class OrderWithShipmentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['user', 'product_total', 'shipping_cost', 'total_amount', 'status', 'created_at', 'shipments']
 
+
+    def get_shipping_address(self, obj):
+        return {
+            "street_address": obj.street_address,
+            "local_govt": obj.local_govt,
+            "landmark": obj.landmark,
+            "country": obj.country,
+            "state": obj.state,
+            "phone_number": obj.phone_number,
+        }
+    
 
 class OrderSerializer(serializers.ModelSerializer):
     """Serializer for order model"""
