@@ -104,7 +104,7 @@ def _extract_weight_kg(item, default_kg: float=1.0) -> float:
         print(f"Weight after calculation: {weight}")
         return weight
     
-    weight_unit = weight_unit.upper()
+    weight_unit = str(weight_unit).upper()
 
     # Conversion factors to KG
     conversion_to_kg = {
