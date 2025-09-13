@@ -78,30 +78,25 @@ def _extract_weight_kg(item, default_kg: float=1.0) -> float:
 
     try:
         logistics = Logistics.objects.get(product_variant=item.variant)
-        print(f"Logistics product variant: {logistics}")
     except ObjectDoesNotExist as e:
         logger.warning(f"Logistics entry not found for variant {item.variant.id}: {str(e)}")
         try:
             logistics = Logistics.objects.get(object_id=item.variant.object_id)
-            print(f"Logistics product id: {logistics}")
         except ObjectDoesNotExist as e:
             logger.warning(f"Logistics entry not found for product {item.variant.object_id}: {str(e)}")
             logistics = None  # or raise a validation error
     
     quantity = getattr(item, "quantity", 1)
 
-    print(f"Logistics: {logistics}")
     if not logistics:
         return default_kg * quantity
     
     weight_value = getattr(logistics, "weight_measurement", None)
     weight_unit = getattr(logistics, "total_weight", None)
-    print(f"weight measurement: {weight_value}\ntotal weight: {weight_unit}")
 
     if not weight_value or not weight_unit:
         weight = default_kg * quantity
 
-        print(f"Weight after calculation: {weight}")
         return weight
     
     # weight_unit = str(weight_unit).upper()
@@ -117,7 +112,6 @@ def _extract_weight_kg(item, default_kg: float=1.0) -> float:
 
     total_weight_kg = float(weight_unit) * quantity * conversion_to_kg[weight_value]
 
-    print(f"Total weight after conversion: {total_weight_kg}")
     return total_weight_kg
 
 
@@ -296,7 +290,6 @@ def group_order_items_by_seller(order):
         
         # Extract weight
         item_weight = _extract_weight_kg(item)
-        print(f"Weight returned: {item_weight}")
 
         # Get seller address and nearest station
         # seller_address, seller_state = _seller_full_address(seller_kyc)
@@ -305,13 +298,10 @@ def group_order_items_by_seller(order):
         # station = Station.objects.get(station_id=seller_station_id)
         
         # Store order info
-        print(f"Seller data: {seller}")
         seller_orders[seller]["items"].append(item)
         # seller_orders[seller]["station"] = station.address
         seller_orders[seller]["weight"] += item_weight
         seller_orders[seller]["seller"] = seller
-        print(f"Weight saved for seller: {seller_orders[seller]["weight"]}")
-    
     
     return seller_orders
 
