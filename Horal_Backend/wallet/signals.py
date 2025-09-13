@@ -6,7 +6,9 @@ from django.conf import settings
 from django.utils.timezone import now
 from notifications.tasks import send_email_task
 from django.conf import settings
-import uuid
+import uuid, logging
+
+logger = logging.getLogger(__name__)
 
 
 @receiver(post_save, sender=OrderItem)
@@ -118,7 +120,7 @@ def notify_seller_of_initiated_withdrawal(sender, instance, **kwargs):
     recipient = instance.seller.email
     seller_name = instance.seller.full_name
     amount = instance.amount_naira
-    transaction_id = instance.transaction_id
+    transaction_id = instance.id
     bank_name = bank_details.bank_name
     expected_arrival = "Within 1-2 business days"
 
