@@ -3,6 +3,7 @@ from django.db import transaction
 
 from .models import Order, OrderShipment
 from products.models import ProductVariant
+from products.utils import update_quantity
 from datetime import timedelta
 import logging
 
@@ -20,6 +21,7 @@ def cancel_expired_pending_orders():
     ).prefetch_related('order_items__variant')
 
     variants_to_update = {}
+    products_to_update = {}
     orders_to_update = []
 
     with transaction.atomic():
@@ -29,12 +31,18 @@ def cancel_expired_pending_orders():
                 if variant.id not in variants_to_update:
                     variants_to_update[variant.id] = variant
                 variant.reserved_quantity = max(variant.reserved_quantity - item.quantity, 0)
+                products_to_update.add(variant.product)
 
             order.status = Order.Status.CANCELLED
             orders_to_update.append(order)
 
         if variants_to_update:
             ProductVariant.objects.bulk_update(variants_to_update.values(), ['reserved_quantity'])
+
+        # Update product quantities
+        for product in products_to_update:
+            update_quantity(product)
+            
         if orders_to_update:
             Order.objects.bulk_update(orders_to_update, ['status'])
 
