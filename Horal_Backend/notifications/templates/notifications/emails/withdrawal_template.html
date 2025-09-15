@@ -1,11 +1,15 @@
 {% extends "notifications/emails/base_email.html" %} {% block content %}
 
-<h3 style="color: #333">Withdrawal Confirmed!</h3>
+<h3 style="color: #333">Withdrawal Successful!</h3>
 <p style="color: #555">Hi {{ seller_name }},</p>
-<p style="font-size: 14px; color: #555; line-height: 1.6">
-  Your recent withdrawal request has been successfully processed. The funds are
-  on their way to your bank account.
-</p>
+
+{% if body_paragraphs %}
+  {% for paragraph in body_paragraphs %}
+    <p style="font-size: 14px; color: #555; line-height: 1.6">
+      {{ paragraph|safe }}
+    </p>
+  {% endfor %}
+{% endif %}
 
 <div
   class="container"
@@ -39,13 +43,6 @@
   >
     <span style="font-weight: bold">Destination Account: </span>
     <span>{{ bank_name }}</span>
-  </div>
-
-  <div
-    style="display: flex; justify-content: space-between; margin-bottom: 8px"
-  >
-    <span style="font-weight: bold">Expected Arrival: </span>
-    <span>Within 1-2 business days</span>
   </div>
 </div>
 
