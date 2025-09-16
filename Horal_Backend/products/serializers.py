@@ -753,7 +753,7 @@ class ProductIndexSerializer(serializers.ModelSerializer):
         model = ProductIndex
         fields = [
             "id", "title", "slug", "price", "image", "brand",
-            "state", "local_govt", "condition", "description",
+            "state", "local_govt", "condition", "description", 'quantity',
             "category", "sub_category", "shop", "is_published", "specifications",
             "average_rating", "total_reviews", 'created_at',
         ]
