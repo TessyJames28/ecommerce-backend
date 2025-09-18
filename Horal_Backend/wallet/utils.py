@@ -12,23 +12,40 @@ from decimal import Decimal
 from django.conf import settings
 from notifications.tasks import send_email_task
 import os, random, logging
+from .signals import payout_retry_signal
 
 logger = logging.getLogger(__name__)
 
 
-def balance_topup(amount, seller, reference_id):
-    subject = "Action Required: Insufficient Balance for Transfer"
+def balance_topup(amount, seller, reference_id, transfer_code=None):
+    if transfer_code:
+        subject = f"Action Required: Payout to Approve"
 
-    context = {
-        "user": "Mr. Emeka",
-        "body_paragraphs": [
-            f"We attempted to process a transfer of ₦{amount:,} for seller {seller}, but the wallet balance was insufficient.",
-            f"Reference ID: {reference_id}",
-            "Please top up Paystack balance to avoid disruptions of sellers payout."
-        ],
-        "footer_note": "This is an automated notification. If you have already topped up, you can ignore this message.",
-        "sender_name": "Horal Payout"
-    }
+        context = {
+            "user": "Mr. Emeka",
+            "body_paragraphs": [
+                f"The payout is now successful for the amount: ₦{amount:,} by seller: {seller}.",
+                "Kindly approve transactions with the below details: "
+                f"Reference ID: {reference_id}",
+                f"Transfer code: {transfer_code}"
+            ],
+            "footer_note": "This is an automated notification. If you have already topped up, you can ignore this message.",
+            "sender_name": "Horal Payout"
+        }
+    else:
+        # For the failure caused by insufficient balance
+        subject = "Action Required: Insufficient Balance for Transfer"
+
+        context = {
+            "user": "Mr. Emeka",
+            "body_paragraphs": [
+                f"We attempted to process a transfer of ₦{amount:,} for seller {seller}, but the wallet balance was insufficient.",
+                f"Reference ID: {reference_id}",
+                "Please top up Paystack balance to avoid disruptions of sellers payout."
+            ],
+            "footer_note": "This is an automated notification. If you have already topped up, you can ignore this message.",
+            "sender_name": "Horal Payout"
+        }
     from_email = f"Horal Payout <{settings.DEFAULT_FROM_EMAIL}>"
 
     send_email_task.delay(
@@ -139,6 +156,8 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
 
     try:
         response = requests.post(url, headers=headers, json=payload)
+        print("Paystack raw:", response.text)
+
         data = response.json()
     except Exception as e:
         raise Exception(f"Error initializing payout: {e}")
@@ -194,6 +213,10 @@ def initiate_payout(recipient_code, seller, amount_kobo=None, payout=None, reaso
             reference_id=response_ref
         )
         logger.warning(f"Paystack transfer because of insufficient fund: {data}")
+        
+        # fire retry signal
+        payout_retry_signal.send(sender=Payout, payout=payout)
+
         return payout
 
     else:

@@ -493,6 +493,7 @@ class ProductIndex(models.Model):
     description = models.TextField()
     specifications = models.TextField(null=True, blank=True) 
     local_govt = models.CharField(max_length=150)
+    quantity = models.PositiveIntegerField(default=0)
     condition = models.CharField(max_length=50, choices=ProductCondition.choices, default=ProductCondition.NEW)
     brand = models.CharField(max_length=120, blank=True, db_index=True)
     is_published = models.BooleanField(default=False)
@@ -519,7 +520,7 @@ class ProductIndex(models.Model):
 
 
     def __str__(self):
-        return f"{self.category_name} - {self.object_id}"
+        return f"{self.category} - {self.object_id}"
 
 
 class RecentlyViewedProduct(models.Model):
