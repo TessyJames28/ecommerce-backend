@@ -33,6 +33,7 @@ def create_or_update_product_index(sender, instance, created, **kwargs):
         "local_govt": instance.local_govt,
         "condition": instance.condition,
         "is_published": instance.is_published,
+        "quantity": instance.quantity,
         "brand": getattr(instance, "brand", "") or "",
     }
 
