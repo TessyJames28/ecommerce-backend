@@ -573,7 +573,7 @@ print("Database seeding complete.")
 
 
 import requests
-from logistics.models import Bank
+from wallet.models import Bank
 from station_addresses import stations
 from logistics.utils import sync_stations_from_gigl, sync_station_addresses, register_gigl_webhook_on_table
 
