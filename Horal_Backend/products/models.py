@@ -520,7 +520,7 @@ class ProductIndex(models.Model):
 
 
     def __str__(self):
-        return f"{self.category_name} - {self.object_id}"
+        return f"{self.category} - {self.object_id}"
 
 
 class RecentlyViewedProduct(models.Model):
