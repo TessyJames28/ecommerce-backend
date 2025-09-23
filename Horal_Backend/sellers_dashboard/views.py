@@ -1,4 +1,10 @@
 from django.shortcuts import get_object_or_404
+from django.conf import settings
+from .reauth_utils import (
+    generate_otp, store_otp, record_send, sendable,
+    verify_otp, issue_reauth_token
+)
+from notifications.emails import send_reauth_email
 from rest_framework.generics import GenericAPIView
 from rest_framework.views import APIView
 from products.utils import BaseResponseMixin
@@ -31,7 +37,7 @@ from sellers.models import SellerKYC
 from django.db.models import Q
 from orders.models import OrderItem
 from django.utils import timezone
-import calendar
+import calendar, json
 
 
 # Create your views here.
@@ -389,3 +395,99 @@ class TopSellingProductsAPIView(APIView, BaseResponseMixin):
             top_selling_products
         )
 
+
+class ReauthOTPStartView(APIView, BaseResponseMixin):
+    """Starts the otp flow by generating and sending OTP to seller email"""
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
+
+
+    def post(self, request, *args, **kwargs):
+        """Post method to start reauth flow for sellers"""
+        user = request.user
+        if not user.is_authenticated or not getattr(user, "is_seller", False):
+            return self.get_response(
+                status.HTTP_401_UNAUTHORIZED,
+                "auth_required"
+            )
+        
+        if not sendable(user.id):
+            return self.get_response(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "otp send rate limited"
+            )
+        
+        otp = generate_otp()
+        store_otp(user.id, otp)
+        record_send(user.id)
+
+        try:
+            send_reauth_email(
+                to_email=user.email,
+                otp_code=otp,
+                subject="Your Reauthentication Verification Code",
+                name=user.full_name
+            )
+        except Exception:
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "failed to send otp"
+            )
+        
+        return self.get_response(
+            status.HTTP_200_OK,
+            "otp sent"
+        )
+    
+
+class ReauthOTPVerifyView(APIView, BaseResponseMixin):
+    """
+    Verifies the OTP and issues a reauth token
+    """
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
+
+
+    def post(self, request, *args, **kwargs):
+        """Post method to verify reauthentication"""
+        user = request.user
+        if not user.is_authenticated or not getattr(user, "is_seller", False):
+            return self.get_response(
+                status.HTTP_401_UNAUTHORIZED,
+                "auth_required"
+            )
+        
+        otp = request.data.get("otp")
+        platform = request.data.get("platform", "web")
+        if not otp:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "otp required"
+            )
+        
+        ok = verify_otp(user.id, otp)
+        if not ok:
+            return self.get_response(
+                status.HTTP_403_FORBIDDEN,
+                "Invalid otp or too many attempts"
+            )
+        
+        token = issue_reauth_token(user.id)
+
+        resp = Response({"detail": "reauth_ok"}, status=status.HTTP_200_OK)
+
+        if platform == "mobile":
+            # Set HttpOnly cookie so frontend doesn't handle tokens manually
+            resp["reauth_token"] = {
+                "reauth_token": token
+            }
+        else:
+            resp.set_cookie(
+                "reauth_token",
+                httponly=True,
+                secure=True, # Use True in production (HTTPS)
+                samesite="None",
+                max_age=getattr(settings, "REAUTH_TTL", 15 * 60)
+            )
+
+        return resp
