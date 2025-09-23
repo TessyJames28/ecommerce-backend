@@ -59,6 +59,25 @@ def send_otp_email(to_email, otp_code, name):
     )
 
 
+def send_reauth_email(to_email, otp_code, subject, name):
+    """Send an OTP email to the user."""
+    from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
+
+    send_email_task.delay(
+        recipient=to_email,
+        subject=subject,
+        from_email=from_email,
+        template_name="notifications/emails/otp_email.html",
+        context={
+            "user": name,
+            "title": subject,
+            "body_text": "This is your one-time password reset passcode. Code expires in 5 minutes. Please do not share it with anyone.",
+            "otp": otp_code,
+            "footer_note": "If you didn’t request a password reset, please ignore this email."
+        }
+    )
+
+
 # def send_password_reset_otp(email, otp_code):
 #     """Send a password reset email to the user."""
 #     return requests.post(
