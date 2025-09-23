@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404
+from django.utils.decorators import method_decorator
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -28,6 +29,7 @@ from .serializers import (
     BankSerializer
 )
 from sellers_dashboard.utils import get_withdrawable_revenue
+from sellers_dashboard.decorators import require_reauth
 import uuid
 
 # Create your views here.
@@ -66,7 +68,12 @@ class VerifySellerBankDetailsView(APIView, BaseResponseMixin):
             )
         
         account_name = verify_bank_account(account_number, bank_code)
-
+        if not account_name:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Bank verification failed"
+            )
+        
         # Get Seller name to compare to bank name
         seller_kyc = SellerKYC.objects.get(user=user)
         first_name = seller_kyc.address.first_name or ""
@@ -79,26 +86,34 @@ class VerifySellerBankDetailsView(APIView, BaseResponseMixin):
         business_name = business_name.strip().lower()
         account_name_clean = account_name.strip().lower()
 
-        full_name_set = set(full_name.split())
-        business_name_set = set(business_name.split())
-        account_name_set = set(account_name_clean.split())
+        # Name comparison
+        def names_match(registered, account):
+            registered_set = set(registered.split())
+            account_set = set(account.split())
+            overlap = registered_set & account_set
+            return len(overlap) / len(account_set) >= 0.6
+        
+        # full_name_set = set(full_name.split())
+        # business_name_set = set(business_name.split())
+        # account_name_set = set(account_name_clean.split())
 
-        # Fail only if it doesn't match either personal name or business name
-        if not (account_name_set <= full_name_set or account_name_set <= business_name_set):
+        # # Fail only if it doesn't match either personal name or business name
+        # if not (account_name_set <= full_name_set or account_name_set <= business_name_set):
+        #     return self.get_response(
+        #         status.HTTP_400_BAD_REQUEST,
+        #         "The bank account name does not match your registered name or business name."
+        #     )
+
+        if not (names_match(full_name, account_name_clean) or names_match(business_name, account_name_clean)):
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
-                "The bank account name does not match your registered name or business name."
-            )
-
-
-        if not account_name:
-            return self.get_response(
-                status.HTTP_400_BAD_REQUEST,
-                "Bank verification failed"
+                "The bank account name does not sufficiently match your registered name or business name."
             )
         
+        # Create transfer recipient
         recipient_code = create_transfer_recipient(account_name, account_number, bank_code)
 
+        # Save bank details
         seller = SellersBankDetails.objects.create(
             bank_name=bank_name,
             account_name=account_name,
@@ -115,6 +130,104 @@ class VerifySellerBankDetailsView(APIView, BaseResponseMixin):
             "message": "Bank details verified and saved successfully",
             "account_name": account_name
         }, status=status.HTTP_200_OK)
+    
+
+class UpdateSellerBankDetailsView(APIView, BaseResponseMixin):
+    """
+    class to verify sellers bank details
+    """
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
+
+    @method_decorator(require_reauth)
+    def put(self, request):
+        """Post method to get and verify seller bank details"""
+        seller = request.user
+        bank_name = request.data.get("bank_name")
+        account_number = request.data.get("account_number").strip()
+        
+        if not account_number.isdigit() or len(account_number) != 10:
+            raise ValidationError(f"Account number must be exactly 10 digits")
+
+        try:
+            user = CustomUser.objects.get(id=seller.id, is_seller=True)
+        except CustomUser.DoesNotExist:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                "This user is not an authenticated seller"
+            )
+        
+        # Get bank code
+        bank_code = get_bank_code(bank_name)
+        if not bank_code:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Invalid bank name"
+            )
+        
+        account_name = verify_bank_account(account_number, bank_code)
+        if not account_name:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Bank verification failed"
+            )
+        
+        # Get Seller name to compare to bank name
+        seller_kyc = SellerKYC.objects.get(user=user)
+        first_name = seller_kyc.address.first_name or ""
+        middle_name = seller_kyc.address.middle_name or ""
+        last_name = seller_kyc.address.last_name or ""
+        business_name = seller_kyc.address.business_name or ""
+
+        # Normalize to lowercase and remove extra spaces
+        full_name = " ".join([first_name, middle_name, last_name]).strip().lower()
+        business_name = business_name.strip().lower()
+        account_name_clean = account_name.strip().lower()
+
+        # Name comparison
+        def names_match(registered, account):
+            registered_set = set(registered.split())
+            account_set = set(account.split())
+            overlap = registered_set & account_set
+            return len(overlap) / len(account_set) >= 0.6
+        # full_name_set = set(full_name.split())
+        # business_name_set = set(business_name.split())
+        # account_name_set = set(account_name_clean.split())
+
+        # # Fail only if it doesn't match either personal name or business name
+        # if not (account_name_set <= full_name_set or account_name_set <= business_name_set):
+        #     return self.get_response(
+        #         status.HTTP_400_BAD_REQUEST,
+        #         "The bank account name does not match your registered name or business name."
+        #     )
+
+        if not (names_match(full_name, account_name_clean) or names_match(business_name, account_name_clean)):
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "The bank account name does not sufficiently match your registered name or business name."
+            )
+        
+        # create transfer recipient
+        recipient_code = create_transfer_recipient(account_name, account_number, bank_code)
+
+        # save / update bank details
+        seller, created = SellersBankDetails.objects.update_or_create(
+            seller=user,
+            defaults={
+                "bank_name": bank_name,
+                "account_name": account_name,
+                "account_number": account_number,
+                "bank_code": bank_code,
+                "recipient_code": recipient_code,
+            }
+        )
+
+        return Response({
+            "status": "success",
+            "status_code": status.HTTP_200_OK,
+            "message": "Bank details updated and verified successfully",
+            "account_name": account_name
+        }, status=status.HTTP_200_OK)
 
 
 class ConfirmWithdrawalView(APIView, BaseResponseMixin):
@@ -122,6 +235,8 @@ class ConfirmWithdrawalView(APIView, BaseResponseMixin):
     permission_classes = [IsAuthenticated]
     authentication_classes = [CookieTokenAuthentication]
 
+
+    @method_decorator(require_reauth)
     def post(self, request):
         """Post method for confirm withdrawal"""
         user = request.user
