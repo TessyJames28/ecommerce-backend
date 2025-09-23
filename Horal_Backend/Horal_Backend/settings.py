@@ -474,6 +474,14 @@ MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.{AWS_S3_REGION_NAME}.digitalocea
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
+# Reauth TTL
+IDLE_TIMEOUT = 5 * 60 # 30 minutes of inactivity → require reauth
+REAUTH_TTL = 3 * 60 # 15 minutes valid reauth token
+OTP_TTL = 5 * 60 # OTP valid for 5 minutes
+MAX_OTP_SENDS_PER_HOUR = 5
+MAX_OTP_VERIFY_ATTEMPTS = 5
+OTP_PEPPER = env("OTP_PEPPER")
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
