@@ -61,11 +61,11 @@ class SellerOrderItemSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
     buyer = serializers.CharField(source="order.user.full_name")
     order_id = serializers.UUIDField(source="order.id")
-    shipment_id = serializers.UUIDField(source="shipment.id")
     price = serializers.SerializerMethodField()
     order_date = serializers.DateTimeField(source='order.created_at')
-    order_status = serializers.CharField(source='order.status')
-    shipment_status = serializers.CharField(source='shipment.status')
+    order_status = serializers.SerializerMethodField()
+    shipment_status = serializers.SerializerMethodField()
+    shipment_id = serializers.SerializerMethodField()
     variant = ProductVariantSerializer()
 
 
@@ -86,6 +86,15 @@ class SellerOrderItemSerializer(serializers.ModelSerializer):
     
     def get_price(self, obj):
         return obj.total_price
+    
+    def get_shipment_id(self, obj):
+        return obj.shipment.id if obj.shipment else None
+    
+    def get_shipment_status(self, obj):
+        return obj.shipment.status if obj.shipment else None
+    
+    def get_order_status(self, obj):
+        return obj.order.status if obj.order else None
     
 
 class SellerProductOrdersSerializer(serializers.Serializer):
