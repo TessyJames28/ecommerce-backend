@@ -17,7 +17,7 @@ from .utils import (
     create_transfer_recipient,
     initiate_payout
 )
-from users.views import CookieTokenAuthentication
+from users.authentication import CookieTokenAuthentication, ReauthRequiredPermission
 from users.models import CustomUser
 from products.utils import BaseResponseMixin
 from .models import SellersBankDetails, Payout, SellerTransactionHistory, Bank
@@ -29,7 +29,7 @@ from .serializers import (
     BankSerializer
 )
 from sellers_dashboard.utils import get_withdrawable_revenue
-from sellers_dashboard.decorators import require_reauth
+from sellers_dashboard.decorators import RequireSensitiveReauthMixin
 import uuid
 
 # Create your views here.
@@ -39,7 +39,7 @@ class VerifySellerBankDetailsView(APIView, BaseResponseMixin):
     """
     class to verify sellers bank details
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
 
     def post(self, request):
@@ -92,17 +92,6 @@ class VerifySellerBankDetailsView(APIView, BaseResponseMixin):
             account_set = set(account.split())
             overlap = registered_set & account_set
             return len(overlap) / len(account_set) >= 0.6
-        
-        # full_name_set = set(full_name.split())
-        # business_name_set = set(business_name.split())
-        # account_name_set = set(account_name_clean.split())
-
-        # # Fail only if it doesn't match either personal name or business name
-        # if not (account_name_set <= full_name_set or account_name_set <= business_name_set):
-        #     return self.get_response(
-        #         status.HTTP_400_BAD_REQUEST,
-        #         "The bank account name does not match your registered name or business name."
-        #     )
 
         if not (names_match(full_name, account_name_clean) or names_match(business_name, account_name_clean)):
             return self.get_response(
@@ -132,14 +121,15 @@ class VerifySellerBankDetailsView(APIView, BaseResponseMixin):
         }, status=status.HTTP_200_OK)
     
 
-class UpdateSellerBankDetailsView(APIView, BaseResponseMixin):
+class UpdateSellerBankDetailsView(
+    RequireSensitiveReauthMixin, APIView, BaseResponseMixin):
     """
     class to verify sellers bank details
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
 
-    @method_decorator(require_reauth)
+
     def put(self, request):
         """Post method to get and verify seller bank details"""
         seller = request.user
@@ -190,16 +180,6 @@ class UpdateSellerBankDetailsView(APIView, BaseResponseMixin):
             account_set = set(account.split())
             overlap = registered_set & account_set
             return len(overlap) / len(account_set) >= 0.6
-        # full_name_set = set(full_name.split())
-        # business_name_set = set(business_name.split())
-        # account_name_set = set(account_name_clean.split())
-
-        # # Fail only if it doesn't match either personal name or business name
-        # if not (account_name_set <= full_name_set or account_name_set <= business_name_set):
-        #     return self.get_response(
-        #         status.HTTP_400_BAD_REQUEST,
-        #         "The bank account name does not match your registered name or business name."
-        #     )
 
         if not (names_match(full_name, account_name_clean) or names_match(business_name, account_name_clean)):
             return self.get_response(
@@ -230,13 +210,12 @@ class UpdateSellerBankDetailsView(APIView, BaseResponseMixin):
         }, status=status.HTTP_200_OK)
 
 
-class ConfirmWithdrawalView(APIView, BaseResponseMixin):
+class ConfirmWithdrawalView(RequireSensitiveReauthMixin, APIView, BaseResponseMixin):
     """Class to handle sellers withdrawal"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
 
 
-    @method_decorator(require_reauth)
     def post(self, request):
         """Post method for confirm withdrawal"""
         user = request.user
@@ -287,7 +266,7 @@ class SellerBankDetailView(GenericAPIView, BaseResponseMixin):
     total revenue and withdrawable revenue
     """
     serializer_class = SellersBankDetailsSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
 
     def get_bank_data(self):
@@ -314,7 +293,7 @@ class InitiateWithdrawalView(APIView, BaseResponseMixin):
         - amount to withdraw
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
 
     def get(self, request):
@@ -362,7 +341,7 @@ class InitiateWithdrawalView(APIView, BaseResponseMixin):
 
 class SingleSellerPayoutView(GenericAPIView, BaseResponseMixin):
     """Class to display seller payout data by payout id"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
     serializer_class = PayoutSerializer
 
@@ -393,7 +372,7 @@ class SingleSellerPayoutView(GenericAPIView, BaseResponseMixin):
 class SingleTransactionHistoryView(GenericAPIView, BaseResponseMixin):
     """Class to handle the retrieval of a single transaction history"""
     serializer_class = SellerTransactionHistorySerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
 
 
@@ -431,7 +410,7 @@ class AllBankDataView(GenericAPIView, BaseResponseMixin):
     Class to handle the retrieval of all bank data
     For frontend usage
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
     serializer_class = BankSerializer
 
