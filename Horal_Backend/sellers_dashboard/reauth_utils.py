@@ -29,9 +29,12 @@ def sendable(user_id: int) -> bool:
 def record_send(user_id: int):
     key = f"seller:otp_sent_count:{user_id}"
     # increment and set expire if first
-    new = cache.incr(key)
-    if new == 1:
-        cache.expire(key, 3600)
+    if not cache.get(key):
+        # initialize count with 1, expires in 5 minutes
+        cache.set(key, 1, timeout=300)
+        return 1
+    else:
+        return cache.incr(key)
 
 
 def generate_otp() -> str:
@@ -41,9 +44,9 @@ def generate_otp() -> str:
 
 def store_otp(user_id: int, otp: str):
     key = f"seller:otp_hash:{user_id}"
-    cache.set(key, _otp_hash(otp, user_id), ex=OTP_TTL)
+    cache.set(key, _otp_hash(otp, user_id), timeout=OTP_TTL)
     """Set verify attempts counter"""
-    cache.set(f"seller:otp_verify_attempts:{user_id}", 0, ex=OTP_TTL)
+    cache.set(f"seller:otp_verify_attempts:{user_id}", 0, timeout=OTP_TTL)
 
 
 def verify_otp(user_id: int, otp: str) -> bool:
@@ -70,15 +73,20 @@ def verify_otp(user_id: int, otp: str) -> bool:
 def issue_reauth_token(user_id: int) -> str:
     token = secrets.token_urlsafe(32)
     key = f"seller:reauth:{user_id}"
+    # Store in cache with TTL (e.g., 15 minutes)
+    cache.set(key, token, timeout=getattr(settings, "REAUTH_TTL", 15*60))
     # Update last activity too
     set_last_activity(user_id)
     return token
 
 
 def validate_reauth(user_id: int, token: str) -> bool:
+    print("DEBUG validate_reauth", user_id, token)
     key = f"seller:reauth:{user_id}"
     stored = cache.get(key)
-    return stored and secrets.compare_digest(stored, token)
+    valid = stored and secrets.compare_digest(stored, token)
+    print("DEBUG token valid?", valid)
+    return valid
 
 
 def revoke_reauth(user_id: int):
@@ -87,7 +95,7 @@ def revoke_reauth(user_id: int):
 
 def set_last_activity(user_id: int):
     key = f"seller:last_activity:{user_id}"
-    cache.set(key, str(int(time.time())), ex=IDLE_TIMEOUT + 30)
+    cache.set(key, str(int(time.time())), timeout=IDLE_TIMEOUT + 30)
 
 
 def is_idle(user_id: int) -> bool:
