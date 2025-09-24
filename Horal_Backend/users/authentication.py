@@ -63,17 +63,14 @@ class ReauthRequiredPermission(BasePermission):
 
             # CASE 1: No token → force OTP
             if not token:
-                print("No token seen")
                 raise AuthenticationFailed("reauth_required")
 
             # CASE 2: Invalid/expired token → force OTP
             if not validate_reauth(user.id, token):
-                print("Token not validated")
                 raise AuthenticationFailed("reauth_required")
 
             # CASE 3: Idle too long → force OTP
             if is_idle(user.id):
-                print("User idle")
                 raise AuthenticationFailed("reauth_required")
             
             set_last_activity(user.id)
