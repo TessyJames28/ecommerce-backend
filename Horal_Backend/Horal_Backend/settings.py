@@ -94,6 +94,7 @@ MIDDLEWARE = [
 
     # Custom middleware
     'carts.middleware.CartMiddleware',
+    # 'sellers_dashboard.middleware.reauth_middleware.DashboardReauthMiddleware',
     
 ]
 
