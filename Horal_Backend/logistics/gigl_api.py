@@ -46,7 +46,10 @@ class GIGLogisticsAPI:
         """Get delivery price for shipments"""
         try:
             url = f"{BASE_URL}/price"
-            res = requests.post(url, json=payload, headers=self._headers(), timeout=15)
+            res = requests.post(
+                url, json=payload, headers=self._headers(), 
+                timeout=(5, 10)  # 5s connect, 10s read
+            )
             res.raise_for_status()
             return res.json()
         
