@@ -450,8 +450,18 @@ def calculate_shipping_for_order(order):
     for shipment, payload in shipment_payloads:
         result = api.get_price(payload)
 
+        # Ensure result is valid and contains deliveryPrice
+        delivery_price = (
+            result.get("object", {}).get("deliveryPrice")
+            if isinstance(result, dict) else None
+        )
+
+        if not delivery_price or Decimal(str(delivery_price)) <= 0:
+            logger.error(f"No valid shipping price returned for shipment {shipment.id}. Result: {result}")
+            raise ValidationError(f"Could not retrieve shipping price for shipment {shipment.id}")
+
         try:
-            price = Decimal(str(result.get("object", {}).get("deliveryPrice", 0)))
+            price = Decimal(str(delivery_price))
         except Exception as e:
             logger.warning(f"Error parsing price for shipment {shipment.id}: {e}")
             raise ValueError(f"Error retrieving shipment price from GIGL: {str(e)}")
