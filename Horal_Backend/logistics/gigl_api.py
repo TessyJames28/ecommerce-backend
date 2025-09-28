@@ -1,6 +1,9 @@
 from django.conf import settings
 from requests.exceptions import HTTPError
 import requests
+import logging
+
+logger = logging.getLogger(__name__)
 
 # initializing with the api key
 BASE_URL = settings.GIGL_BASE_URL
@@ -43,9 +46,16 @@ class GIGLogisticsAPI:
         """Get delivery price for shipments"""
         try:
             url = f"{BASE_URL}/price"
-            res = requests.post(url, json=payload, headers=self._headers())
+            res = requests.post(url, json=payload, headers=self._headers(), timeout=15)
             res.raise_for_status()
             return res.json()
+        
+        except requests.exceptions.Timeout:
+            logger.error("GIGL price request timed out")
+            return {"error": True, "details": "Shipping provider timed out"}
+        except requests.exceptions.RequestException as e:
+            logger.error(f"GIGL request error: {e}")
+            return {"error": True, "details": str(e)}
         except HTTPError as e:
             return {"error": str(e), "details": res.text}
     
@@ -54,9 +64,16 @@ class GIGLogisticsAPI:
         """Create shipment and get waybill"""
         try:
             url = f"{BASE_URL}/captureshipment"
-            res = requests.post(url, json=payload, headers=self._headers())
+            res = requests.post(url, json=payload, headers=self._headers(), timeout=15)
             res.raise_for_status()
             return res.json()
+        
+        except requests.exceptions.Timeout:
+            logger.error("GIGL price request timed out")
+            return {"error": True, "details": "Shipping provider timed out"}
+        except requests.exceptions.RequestException as e:
+            logger.error(f"GIGL request error: {e}")
+            return {"error": True, "details": str(e)}
         except HTTPError as e:
             return {"error": str(e), "details": res.text}
         
@@ -65,11 +82,17 @@ class GIGLogisticsAPI:
         """Track shipment using waybill"""
         try:
             url = f"{BASE_URL}/TrackAllMobileShipment/{waybill}"
-            res = requests.get(url, headers=self._headers())
+            res = requests.get(url, headers=self._headers(), timeout=15)
             res.raise_for_status()
             
             return res.json()
         
+        except requests.exceptions.Timeout:
+            logger.error("GIGL price request timed out")
+            return {"error": True, "details": "Shipping provider timed out"}
+        except requests.exceptions.RequestException as e:
+            logger.error(f"GIGL request error: {e}")
+            return {"error": True, "details": str(e)}
         except HTTPError as e:
             return {"error": str(e), "details": res.text}
         
@@ -78,10 +101,17 @@ class GIGLogisticsAPI:
         """Get List of GIGL stations"""
         try:
             url = f"{BASE_URL}/localStations"
-            res = requests.get(url, headers=self._headers())
+            res = requests.get(url, headers=self._headers(), timeout=15)
             res.raise_for_status()
 
             return res.json()
+        
+        except requests.exceptions.Timeout:
+            logger.error("GIGL price request timed out")
+            return {"error": True, "details": "Shipping provider timed out"}
+        except requests.exceptions.RequestException as e:
+            logger.error(f"GIGL request error: {e}")
+            return {"error": True, "details": str(e)}
         except HTTPError as e:
             return {"error": str(e), "details": res.text}
     
@@ -91,9 +121,16 @@ class GIGLogisticsAPI:
         payload = {"url": settings.HORAL_GIGL_WEBHOOK}
         try:
             url = settings.GIGL_WEBHOOK
-            res = requests.post(url, json=payload, headers=self._headers())
+            res = requests.post(url, json=payload, headers=self._headers(), timeout=15)
             res.raise_for_status()
             return res.json()
+        
+        except requests.exceptions.Timeout:
+            logger.error("GIGL price request timed out")
+            return {"error": True, "details": "Shipping provider timed out"}
+        except requests.exceptions.RequestException as e:
+            logger.error(f"GIGL request error: {e}")
+            return {"error": True, "details": str(e)}
         except HTTPError as e:
             return {"error": str(e), "details": res.text}
          
