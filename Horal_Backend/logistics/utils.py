@@ -448,7 +448,6 @@ def calculate_shipping_for_order(order):
         raise ValidationError(f"Error creating shipment payload for order: {str(e)}")
 
     for shipment, payload in shipment_payloads:
-        print(f"Main payload: {payload}")
         result = api.get_price(payload)
 
         # Ensure result is valid and contains deliveryPrice
