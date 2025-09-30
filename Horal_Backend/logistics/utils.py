@@ -443,6 +443,7 @@ def calculate_shipping_for_order(order):
     # Create grouped shipment payloads
     try:
         shipment_payloads = create_shipment_payload(order)
+        print(f"Shipment payload: {shipment_payloads}")
     except Exception as e:
         logger.error(f"Error creating shipment payloads for order {order.id}: {str(e)}\n{str(traceback.format_exc())}")
         raise ValidationError(f"Error creating shipment payload for order: {str(e)}")
