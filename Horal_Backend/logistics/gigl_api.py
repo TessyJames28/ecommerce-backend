@@ -48,7 +48,7 @@ class GIGLogisticsAPI:
             url = f"{BASE_URL}/price"
             res = requests.post(
                 url, json=payload, headers=self._headers(), 
-                timeout=(5, 25)  # 5s connect, 10s read
+                timeout=(5, 10)  # 5s connect, 10s read
             )
             res.raise_for_status()
             return res.json()
