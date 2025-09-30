@@ -48,7 +48,7 @@ class GIGLogisticsAPI:
             url = f"{BASE_URL}/price"
             res = requests.post(
                 url, json=payload, headers=self._headers(), 
-                timeout=(5, 10)  # 5s connect, 10s read
+                timeout=(5, 45)  # 5s connect, 45s read
             )
             res.raise_for_status()
             return res.json()
@@ -67,7 +67,7 @@ class GIGLogisticsAPI:
         """Create shipment and get waybill"""
         try:
             url = f"{BASE_URL}/captureshipment"
-            res = requests.post(url, json=payload, headers=self._headers(), timeout=15)
+            res = requests.post(url, json=payload, headers=self._headers(), timeout=50)
             res.raise_for_status()
             return res.json()
         
@@ -85,7 +85,7 @@ class GIGLogisticsAPI:
         """Track shipment using waybill"""
         try:
             url = f"{BASE_URL}/TrackAllMobileShipment/{waybill}"
-            res = requests.get(url, headers=self._headers(), timeout=15)
+            res = requests.get(url, headers=self._headers(), timeout=50)
             res.raise_for_status()
             
             return res.json()
@@ -104,7 +104,7 @@ class GIGLogisticsAPI:
         """Get List of GIGL stations"""
         try:
             url = f"{BASE_URL}/localStations"
-            res = requests.get(url, headers=self._headers(), timeout=15)
+            res = requests.get(url, headers=self._headers(), timeout=50)
             res.raise_for_status()
 
             return res.json()
@@ -124,7 +124,7 @@ class GIGLogisticsAPI:
         payload = {"url": settings.HORAL_GIGL_WEBHOOK}
         try:
             url = settings.GIGL_WEBHOOK
-            res = requests.post(url, json=payload, headers=self._headers(), timeout=15)
+            res = requests.post(url, json=payload, headers=self._headers(), timeout=50)
             res.raise_for_status()
             return res.json()
         
@@ -136,4 +136,4 @@ class GIGLogisticsAPI:
             return {"error": True, "details": str(e)}
         except HTTPError as e:
             return {"error": str(e), "details": res.text}
-         
+                  
