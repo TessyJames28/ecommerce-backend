@@ -328,19 +328,22 @@ def create_gigl_shipment_for_shipment(order_id):
 
     for shipment, payload in shipment_payloads:
         try:
-            # Skip if shipment already has a tracking number
             if not shipment.tracking_number:
+                logger.info(f"Creating shipment for {shipment.id} with payload {payload}")
                 result = api.create_shipment(payload)
-                waybill = result.get("waybill")
+                logger.info(f"GIGL response for shipment {shipment.id}: {result}")
 
+                waybill = result.get("Waybill")
                 if waybill:
                     shipment.tracking_number = waybill
                     shipment.status = OrderShipment.Status.SHIPMENT_INITIATED
                     shipment.save(update_fields=["tracking_number", "status"])
+                    logger.info(f"Shipment {shipment.id} saved with tracking number {waybill}")
                 else:
+                    logger.warning(f"No waybill returned for shipment {shipment.id}. Response: {result}")
                     all_success = False
             else:
-                logger.info(f"Shipment {shipment.id} already has tracking number {shipment.tracking_number}, skipping creation.")   
+                logger.info(f"Shipment {shipment.id} already has tracking number {shipment.tracking_number}, skipping creation.")
         except Exception as e:
             logger.warning(f"Error creating shipment {shipment.id}: {e}")
             all_success = False
