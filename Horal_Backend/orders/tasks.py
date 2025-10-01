@@ -50,6 +50,12 @@ def create_gigl_shipment_on_each_shipment(order_id):
     # call GIGL API
     try:
         result = create_gigl_shipment_for_shipment(str(order.id))
+        
+        if result:
+            logger.info(f"[GIGL] Shipment(s) successfully created for order {order.id}")
+        else:
+            logger.error(f"[GIGL] Some shipments failed to create for order {order.id}")
+        return result
     except Exception as e:
         logger.error(f"Error creating GIGL shipment for order {order.id}: {str(e)}")
 
