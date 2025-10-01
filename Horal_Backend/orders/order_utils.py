@@ -21,7 +21,7 @@ def cancel_expired_pending_orders():
     ).prefetch_related('order_items__variant')
 
     variants_to_update = {}
-    products_to_update = {}
+    products_to_update = set()
     orders_to_update = []
 
     with transaction.atomic():
@@ -35,6 +35,9 @@ def cancel_expired_pending_orders():
 
             order.status = Order.Status.CANCELLED
             orders_to_update.append(order)
+            
+            # delete related shipments to keep things clean
+            order.shipments.all().delete()
 
         if variants_to_update:
             ProductVariant.objects.bulk_update(variants_to_update.values(), ['reserved_quantity'])
