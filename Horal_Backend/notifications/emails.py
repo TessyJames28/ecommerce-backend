@@ -6,7 +6,15 @@ from .tasks import send_email_task
 
 def send_registration_otp_email(to_email, otp_code, name):
     """Send an OTP email to the user."""
-
+    # subject = 'Your OTP Code'
+    # message = (
+    #     f"Hi there,\n\n"
+    #     f"Here is your OTP code from Horal: {otp_code}\n"
+    #     f"This code will expire in 5 minutes.\n\n"
+    #     f"If you didn't request this code, please ignore this email.\n\n"
+    #     f"Thanks,\n"
+    #     f"The Horal Team"
+    # )
     from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
 
     send_email_task.delay(
