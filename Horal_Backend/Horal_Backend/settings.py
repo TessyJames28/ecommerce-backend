@@ -144,6 +144,7 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SWAGGER_DOCS_BASE_URL= env('SWAGGER_DOCS_BASE_URL')
 
 REST_FRAMEWORK = {
+    "EXCEPTION_HANDLER": "Horal_Backend.api.custom_exception_handler",
     'DEFAULT_AUTHENTICATION_CLASSES': [
     'rest_framework.authentication.SessionAuthentication', 
     'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -476,8 +477,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # Reauth TTL
-IDLE_TIMEOUT = 5 * 60 # 30 minutes of inactivity → require reauth
-REAUTH_TTL = 3 * 60 # 15 minutes valid reauth token
+IDLE_TIMEOUT = 5 * 60 # 5 minutes of inactivity → require reauth
+REAUTH_TTL = 3 * 60 # 3 minutes valid reauth token
 OTP_TTL = 5 * 60 # OTP valid for 5 minutes
 MAX_OTP_SENDS_PER_HOUR = 5
 MAX_OTP_VERIFY_ATTEMPTS = 5
