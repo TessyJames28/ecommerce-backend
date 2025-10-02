@@ -134,6 +134,13 @@ class FoodCondition(models.TextChoices):
     FRESH = 'fresh', 'Fresh'
     FROZEN = 'frozen', 'Frozen'
     CANNED = 'canned', 'Canned'
+    CHILLED_REFRIGERATED = 'chilled_refrigerated', 'Chilled or Refrigerated'
+    DRIED_DEHYDRATED = 'dried_dehydrated', 'Dried or Dehydrated'
+    FREEZE_DRIED = 'freeze_dried', 'Freeze-Dried'
+    SMOKED = 'smoked', 'Smoked'
+    READY_TO_EAT = 'ready_to_eat', 'Ready-To-Eat'
+    OTHERS = 'others', 'Others'
+
 
 class FuelType(models.TextChoices):
     PETROL = 'petrol', 'Petrol'
