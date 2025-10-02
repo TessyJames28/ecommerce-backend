@@ -263,10 +263,8 @@ DOJAH_SECRET = env('DOJAH_SECRET')
 DOJAH_PUBLIC_KEY = env('DOJAH_PUBLIC_KEY')
 DOJAH_BASE_URL = env('DOJAH_BASE_URL')
 
-import urllib.parse as urlparse
-
-redis_url = env("REDIS_URL")
-url = urlparse.urlparse(redis_url)
+# redis_url = env("REDIS_URL")
+# url = urlparse.urlparse(redis_url)
 
 # CACHES = {
 #     "default": {
