@@ -88,8 +88,11 @@ class KYCIDVerificationWebhook(GenericAPIView, BaseResponseMixin):
                 address = seller.address
 
                 # Normalize name to facilitate loose match
-                first_name_match = address.first_name.lower() == entity.get("first_name", "").lower()
-                last_name_match = address.last_name.lower() == entity.get("last_name", "").lower()
+                def normalize_name(name: str) -> str:
+                    return " ".join(name.split()).lower()
+
+                first_name_match = normalize_name(address.first_name) == normalize_name(entity.get("first_name", ""))
+                last_name_match = normalize_name(address.last_name) == normalize_name(entity.get("last_name", ""))
 
                 if not (first_name_match and last_name_match):
                     kyc_nin.status = KYCStatus.FAILED
