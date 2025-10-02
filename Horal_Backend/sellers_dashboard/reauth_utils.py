@@ -2,6 +2,7 @@ from django.conf import settings
 from django.core.cache import cache
 from redis.exceptions import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
 from django.core.cache.backends.base import InvalidCacheBackendError
+from rest_framework.exceptions import APIException
 import time, secrets
 import hashlib, hmac
 import logging
@@ -136,3 +137,9 @@ def is_idle(user_id: int) -> bool:
         return int(time.time()) - int(ts) > IDLE_TIMEOUT
     except (RedisConnectionError, RedisTimeoutError, InvalidCacheBackendError) as e:
         logging.warning(f"Caching error: {e}")
+
+
+class ReauthRequired(APIException):
+    status_code = 403
+    default_detail = "reauth_required"
+    default_code = "reauth_required"
