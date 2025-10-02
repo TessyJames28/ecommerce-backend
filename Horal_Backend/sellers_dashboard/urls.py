@@ -5,7 +5,9 @@ from .views import (
     SellerProfileView,
     SellerDashboardAnalyticsAPIView,
     TopSellingProductsAPIView,
-    SellerOrderDetailView
+    SellerOrderDetailView,
+    ReauthOTPStartView,
+    ReauthOTPVerifyView
 )
 
 
@@ -16,5 +18,7 @@ urlpatterns = [
     path('profile/', SellerProfileView.as_view(), name='seller-profile'),
     path("analytics/", SellerDashboardAnalyticsAPIView.as_view(), name="seller-dashboard-analytics"),
     path("topselling/", TopSellingProductsAPIView.as_view(), name="seller_top_selling_product"),
-    
+    path("reauth/otp/start/", ReauthOTPStartView.as_view(), name="reauth_otp_start"),
+    path("reauth/otp/verify/", ReauthOTPVerifyView.as_view(), name="reauth_otp_verify"),
+
 ]

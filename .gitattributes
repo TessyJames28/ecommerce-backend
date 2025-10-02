@@ -1,0 +1,2 @@
+# Always prefer current branch’s version of migrations during merge/rebase
+**/migrations/*.py merge=ours

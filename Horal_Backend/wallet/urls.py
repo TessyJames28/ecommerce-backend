@@ -6,12 +6,14 @@ from .views import (
     SingleTransactionHistoryView,
     VerifySellerBankDetailsView,
     ConfirmWithdrawalView,
-    AllBankDataView
+    AllBankDataView,
+    UpdateSellerBankDetailsView
 )
 
 
 urlpatterns = [
     path('verify-bank/', VerifySellerBankDetailsView.as_view(), name="verify_bank_detail"),
+    path('update-bank/', UpdateSellerBankDetailsView.as_view(), name="update_bank_detail"),
     path("initiate-withdrawal/", InitiateWithdrawalView.as_view(), name="initiate-withdraw"),
     path("withdraw/", ConfirmWithdrawalView.as_view(), name="confirm-withdrawal"),
     path("transaction/", SellerBankDetailView.as_view(), name="bank_and_transaction_data"),

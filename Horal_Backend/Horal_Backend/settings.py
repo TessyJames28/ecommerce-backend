@@ -94,6 +94,7 @@ MIDDLEWARE = [
 
     # Custom middleware
     'carts.middleware.CartMiddleware',
+    # 'sellers_dashboard.middleware.reauth_middleware.DashboardReauthMiddleware',
     
 ]
 
@@ -143,6 +144,7 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SWAGGER_DOCS_BASE_URL= env('SWAGGER_DOCS_BASE_URL')
 
 REST_FRAMEWORK = {
+    "EXCEPTION_HANDLER": "Horal_Backend.api.custom_exception_handler",
     'DEFAULT_AUTHENTICATION_CLASSES': [
     'rest_framework.authentication.SessionAuthentication', 
     'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -263,8 +265,8 @@ DOJAH_BASE_URL = env('DOJAH_BASE_URL')
 
 import urllib.parse as urlparse
 
-# redis_url = env("REDIS_URL")
-# url = urlparse.urlparse(redis_url)
+redis_url = env("REDIS_URL")
+url = urlparse.urlparse(redis_url)
 
 # CACHES = {
 #     "default": {
@@ -473,6 +475,14 @@ MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.{AWS_S3_REGION_NAME}.digitalocea
 # -------------------------------------------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+
+# Reauth TTL
+IDLE_TIMEOUT = 10 * 60 # 10 minutes of inactivity → require reauth
+REAUTH_TTL = 5 * 60 # 5 minutes valid reauth token
+OTP_TTL = 5 * 60 # OTP valid for 5 minutes
+MAX_OTP_SENDS_PER_HOUR = 5
+MAX_OTP_VERIFY_ATTEMPTS = 5
+OTP_PEPPER = env("OTP_PEPPER")
 
 
 # Default primary key field type

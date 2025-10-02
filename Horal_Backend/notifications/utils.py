@@ -2,8 +2,8 @@ from django.core.mail import send_mail
 from django.core.cache import cache
 from django.conf import settings
 from django.apps import apps
+from redis.exceptions import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
 from django.core.cache.backends.base import InvalidCacheBackendError
-from redis.exceptions import ConnectionError as RedisConnectionError
 from rest_framework.response import Response
 import random
 import logging
@@ -77,7 +77,7 @@ def safe_cache_get(key, default=None):
     """Safe cache for retriving cache data"""
     try:
         return cache.get(key)
-    except (RedisConnectionError, TimeoutError, InvalidCacheBackendError) as e:
+    except (RedisConnectionError, RedisTimeoutError, InvalidCacheBackendError) as e:
         logging.warning(f"caching error: {e}")
         return default
     
@@ -86,7 +86,7 @@ def safe_cache_set(key, value, timeout=86400):
     """Safe cache to set cache data"""
     try:
         cache.set(key, value, timeout)
-    except (RedisConnectionError, TimeoutError, InvalidCacheBackendError) as e:
+    except (RedisConnectionError, RedisTimeoutError, InvalidCacheBackendError) as e:
         logging.warning(f"Caching error: {e}")
         pass
 

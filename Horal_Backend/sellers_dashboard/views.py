@@ -1,4 +1,10 @@
 from django.shortcuts import get_object_or_404
+from django.conf import settings
+from .reauth_utils import (
+    generate_otp, store_otp, record_send, sendable,
+    verify_otp, issue_reauth_token
+)
+from notifications.emails import send_reauth_email
 from rest_framework.generics import GenericAPIView
 from rest_framework.views import APIView
 from products.utils import BaseResponseMixin
@@ -13,7 +19,7 @@ from .serializers import (
     SellerProfileSerializer,
     SellerOrderItemSerializer
 )
-from users.authentication import CookieTokenAuthentication
+from users.authentication import CookieTokenAuthentication, ReauthRequiredPermission
 from .utils import (
     get_return_order,
     get_rolling_topselling_products,
@@ -31,7 +37,7 @@ from sellers.models import SellerKYC
 from django.db.models import Q
 from orders.models import OrderItem
 from django.utils import timezone
-import calendar
+import calendar, json
 
 
 # Create your views here.
@@ -41,7 +47,7 @@ class SellerProductRatingView(GenericAPIView, BaseResponseMixin):
     products ratings
     """
     serializer_class = SellerProductRatingsSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
 
     def get(self, request, *args, **kwargs):
@@ -100,7 +106,7 @@ class SellerOrderListView(GenericAPIView, BaseResponseMixin):
     Class that handles the retrieval of all a sellers order
     """
     serializer_class = SellerProductOrdersSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
 
     def get(self, request, *args, **kwargs):
@@ -108,6 +114,7 @@ class SellerOrderListView(GenericAPIView, BaseResponseMixin):
         Get all orders beloging to a seller
         """
         user = request.user
+        print(f"User: {user}")
         search = request.query_params.get("search")
         filter_status = request.query_params.get("status")
         year = request.query_params.get("year")
@@ -184,7 +191,7 @@ class SellerOrderDetailView(GenericAPIView, BaseResponseMixin):
     from sellers order
     """
     serializer_class = SellerOrderItemSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
 
     def get(self, request, order_item_id):
@@ -220,7 +227,7 @@ class SellerProfileView(GenericAPIView):
     """
     View to retrieve the complete seller profile
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
     serializer_class = SellerProfileSerializer
 
@@ -267,7 +274,7 @@ class SellerDashboardAnalyticsAPIView(APIView, BaseResponseMixin):
     Class that that displays all data for seller's dashboard
     analytics
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
 
 
@@ -336,7 +343,7 @@ class TopSellingProductsAPIView(APIView, BaseResponseMixin):
     Class that that retrieves all sellers top selling products
     Can be filtered by recent and oldest
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
 
 
@@ -388,4 +395,97 @@ class TopSellingProductsAPIView(APIView, BaseResponseMixin):
             "Seller top selling products retrieved successfully",
             top_selling_products
         )
+
+
+class ReauthOTPStartView(APIView, BaseResponseMixin):
+    """Starts the otp flow by generating and sending OTP to seller email"""
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
+    authentication_classes = [CookieTokenAuthentication]
+
+
+    def post(self, request, *args, **kwargs):
+        """Post method to start reauth flow for sellers"""
+        user = request.user
+        print("DEBUG start OTP for user:", user.id)
+
+        if not user.is_authenticated or not getattr(user, "is_seller", False):
+            return self.get_response(
+                status.HTTP_401_UNAUTHORIZED,
+                "auth_required"
+            )
+        
+        if not sendable(user.id):
+            return self.get_response(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "otp send rate limited"
+            )
+        
+        otp = generate_otp()
+        store_otp(user.id, otp)
+        record_send(user.id)
+
+        try:
+            send_reauth_email(
+                to_email="matrixcode00@gmail.com", # use for testing purpose. Will be remove for prod
+                otp_code=otp,
+                subject="Your Reauthentication Verification Code",
+                name=user.full_name
+            )
+        except Exception:
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "failed to send otp"
+            )
+        
+        return self.get_response(
+            status.HTTP_200_OK,
+            "otp sent"
+        )
+    
+
+class ReauthOTPVerifyView(APIView, BaseResponseMixin):
+    """
+    Verifies the OTP and issues a reauth token
+    """
+    permission_classes = [IsAuthenticated, ReauthRequiredPermission]
+    authentication_classes = [CookieTokenAuthentication]
+
+
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        if not user.is_authenticated or not getattr(user, "is_seller", False):
+            return self.get_response(status.HTTP_401_UNAUTHORIZED, "auth_required")
+
+        otp = request.data.get("otp")
+        platform = request.data.get("platform", "web")
+        if not otp:
+            return self.get_response(status.HTTP_400_BAD_REQUEST, "otp required")
+
+        ok = verify_otp(user.id, otp)
+        if not ok:
+            return self.get_response(
+                status.HTTP_403_FORBIDDEN,
+                "Invalid otp or too many attempts"
+            )
+
+        token = issue_reauth_token(user.id)
+
+        if platform == "mobile":
+            # Mobile: return token in JSON so the app can store it (e.g. in secure storage)
+            return Response(
+                {"detail": "reauth_ok", "reauth_token": token},
+                status=status.HTTP_200_OK
+            )
+        else:
+            # Web: set token as HttpOnly cookie
+            resp = Response({"detail": "reauth_ok"}, status=status.HTTP_200_OK)
+            resp.set_cookie(
+                key="reauth_token",
+                value=token,   # <- FIXED (was missing)
+                httponly=True,
+                secure=True,  # only True if HTTPS
+                samesite="None",
+                max_age=getattr(settings, "REAUTH_TTL", 15 * 60),
+            )
+            return resp
 

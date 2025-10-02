@@ -6,15 +6,7 @@ from .tasks import send_email_task
 
 def send_registration_otp_email(to_email, otp_code, name):
     """Send an OTP email to the user."""
-    # subject = 'Your OTP Code'
-    # message = (
-    #     f"Hi there,\n\n"
-    #     f"Here is your OTP code from Horal: {otp_code}\n"
-    #     f"This code will expire in 5 minutes.\n\n"
-    #     f"If you didn't request this code, please ignore this email.\n\n"
-    #     f"Thanks,\n"
-    #     f"The Horal Team"
-    # )
+
     from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
 
     send_email_task.delay(
@@ -33,15 +25,6 @@ def send_registration_otp_email(to_email, otp_code, name):
 
 def send_otp_email(to_email, otp_code, name):
     """Send an OTP email to the user."""
-    # subject = 'Your OTP Code'
-    # message = (
-    #     f"Hi there,\n\n"
-    #     f"Here is your OTP code from Horal: {otp_code}\n"
-    #     f"This code will expire in 5 minutes.\n\n"
-    #     f"If you didn't request this code, please ignore this email.\n\n"
-    #     f"Thanks,\n"
-    #     f"The Horal Team"
-    # )
     from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
 
     send_email_task.delay(
@@ -59,19 +42,23 @@ def send_otp_email(to_email, otp_code, name):
     )
 
 
-# def send_password_reset_otp(email, otp_code):
-#     """Send a password reset email to the user."""
-#     return requests.post(
-#         f"https://api.mailgun.net/v3/{settings.MAILGUN_DOMAIN}/messages",
-#         auth=("api", settings.MAILGUN_API_KEY),
-#         data={
-#             "from": f"YourApp <mailgun@{settings.MAILGUN_DOMAIN}>",
-#             "to": [email],
-#             "subject": "Your Password Reset OTP",
-#             "text": f"Your OTP is: {otp_code}",  # Replace with your real OTP logic
-#         }
-#     )
+def send_reauth_email(to_email, otp_code, subject, name):
+    """Send an OTP email to the user."""
+    from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
 
+    send_email_task(
+        recipient=to_email,
+        subject=subject,
+        from_email=from_email,
+        template_name="notifications/emails/otp_email.html",
+        context={
+            "user": name,
+            "title": subject,
+            "body_text": "This is your one-time password reset passcode. Code expires in 5 minutes. Please do not share it with anyone.",
+            "otp": otp_code,
+            "footer_note": "If you didn’t request a reauthentication to your dashboard, please ignore this email."
+        }
+    )
 
 
 def send_refund_email(user_email, order_id, username):
