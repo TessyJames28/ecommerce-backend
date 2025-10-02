@@ -61,36 +61,38 @@ states_and_lgas = {
 categories_data = {
     "fashion": [
         "clothing (men and women)", "shoes (men and women)", "bags", "jewelries",
-        "watches", "eyewear", "underwear & sleepwear", "jerseys", "hats & caps", "swimwear"
+        "watches", "eyewear", "underwear & sleepwear", "jerseys", "hats & caps", "swimwear", "others"
     ],
     "health and beauty": [
-        "skincare", "makeup", "hair care", "fragrances", "wellness & supplements", "oral hygiene"
+        "skincare", "makeup", "hair care", "fragrances", "wellness & supplements", "oral hygiene", "others"
     ],
     "foods": [
         "fresh produce", "meat, poultry & seafood", "dairy & eggs", "beverages (non-alcoholic)",
-        "baked goods", "frozen foods"
+        "baked goods", "frozen foods", "fruits", "vegetables", "grains or cereals", "legumes or pulses",
+        "nuts and seeds", "meat and poultry", "fish and seafood", "dairy", "eggs", "fats and oils", "herbs and spices",
+        "confectionery and snacks", "others"
     ],
     "vehicles": [
         "cars", "motorcycles", "buses & vans", "vehicle parts & accessories",
-        "bicycles & scooters", "boats & watercraft", "trucks"
+        "bicycles & scooters", "boats & watercraft", "trucks", "others"
     ],
     "gadget": [
         "smartphones", "tablets", "smartwatches & wearables", "drones",
         "cameras & photography gadgets", "portable audio", "gaming",
-        "gps & navigation", "e-readers", "vr/ar devices"
+        "gps & navigation", "e-readers", "vr/ar devices", "laptop", "others"
     ],
     "accessories": [
         "phone accessories", "laptop accessories", "camera accessories",
-        "travel accessories", "wallets & cardholders", "umbrellas", "gloves", "belts"
+        "travel accessories", "wallets & cardholders", "umbrellas", "gloves", "belts", "others"
     ],
     "children": [
         "Baby clothing (0-24 months)", "diapers & wipes", "feeding & nursing", "gear & travel",
-        "toys & gifts (0-3 years)", "children clothing", "maternity wear", "baby food", "safety & health"
+        "toys & gifts (0-3 years)", "children clothing", "maternity wear", "baby food", "safety & health", "others"
     ],
     "electronics": [
         "televisions & home theater", "audio & hi-fi systems", "computers & laptops",
         "printers & scanners", "networking devices", "home appliances",
-        "gaming PCs & components", "generators"
+        "gaming PCs & components", "generators", "others"
     ]
 }
 
