@@ -279,69 +279,69 @@ url = urlparse.urlparse(redis_url)
 #     }
 # }
 
-# import urllib.parse as urlparse
+import urllib.parse as urlparse
 
-# redis_url = env("REDIS_URL")
-# url = urlparse.urlparse(redis_url)
-
-
-# CACHES = {
-#     "default": {
-#         "BACKEND": "django_redis.cache.RedisCache",
-#         "LOCATION": f"redis://{url.hostname}:{url.port}/0",
-#         "OPTIONS": {
-#             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-#             # No PASSWORD, no SSL
-#         }
-#     }
-# }
-
-# # Celery settings
-# CELERY_BROKER_URL = f"redis://{url.hostname}:{url.port}/0"
-# CELERY_RESULT_BACKEND = CELERY_BROKER_URL
-
-# # No SSL needed for Render internal Redis
-# CELERY_BROKER_USE_SSL = None  
-
-# CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
-
-# CELERY_ACCEPT_CONTENT = ["json"]
-# CELERY_TASK_SERIALIZER = "json"
-# CELERY_RESULT_SERIALIZER = "json"
-# CELERY_TIMEZONE = "UTC"
+redis_url = env("REDIS_URL")
+url = urlparse.urlparse(redis_url)
 
 
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": f"{url.scheme}://{url.hostname}:{url.port}/0",
+        "LOCATION": f"redis://{url.hostname}:{url.port}/0",
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "PASSWORD": url.password,
-            "SSL": url.scheme == "rediss",
+            # No PASSWORD, no SSL
         }
     }
 }
 
+# Celery settings
+CELERY_BROKER_URL = f"redis://{url.hostname}:{url.port}/0"
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 
-# Celery setting
-import ssl
+# No SSL needed for Render internal Redis
+CELERY_BROKER_USE_SSL = None  
 
-# Change to its redis DB on production with custom redis setup
-CELERY_BROKER_URL = env("REDIS_URL")
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
-CELERY_BROKER_USE_SSL = {
-    # Change to SSL.CERT_REQUIRED when using own trusted custom redis
-    'ssl_cert_reqs': None # or ssl.CERT_NONE 
-}
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "UTC"
 
-CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
-CELERY_RESULT_BACKEND = 'django-db'
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'UTC' 
+# CACHES = {
+#     "default": {
+#         "BACKEND": "django_redis.cache.RedisCache",
+#         "LOCATION": f"{url.scheme}://{url.hostname}:{url.port}/0",
+#         "OPTIONS": {
+#             "CLIENT_CLASS": "django_redis.client.DefaultClient",
+#             "PASSWORD": url.password,
+#             "SSL": url.scheme == "rediss",
+#         }
+#     }
+# }
+
+
+# # Celery setting
+# import ssl
+
+# # Change to its redis DB on production with custom redis setup
+# CELERY_BROKER_URL = env("REDIS_URL")
+
+# CELERY_BROKER_USE_SSL = {
+#     # Change to SSL.CERT_REQUIRED when using own trusted custom redis
+#     'ssl_cert_reqs': None # or ssl.CERT_NONE 
+# }
+
+# CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# CELERY_RESULT_BACKEND = 'django-db'
+# CELERY_ACCEPT_CONTENT = ['json']
+# CELERY_TASK_SERIALIZER = 'json'
+# CELERY_RESULT_SERIALIZER = 'json'
+# CELERY_TIMEZONE = 'UTC' 
 
 
 # GIGL Setup
@@ -477,8 +477,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # Reauth TTL
-IDLE_TIMEOUT = 5 * 60 # 5 minutes of inactivity → require reauth
-REAUTH_TTL = 3 * 60 # 3 minutes valid reauth token
+IDLE_TIMEOUT = 10 * 60 # 10 minutes of inactivity → require reauth
+REAUTH_TTL = 5 * 60 # 5 minutes valid reauth token
 OTP_TTL = 5 * 60 # OTP valid for 5 minutes
 MAX_OTP_SENDS_PER_HOUR = 5
 MAX_OTP_VERIFY_ATTEMPTS = 5
