@@ -680,48 +680,56 @@ class SingleLocationView(GenericAPIView):
 
 
 class CookieTokenRefreshView(TokenRefreshView):
-    """Class to handle the refreshing of jwt token"""
+    """Handle refreshing of JWT tokens for web (cookies) and mobile (body)."""
     serializer_class = TokenRefreshSerializer
 
     def post(self, request, *args, **kwargs):
-        """
-        JWT token to be refreshed are gotten from
-        The cookie where it's set
-        """
-        # Pull refresh token from cookies
-        refresh_token = request.COOKIES.get("refresh_token")
+        platform = request.data.get("platform", "web")  # default to web
+
+        if platform.lower() == "mobile":
+            # Expect refresh token from request body
+            refresh_token = request.data.get("refresh")
+        else:
+            # Expect refresh token from cookies
+            refresh_token = request.COOKIES.get("refresh_token")
 
         if not refresh_token:
             return Response({"detail": "Refresh token missing"}, status=401)
-        
-        # Inject into request data for serializer
-        request.data._mutable = True # Temporary make data mutable
-        request.data["refresh"] = refresh_token
-        request.data._mutable = False
 
-        response = super().post(request, *args, **kwargs)
-        access = request.data.get("access")
-        refresh = request.data.get("refresh")
+        # Build data for serializer
+        data = {"refresh": refresh_token}
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
 
-        # Clear response body tokens => optional
-        response.data = {"detail", "Token refreshed"}
+        # Standard DRF-SimpleJWT validated data
+        access = serializer.validated_data.get("access")
+        refresh = serializer.validated_data.get("refresh")
 
-        # Set new access token cookie
-        response.set_cookie(
-            key="access_token",
-            value=access,
-            httponly=True,
-            secure=True,
-            samesite="None",
-        )
+        response = Response(status=200)
 
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh,
-            httponly=True,
-            secure=True,
-            samesite="None",
-        )
+        if platform.lower() == "mobile":
+            # Mobile → send tokens back in body
+            response.data = {
+                "access": access,
+                "refresh": refresh,
+            }
+        else:
+            # Web → no tokens in body, just set cookies
+            response.data = {"detail": "Token refreshed"}
+            response.set_cookie(
+                key="access_token",
+                value=access,
+                httponly=True,
+                secure=True,
+                samesite="None",
+            )
+            response.set_cookie(
+                key="refresh_token",
+                value=refresh,
+                httponly=True,
+                secure=True,
+                samesite="None",
+            )
 
         return response
     
