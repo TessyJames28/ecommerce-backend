@@ -87,7 +87,6 @@ class KYCIDVerificationWebhook(GenericAPIView, BaseResponseMixin):
                 seller = SellerKYC.objects.get(user__id=user_id)
                 address = seller.address
 
-                # Normalize name to facilitate loose match
                 def normalize_name(name: str) -> str:
                     return " ".join(name.split()).lower()
 
