@@ -46,7 +46,7 @@ def send_reauth_email(to_email, otp_code, subject, name):
     """Send an OTP email to the user."""
     from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
 
-    send_email_task.delay(
+    send_email_task(
         recipient=to_email,
         subject=subject,
         from_email=from_email,
