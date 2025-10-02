@@ -79,7 +79,7 @@ categories_data = {
     "gadget": [
         "smartphones", "tablets", "smartwatches & wearables", "drones",
         "cameras & photography gadgets", "portable audio", "gaming",
-        "gps & navigation", "e-readers", "vr/ar devices", "laptop", "others"
+        "gps & navigation", "e-readers", "vr/ar devices", "others"
     ],
     "accessories": [
         "phone accessories", "laptop accessories", "camera accessories",
