@@ -426,7 +426,7 @@ class ReauthOTPStartView(APIView, BaseResponseMixin):
 
         try:
             send_reauth_email(
-                to_email=user.email, # use for testing purpose. Will be remove for prod
+                to_email=user.email,
                 otp_code=otp,
                 subject="Your Reauthentication Verification Code",
                 name=user.full_name
