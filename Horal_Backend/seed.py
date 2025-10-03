@@ -31,7 +31,7 @@ from products.models import (
     VehicleImage, FashionImage, ElectronicsImage, FoodImage,
     HealthAndBeautyImage, AccessoryImage, ChildrenImage, GadgetImage
 )
-from logistics.models import Logistics
+from logistics.models import Logistics, GIGLExperienceCentre, GIGLShipment
 from django.conf import settings
 
 from products.utils import image_model_map
@@ -118,6 +118,8 @@ YearlyShopSales.objects.all().delete()
 SellersBankDetails.objects.all().delete()
 SellerTransactionHistory.objects.all().delete()
 Payout.objects.all().delete()
+GIGLShipment.objects.all().delete()
+GIGLExperienceCentre.objects.all().delete()
 
 # Create categories and subcategories
 category_map = {}
@@ -321,7 +323,7 @@ def create_logistics(product):
     logistics = Logistics.objects.create(
         content_type=ContentType.objects.get_for_model(product),
         object_id=product.id,
-        weight_measurement=random.choice(["KG", "G", "L", "ML", "M"]),
+        weight_measurement=random.choice(["KG", "G"]),
         total_weight=random.randint(1, 5),
     )
     return logistics
