@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import(
     RegisterUserView,
+    AgentRegisterUserView,
     UserLoginView,
     UserLogoutView,
     GoogleLoginView,
@@ -20,6 +21,7 @@ from django.conf import settings
 
 urlpatterns = [
     path("register/", RegisterUserView.as_view(), name="register"),
+    path("agent/register/", AgentRegisterUserView.as_view(), name="agent-registration"),
     path("confirm-registration/", ConfirmRegistrationOTPView.as_view(), name='confirm-registration'),
     path("resend-registration-otp/", ResendRegistrationOTPView.as_view(), name='resend-registration-otp'),
     path("login/", UserLoginView.as_view(), name="login"),
