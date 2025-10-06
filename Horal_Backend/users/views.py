@@ -31,7 +31,10 @@ from notifications.utils import (
     verify_registration_otp,
     safe_cache_set, safe_cache_get
 )
-from notifications.emails import send_otp_email, send_registration_otp_email
+from notifications.emails import (
+    send_otp_email, send_registration_otp_email,
+    send_registration_url_email
+)
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from django.views.decorators.csrf import csrf_exempt
@@ -742,3 +745,50 @@ def get_csrf_token(request):
     """
     return JsonResponse({"csrfToken": request.META.get("CSRF_COOKIE")})
 
+
+#======== New Registration endpoint for agents scouting for sellers =======
+@method_decorator(csrf_exempt, name='dispatch')
+class AgentRegisterUserView(GenericAPIView):
+    """API endpoint to register users"""
+    queryset = CustomUser.objects.all()
+    serializer_class = CustomUserSerializer
+
+    def post(self, request, *args, **kwargs):
+        """
+        Handles user registration and send registration url to the email used
+        Url contains otp that needs to be verified before account can be registered
+        """
+        data = request.data.copy()
+        
+        # Get url to redirect users to complete registration
+        url = data.pop("url", "")
+        print("Registration URL:", url)
+
+        if not url:
+            return Response({
+                "status": "error",
+                "status_code": status.HTTP_400_BAD_REQUEST,
+                "message": "URL is required for agent registration"
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        
+        email = serializer.validated_data["email"]
+        user_name = serializer.validated_data["full_name"]
+        
+        # Generate OTP and send it to the user's email
+        otp = generate_otp()
+
+        # Store registration data temporarily for 30mins
+        safe_cache_set(f"reg_data:{email}", json.dumps(serializer.validated_data), timeout=86400) # 24 hours livespan
+        safe_cache_set(f"otp:{email}", otp, timeout=86400) # OTP valid for 24 hours
+
+        # Send registration otp url
+        reg_url = f"{url}?email={email}&otp={otp}"
+        send_registration_url_email(email, reg_url, user_name)
+
+        return Response({
+            "status": "success",
+            "message": "Regitration url sent to email. Verify to complete registration."
+        }, status=status.HTTP_200_OK)
