@@ -111,6 +111,16 @@ def handle_shipment_delivered(sender, shipment, reminder=None, **kwargs):
         }
     )
 
+    # mark reminder as sent
+    if reminder:
+        if reminder == '2h':
+            shipment.reminder_2h_sent = True
+        elif reminder == '24h':
+            shipment.reminder_24h_sent = True
+        elif reminder == '48h':
+            shipment.reminder_48h_sent = True
+        shipment.save(update_fields=[f'reminder_{reminder}_sent'])
+
     logger.info(f"Shipment email sent to user (reminder: {reminder})")
 
 
