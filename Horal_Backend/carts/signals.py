@@ -2,6 +2,9 @@ from django.dispatch import Signal, receiver
 from notifications.tasks import send_email_task
 from products.models import ProductIndex
 from django.conf import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 cart_abandoned = Signal()
 
@@ -68,4 +71,16 @@ def handle_cart_abandonment(sender, cart, reminder=None, **kwargs):
             }
         }
     )
+
+    # mark reminder as sent
+    if reminder:
+        if reminder == '2h':
+            cart.reminder_2h_sent = True
+        elif reminder == '24h':
+            cart.reminder_24h_sent = True
+        elif reminder == '48h':
+            cart.reminder_48h_sent = True
+        cart.save(update_fields=[f'reminder_{reminder}_sent'])
+
+    logger.info(f"Cart abandonment email sent to user (reminder: {reminder})")
 
