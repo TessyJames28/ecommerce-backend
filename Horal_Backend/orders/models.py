@@ -87,10 +87,6 @@ class OrderShipment(models.Model):
     shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     delivered_at = models.DateTimeField(null=True, blank=True)
 
-    # Set delivery and pickup stations
-    # seller_station = models.PositiveIntegerField()
-    # buyer_station = models.PositiveIntegerField()
-
     # reminder flags for the shipment
     reminder_2h_sent = models.BooleanField(default=False, db_index=True)
     reminder_24h_sent = models.BooleanField(default=False, db_index=True)
@@ -98,6 +94,7 @@ class OrderShipment(models.Model):
 
     # Auto completion of order
     auto_completion = models.BooleanField(default=False)
+    auto_completion_email_sent = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
