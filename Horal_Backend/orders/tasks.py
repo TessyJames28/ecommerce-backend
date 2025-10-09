@@ -95,14 +95,20 @@ def check_delivered_shipments():
         ).exclude(**{flag: True})
 
         for shipment in shipments:
+            # Skip if all items are already reviewed (completed)
+            if all(item.is_completed for item in shipment.items.all()):
+                continue
             shipment_delivered.send(sender=OrderShipment, shipment=shipment, reminder=label)
             setattr(shipment, flag, True)
             shipment.save(update_fields=[flag])
 
     # --- Notify already auto-completed shipments ---
-    auto_shipments = OrderShipment.objects.filter(auto_completion=True)
+    auto_shipments = OrderShipment.objects.filter(
+        auto_completion=True).exclude(auto_completion_email_sent=True)
 
     for shipment in auto_shipments:
         shipment_delivered.send(sender=OrderShipment, shipment=shipment)
+        shipment.auto_completion_email_sent = True
+        shipment.save(update_fields=["auto_completion_email_sent"])
 
 
