@@ -268,22 +268,6 @@ import urllib.parse as urlparse
 redis_url = env("REDIS_URL")
 url = urlparse.urlparse(redis_url)
 
-# CACHES = {
-#     "default": {
-#         "BACKEND": "django_redis.cache.RedisCache",
-#         "LOCATION": f"{url.scheme}://{url.hostname}:{url.port}/0",
-#         "OPTIONS": {
-#             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-#             "PASSWORD": url.password,
-#         }
-#     }
-# }
-
-# import urllib.parse as urlparse
-
-# redis_url = env("REDIS_URL")
-# url = urlparse.urlparse(redis_url)
-
 
 # CACHES = {
 #     "default": {
@@ -477,7 +461,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # Reauth TTL
-IDLE_TIMEOUT = 10 * 60 # 10 minutes of inactivity → require reauth
+IDLE_TIMEOUT = 30 * 60 # 30 minutes of inactivity → require reauth
 REAUTH_TTL = 5 * 60 # 5 minutes valid reauth token
 OTP_TTL = 5 * 60 # OTP valid for 5 minutes
 MAX_OTP_SENDS_PER_HOUR = 5
@@ -530,3 +514,17 @@ for app in APPS_TO_LOG:
         "level": "INFO",
         "propagate": False,
     }
+LOGGING["handlers"]["root_file"] = {
+    "class": "logging.handlers.TimedRotatingFileHandler",
+    "filename": os.path.join(LOG_DIR, "system.log"),
+    "when": "midnight",
+    "interval": 1,
+    "backupCount": 30,
+    "formatter": "verbose",
+}
+
+LOGGING["root"] = {
+    "handlers": ["root_file"],
+    "level": "WARNING",  # or INFO if you want more verbosity
+}
+

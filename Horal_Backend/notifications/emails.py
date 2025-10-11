@@ -31,6 +31,25 @@ def send_registration_otp_email(to_email, otp_code, name):
     )
 
 
+def send_registration_url_email(to_email, url, name):
+    """Send registration url email to the user."""
+
+    from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
+
+    send_email_task.delay(
+        recipient=to_email,
+        subject="Horal Registration Verification",
+        from_email=from_email,
+        template_name="notifications/emails/otp_email.html",
+        context={
+            "user": name,
+            "title": "Your One-Time Verification Link",
+            "body_text": "This is your one-time Horal verification link. Click the link below to complete your registration. Link expires in 24hours.",
+            "otp": url
+        }
+    )
+
+
 def send_otp_email(to_email, otp_code, name):
     """Send an OTP email to the user."""
     from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"

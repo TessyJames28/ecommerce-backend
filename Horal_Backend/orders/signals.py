@@ -1,5 +1,5 @@
 from django.dispatch import receiver, Signal
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, post_delete, pre_save
 from .models import (
     Order, OrderItem, OrderShipment,
     DELAY_STATUSES, OrderReturnRequest,
@@ -38,10 +38,15 @@ def handle_shipment_delivered(sender, shipment, reminder=None, **kwargs):
     """
     if not shipment.delivered_at:
         return
+    
+    # Only include products not yet reviewed
+    unreviewed_items = shipment.items.filter(is_completed=False)
+    if not unreviewed_items.exists():
+        return  # skip sending email if everything reviewed
 
     # Build product list
     products = []
-    for item in shipment.items.all():
+    for item in unreviewed_items:
         product = ProductIndex.objects.get(id=item.variant.object_id)
         products.append({
             "image": product.image if product.image else None,
@@ -316,6 +321,23 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
 #         update_quantity(variant.product)
 
 
+@receiver(pre_save, sender=OrderShipment)
+def store_old_status(sender, instance, **kwargs):
+    """
+    Store the old status of the shipment before saving
+    so we can compare it in post_save.
+    """
+    if not instance.pk:
+        instance._old_status = None
+        return
+    
+    try:
+        old_instance = sender.objects.get(pk=instance.pk)
+        instance._old_status = old_instance.status
+    except sender.DoesNotExist:
+        instance._old_status = None
+
+
 
 @receiver(post_save, sender=OrderShipment)
 def send_order_status_email(sender, instance, created, **kwargs):
@@ -324,6 +346,11 @@ def send_order_status_email(sender, instance, created, **kwargs):
     Shipment status updates.
     """
     if created:
+        return
+    
+    # Skip if status did not change
+    old_status = getattr(instance, "_old_status", None)
+    if old_status == instance.status:
         return
     
     status = instance.status
