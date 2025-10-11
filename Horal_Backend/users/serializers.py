@@ -77,8 +77,21 @@ class LoginSerializer(serializers.ModelSerializer):
 
         try:
             user = CustomUser.objects.get(email=email)
-            if not user.check_password(password):
-                raise serializers.ValidationError(_("Invalid password."))
+
+            # Handle users created via Google login (no password)
+            if not user.has_usable_password() or user.password in [None, ""]:
+                raise serializers.ValidationError(
+                    "This account does not have a password set. Please use Google Sign-In."
+                )
+
+            # Safely check password
+            try:
+                if not user.check_password(password):
+                    raise serializers.ValidationError("Invalid password.")
+            except TypeError:
+                raise serializers.ValidationError({
+                    "This account does not have a password set. Please use Google Sign-In."
+                })
             
             user.is_active = True
             user.last_login = now()
