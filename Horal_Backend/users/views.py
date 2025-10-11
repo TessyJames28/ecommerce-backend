@@ -237,20 +237,11 @@ class UserLoginView(GenericAPIView):
             serializer.is_valid(raise_exception=True)
             user = serializer.validated_data['user']
 
-            # Check if the user has no password (e.g., Google Sign-In only)
-            if not user.has_usable_password():
-                return Response({
-                    "status": "error",
-                    "status_code": status.HTTP_400_BAD_REQUEST,
-                    "message": "This account does not have a password set. Please use Google Sign-In.",
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
         except ValidationError as e:
             return Response({
                 "status": "error",
                 "status_code": status.HTTP_400_BAD_REQUEST,
-                "message": e.detail if isinstance(e.detail, str) else "Invalid email or password",
-                "errors": e.detail
+                "message": e.detail
             }, status=status.HTTP_400_BAD_REQUEST)
         
         except ObjectDoesNotExist:
@@ -265,8 +256,7 @@ class UserLoginView(GenericAPIView):
             return Response({
                 "status": "error",
                 "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR,
-                "message": "An unexpected error occurred during login. Please try again.",
-                "error": str(e)
+                "message": f"An unexpected error occurred during login. Please try again: {str(e)}",
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         response_data = {
