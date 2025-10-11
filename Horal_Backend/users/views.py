@@ -1,5 +1,6 @@
 import json
 from django.utils.timezone import now
+from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
 from rest_framework.generics import GenericAPIView
 from rest_framework import serializers
@@ -234,6 +235,16 @@ class UserLoginView(GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
+            user = serializer.validated_data['user']
+
+            # Check if the user has no password (e.g., Google Sign-In only)
+            if not user.has_usable_password():
+                return Response({
+                    "status": "error",
+                    "status_code": status.HTTP_400_BAD_REQUEST,
+                    "message": "This account does not have a password set. Please use Google Sign-In.",
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
         except ValidationError as e:
             return Response({
                 "status": "error",
@@ -241,7 +252,22 @@ class UserLoginView(GenericAPIView):
                 "message": e.detail if isinstance(e.detail, str) else "Invalid email or password",
                 "errors": e.detail
             }, status=status.HTTP_400_BAD_REQUEST)
-        user = serializer.validated_data['user']
+        
+        except ObjectDoesNotExist:
+            return Response({
+                "status": "error",
+                "status_code": status.HTTP_404_NOT_FOUND,
+                "message": "User not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            # Catch-all for any unexpected error
+            return Response({
+                "status": "error",
+                "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "message": "An unexpected error occurred during login. Please try again.",
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         response_data = {
             "status": "success",
@@ -361,6 +387,8 @@ class GoogleLoginView(GenericAPIView):
 
         if platform == "mobile":
             client_id = settings.GOOGLE_OAUTH['MOBILE_CLIENT_ID']
+        elif platform == "ios":
+            client_id = settings.GOOGLE_OAUTH['IOS_CLIENT_ID']
         else:
             client_id = settings.GOOGLE_OAUTH['WEB_CLIENT_ID']
 
@@ -374,6 +402,13 @@ class GoogleLoginView(GenericAPIView):
                 # picture_url = id_info['picture']
 
                 # You can also extract other fields like 'picture' if needed
+
+                if not email:
+                    return Response({
+                        "error": "Google account email not found",
+                        "status": "failed",
+                        "message": "Could not retrieve email from Google account"
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
                 # Check if user already exists, or create a new one
                 user, created = CustomUser.objects.get_or_create(
@@ -452,6 +487,13 @@ class GoogleLoginView(GenericAPIView):
                     "status": "failed",
                     "message": "Invalid Google token"
                 }, status=status.HTTP_400_BAD_REQUEST)
+            
+            except Exception as e:
+                return Response({
+                    "error": str(e),
+                    "status": "failed",
+                    "message": "An unexpected error occurred during Google login"
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
 
 class UserLogoutView(GenericAPIView):
