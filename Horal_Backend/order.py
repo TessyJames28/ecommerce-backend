@@ -216,4 +216,5 @@ def create_three_orders():
             print(f"      -> OrderItem created for variant {item.id}")
 
 if __name__ == "__main__":
+    create_twelve_orders()
     create_three_orders()
