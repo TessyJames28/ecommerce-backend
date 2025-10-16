@@ -136,7 +136,6 @@ class OrderSerializer(serializers.ModelSerializer):
             - If all shipments are not delivered, return "Ongoing"
             - If all items linked to the order has is_completed=True, return "Completed"
         """
-        print("Called get_shipment_status")
         shipment_statuses = [
             OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
             OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
@@ -151,9 +150,7 @@ class OrderSerializer(serializers.ModelSerializer):
             shipment.status in shipment_statuses
             for shipment in shipments
         )
-        all_completed = all(
-            all(item.is_completed for item in obj.order_items.all())
-        )
+        all_completed = all(item.is_completed for item in obj.order_items.all())
 
         if all_completed:
             return "Completed"
