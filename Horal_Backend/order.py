@@ -114,6 +114,10 @@ def create_twelve_orders():
             )
             print(f"      -> Shipment created (Tracking: {shipment.tracking_number}, Status: {shipment.status})")
 
+            order_item.shipment = shipment
+            order_item.save(update_fields=["shipment"])
+            print(f"      -> OrderItem linked to shipment {shipment.tracking_number}")
+            
             # Handle delivered shipments
             if shipment.status in [
                 OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
