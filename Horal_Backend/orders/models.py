@@ -26,6 +26,9 @@ class Order(ShippingSnapshotMixin, models.Model):
         """Enum for order status"""
         PENDING = "pending", "Pending"
         PAID = "paid", "Paid"
+        DELIVERED = "delivered", "Delivered"
+        ONGOING = "ongoing", "Ongoing"
+        COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
         CANCELLED = "cancelled", "Cancelled"
 
