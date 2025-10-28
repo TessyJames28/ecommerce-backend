@@ -85,7 +85,7 @@ class FEZDeliveryAPI:
         
 
     def get_order_details(self, order_id):
-        """Create shipment order and get order id"""
+        """Get a single order details based on order id"""
         try:
             url = f"{BASE_URL}/orders/{order_id}"
             res = requests.get(url, headers=self._headers(), timeout=15)
@@ -122,7 +122,7 @@ class FEZDeliveryAPI:
         
 
     def track_shipment(self, orderNumber):
-        """Track shipment using waybill"""
+        """Track shipment using FEZ Delivery worder number"""
         try:
             url = f"{BASE_URL}/order/track/{orderNumber}"
             res = requests.get(url, headers=self._headers(), timeout=15)
@@ -161,7 +161,7 @@ class FEZDeliveryAPI:
     
     def register_webhook(self):
         """Register webhook for the FEZ Delivery event status update"""
-        payload = {"webhook": settings.HORAL_FEZ_WEBHOOK}
+        payload = {"webhook": settings.HORAL_FEZ_WEBHOOK.strip()}
         try:
             url = f"{BASE_URL}/webhooks/store"
             res = requests.post(url, json=payload, headers=self._headers(), timeout=15)
