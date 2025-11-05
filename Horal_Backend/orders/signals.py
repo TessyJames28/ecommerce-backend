@@ -1,28 +1,20 @@
 from django.dispatch import receiver, Signal
 from django.db.models.signals import post_save, post_delete
 from .models import (
-    Order, OrderItem, OrderShipment,
-    DELAY_STATUSES, OrderReturnRequest,
-    DELAY_STATUSES_CUSTOMER,
-    DELIVERED_STATUSES, PICKUP_STATUSES
+    Order, OrderShipment,
+    OrderReturnRequest,
 )
 from support.utils import (
-    create_message_for_instance,
     generate_received_subject
 )
-from logistics.models import Station
 from collections import defaultdict
-from .utils import update_quantity, format_variant
+from .utils import format_variant
 from products.models import ProductIndex, ProductVariant
 from notifications.tasks import send_email_task
 from django.conf import settings
 from django.utils.timezone import now
 from users.models import CustomUser
-from logistics.utils import group_order_items_by_seller
-from sellers.models import SellerKYC, SellerKYCAddress
-from shops.models import Shop
-from .tasks import create_gigl_shipment_on_each_shipment
-from logistics.utils import calculate_shipping_for_order, get_experience_centers
+from .tasks import create_fez_shipment_on_each_shipment
 import logging
 
 logger = logging.getLogger(__name__)
@@ -169,7 +161,7 @@ def send_return_received_email(sender, instance, created, **kwargs):
 
 
 @receiver(post_save, sender=Order)
-def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
+def create_fez_shipment_on_paid(sender, instance: Order, created, **kwargs):
     """
     Auto-create GIGL shipments when an order is marked as PAID for the first time,
     and send a customized receipt email. If this is the user's first order, 
@@ -180,7 +172,7 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
     if created or instance.status != Order.Status.PAID:
         return
     
-    create_gigl_shipment_on_each_shipment.delay(str(instance.id))
+    create_fez_shipment_on_each_shipment.delay(str(instance.id))
 
     from_email = f"Horal Order <{settings.DEFAULT_FROM_EMAIL}>"
     order_items = []
@@ -243,7 +235,6 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
         "email": "",
         "name": "",
         "items": [],
-        "addresses": ""
     })
 
     # Build seller data per shipment
@@ -254,11 +245,6 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
         if seller_id not in sellers_data:
             sellers_data[seller_id]["email"] = seller.user.email
             sellers_data[seller_id]["name"] = seller.user.full_name
-        
-            # Get seller state and addresses dynamically per seller
-            seller_state = seller.address.state
-            addresses = get_experience_centers(seller_state)
-            sellers_data[seller_id]["addresses"] = addresses
 
         # Add shipment items
         for item in shipment.items.all():
@@ -288,8 +274,7 @@ def create_gigl_shipment_on_paid(sender, instance: Order, created, **kwargs):
             context={
                 "user": data["name"],
                 "body_paragraphs": body_paragraphs,
-                "order_items": data["items"],
-                "addresses": data["addresses"]
+                "order_items": data["items"]
             }
         )
 
@@ -332,15 +317,15 @@ def send_order_status_email(sender, instance, created, **kwargs):
     # pickup_station = Station.objects.get(station_id=instance.buyer_station)
 
     # Email customers based on status
-    if status in PICKUP_STATUSES:
-        subject = "Your order is ready for pickup"
-        message = [
-            f"Your order #{instance.order.id} is now available for pickup at the designated location.",
-            f"Our partner will reach out with pickup address." ,
-            f"Please collect it as soon as possible.",
-            "Thank you!"
-        ]
-    elif status in DELIVERED_STATUSES:
+    # if status == OrderShipment.Status.PENDING_RECIPIENT_PICKUP:
+    #     subject = "Your order is ready for pickup"
+    #     message = [
+    #         f"Your order #{instance.order.id} is now available for pickup at the designated location.",
+    #         f"Our partner will reach out with pickup address." ,
+    #         f"Please collect it as soon as possible.",
+    #         "Thank you!"
+    #     ]
+    if status == OrderShipment.Status.DELIVERED:
         subject = "Your order has been delivered"
         message = [
             f"Your order #{instance.order.id} has been delivered to your address.",
@@ -348,20 +333,20 @@ def send_order_status_email(sender, instance, created, **kwargs):
             f"If there are any issues, you may initiate a return request within this period.",
             "Thank you!"
         ]
-    elif status in DELAY_STATUSES:
-        subject = "Delivery Delay Notification"
-        message = [
-            f"There has been a delay with your order #{instance.order.id}.",
-            "We sincerely apologize for the inconvenience and appreciate your patience.",
-            "Thank you!"
-        ]
-    elif status in DELAY_STATUSES_CUSTOMER:
-        subject = "Delivery Delay Notification"
-        message = [
-            f"Your order shipment #{instance.id} has arrived at the pickup station.",
-            f"Kindly go to the address provided by our partner to pick up your order",
-            "Thank you!"
-        ]
+    # elif status in DELAY_STATUSES:
+    #     subject = "Delivery Delay Notification"
+    #     message = [
+    #         f"There has been a delay with your order #{instance.order.id}.",
+    #         "We sincerely apologize for the inconvenience and appreciate your patience.",
+    #         "Thank you!"
+    #     ]
+    # elif status in DELAY_STATUSES_CUSTOMER:
+    #     subject = "Delivery Delay Notification"
+    #     message = [
+    #         f"Your order shipment #{instance.id} has arrived at the pickup station.",
+    #         f"Kindly go to the address provided by our partner to pick up your order",
+    #         "Thank you!"
+    #     ]
     else:
         return
 
