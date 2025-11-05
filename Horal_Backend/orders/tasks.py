@@ -5,7 +5,7 @@ from .order_utils import (
 )
 from orders.models import OrderItem, OrderShipment, Order
 from sellers.models import SellerKYC, SellerKYCAddress
-from logistics.utils import create_gigl_shipment_for_shipment
+from logistics.utils import create_fez_shipment_for_shipment
 from shops.models import Shop
 from django.utils import timezone
 from datetime import timedelta
@@ -33,12 +33,13 @@ def auto_complete_orders_tasks():
 
 
 @shared_task
-def create_gigl_shipment_on_each_shipment(order_id):
+def create_fez_shipment_on_each_shipment(order_id):
     """
     Task to auto-create GIGL shipments when
     an order is markedas PAID
     """
-       
+    result = None
+
     try:
         order = Order.objects.get(id=order_id)
     except Order.DoesNotExist as e:
@@ -49,21 +50,21 @@ def create_gigl_shipment_on_each_shipment(order_id):
 
     # call GIGL API
     try:
-        result = create_gigl_shipment_for_shipment(str(order.id))
+        result = create_fez_shipment_for_shipment(str(order.id))
         
         if result:
-            logger.info(f"[GIGL] Shipment(s) successfully created for order {order.id}")
+            logger.info(f"[FEZ] Shipment(s) successfully created for order {order.id}")
         else:
-            logger.error(f"[GIGL] Some shipments failed to create for order {order.id}")
+            logger.error(f"[FEZ] Some shipments failed to create for order {order.id}")
         return result
     except Exception as e:
-        logger.error(f"Error creating GIGL shipment for order {order.id}: {str(e)}")
+        logger.error(f"Error creating FEZ shipment for order {order.id}: {str(e)}")
 
     
     if result:
-        logger.info(f"GIGL Shipment created for order {order.id}")
+        logger.info(f"FEZ Shipment created for order {order.id}")
     else:
-        logger.error(f"Failed to create GIGL shipment for order {order.id}")
+        logger.error(f"Failed to create FEZ shipment for order {order.id}")
 
 
 @shared_task

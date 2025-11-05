@@ -576,8 +576,7 @@ print("Database seeding complete.")
 
 import requests
 from wallet.models import Bank
-from station_addresses import stations
-from logistics.utils import sync_stations_from_gigl, sync_station_addresses, register_gigl_webhook_on_table
+from logistics.utils import register_webhook_view
 
 
 def fetch_and_store_bank():
@@ -613,23 +612,15 @@ def fetch_and_store_bank():
         raise Exception(f"Failed to fetch banks: {data}")
     
 
-def sync_gigl_data(station_address):
-    print("Syncing GIGL data")
+def register_webhook():
+    print("Syncing FEZ Delivery Data to Register Webhook")
 
-    print("Starting to sync stations from gigl")
-    sync_stations_from_gigl()
-    print("Done syncing stations from gigl")
-
-    print("Stating to sync experience centre addresses")
-    sync_station_addresses(station_address)
-    print("Done syncing experience center addresses")
-
-    print("About to register webhook for secret")
-    register_gigl_webhook_on_table()
-    print("Registered webhook on table")
+    print("About to register webhook")
+    result = register_webhook_view()
+    print(f"Registered webhook result: {result}")
     
 if __name__ == "__main__":
     fetch_and_store_bank()
     print(f"Bank data fetched successfully")
-    sync_gigl_data(stations)
-    print("Done syncing gigl data")
+    register_webhook()
+    print("Done registering fez webhook data")
