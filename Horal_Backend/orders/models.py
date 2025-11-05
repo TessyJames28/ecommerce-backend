@@ -62,19 +62,25 @@ class OrderShipment(models.Model):
     class Status(models.TextChoices):
         """Enum for order status"""
         SHIPMENT_INITIATED = "shipment_initiated", "Shipment Initiated"
-        SHIPMENT_CREATED = "shipment_created", "Shipment Created (CRT)"
-        SHIPMENT_CREATED_BY_CUSTOMER = "shipment_created_by_customer", "Shipment Created by Customer (MCRT)"
-        AVAILABLE_FOR_PICKUP = "available_for_pickup", "Available for Pick-Up (AD)"
-        SHIPMENT_PICKED_UP = "shipment_picked_up", "Shipment Picked Up (MPIK)"
-        SHIPMENT_ARRIVED_FINAL_DESTINATION = "shipment_arrived_final_destination", "Shipment Arrived Final Destination (MAFD)"
-        OUT_FOR_DELIVERY = "out_for_delivery", "Out for Delivery / With Courier (OFDU)"
-        DELIVERED_TO_CUSTOMER_ADDRESS = "delivered_to_customer_address", "Delivered to Customer Address (MAHD)"
-        DELIVERED_TO_PICKUP_POINT = "delivered_to_pickup_point", "Delivered to Pickup Point (OKC)"
-        DELIVERED_TO_TERMINAL = "delivered_to_terminal", "Delivered to Terminal (OKT)"
-        DELAYED_DELIVERY = "delayed_delivery", "Delayed Delivery (DLD)"
-        DELAYED_PICKUP = "delayed_pickup", "Delayed Pickup (DLP)"
-        DELAYED_PICKUP_BY_CUSTOMER = "delayed_pickup_by_customer", "Delayed Pickup By Customer"
-
+        ACCEPTED_AT_INVENTORY_FACILITY = "accepted_at_inventory_facility", "Accepted At Inventory Facility"
+        ACCEPTED_AT_LAST_MILE_HUB = "accepted_at_last_mile_hub", "Accepted At Last Mile Hub"
+        ASSIGNED_TO_A_RIDER = "assigned_to_a_rider", "Assigned To A Rider"
+        DELIVERED = "delivered", "Delivered"
+        DISPATCHED = "dispatched", "Dispatched"
+        ENROUTE_TO_LAST_MILE_HUB = "enroute_to_last_mile_hub", "Enroute To Last Mile Hub"
+        ENROUTE_TO_FIRST_MILE_HUB = "enroute_to_first_mile_hub", "Enroute To First Mile Hub"
+        FAILED_PICKUP = "failed_pickup", "Failed Pick-Up"
+        IN_RETURN_TO_CUSTOMER = "in_return_to_customer", "In Return To Customer"
+        IN_RETURN_TO_FIRST_MILE_HUB = "in_return_to_first_mile_hub", "In Return To First Mile Hub"
+        IN_RETURN_TO_LAST_MILE_HUB = "in_return_to_last_mile_hub", "In Return To Last Mile Hub"
+        PENDING_PICKUP = "pending_pickup", "Pending Pick-Up"
+        PENDING_RECIPIENT_PICKUP = "pending_recipient_pickup", "Pending Recipient Pick-Up"
+        PICKED_UP = "picked_up", "Picked-Up"
+        REJECTED_AT_INVENTORY_FACILITY = "rejected_at_inventory_facility", "Rejected At Inventory Facility"
+        REJECTED_AT_LAST_MILE_HUB = "rejected_at_last_mile_hub", "Rejected At Last Mile Hub"
+        RETURNED = "returned", "Returned"
+        RETURNED_TO_FIRST_MILE_HUB = "returned_to_first_mile_hub", "Returned To First Mile Hub"
+        RETURNED_TO_LAST_MILE_HUB = "returned_to_last_mile_hub", "Returned To Last Mile Hub"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="shipments")
@@ -89,10 +95,6 @@ class OrderShipment(models.Model):
     total_weight = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     delivered_at = models.DateTimeField(null=True, blank=True)
-
-    # Set delivery and pickup stations
-    # seller_station = models.PositiveIntegerField()
-    # buyer_station = models.PositiveIntegerField()
 
     # reminder flags for the shipment
     reminder_2h_sent = models.BooleanField(default=False, db_index=True)
@@ -204,37 +206,24 @@ class OrderReturnRequest(models.Model):
         order_item.save(update_fields=["is_return_requested", "is_returned"])
 
 
-GIGL_TO_ORDER_STATUS = {
-    'CRT': OrderShipment.Status.SHIPMENT_CREATED,
-    'MCRT': OrderShipment.Status.SHIPMENT_CREATED_BY_CUSTOMER,
-    'AD': OrderShipment.Status.AVAILABLE_FOR_PICKUP,
-    'MPIK': OrderShipment.Status.SHIPMENT_PICKED_UP,
-    'OFDU': OrderShipment.Status.OUT_FOR_DELIVERY,
-    'MAFD': OrderShipment.Status.SHIPMENT_ARRIVED_FINAL_DESTINATION,
-    'MAHD': OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
-    'OKC': OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
-    'OKT': OrderShipment.Status.DELIVERED_TO_TERMINAL,
-    'DLD': OrderShipment.Status.DELAYED_DELIVERY,
-    'DLP': OrderShipment.Status.DELAYED_PICKUP,
-    'DUBC': OrderShipment.Status.DELAYED_PICKUP_BY_CUSTOMER
+# maps external logistics status label to internal enum value
+FEZ_STATUS_MAP = {
+    "Accepted At Inventory Facility": OrderShipment.Status.ACCEPTED_AT_INVENTORY_FACILITY,
+    "Accepted At Last Mile Hub": OrderShipment.Status.ACCEPTED_AT_LAST_MILE_HUB,
+    "Assigned To A Rider": OrderShipment.Status.ASSIGNED_TO_A_RIDER,
+    "Delivered": OrderShipment.Status.DELIVERED,
+    "Dispatched": OrderShipment.Status.DISPATCHED,
+    "Enroute To Last Mile Hub": OrderShipment.Status.ENROUTE_TO_LAST_MILE_HUB,
+    "Enroute To First Mile Hub": OrderShipment.Status.ENROUTE_TO_FIRST_MILE_HUB,
+    "Failed Pick-Up": OrderShipment.Status.FAILED_PICKUP,
+    "In Return To Customer": OrderShipment.Status.IN_RETURN_TO_CUSTOMER,
+    "In Return To First Mile Hub": OrderShipment.Status.IN_RETURN_TO_FIRST_MILE_HUB,
+    "In Return To Last Mile Hub": OrderShipment.Status.IN_RETURN_TO_LAST_MILE_HUB,
+    "Pending Pick-Up": OrderShipment.Status.PENDING_PICKUP,
+    "Picked-Up": OrderShipment.Status.PICKED_UP,
+    "Rejected At Inventory Facility": OrderShipment.Status.REJECTED_AT_INVENTORY_FACILITY,
+    "Rejected At Last Mile Hub": OrderShipment.Status.REJECTED_AT_LAST_MILE_HUB,
+    "Returned": OrderShipment.Status.RETURNED,
+    "Returned To First Mile Hub": OrderShipment.Status.RETURNED_TO_FIRST_MILE_HUB,
+    "Returned To Last Mile Hub": OrderShipment.Status.RETURNED_TO_LAST_MILE_HUB,
 }
-
-
-PICKUP_STATUSES = [
-    OrderShipment.Status.AVAILABLE_FOR_PICKUP,
-]
-
-DELIVERED_STATUSES = [
-    OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
-    OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
-    OrderShipment.Status.DELIVERED_TO_TERMINAL,
-]
-
-DELAY_STATUSES = [
-    OrderShipment.Status.DELAYED_DELIVERY,
-]
-
-DELAY_STATUSES_CUSTOMER = [
-    OrderShipment.Status.DELAYED_PICKUP,
-    OrderShipment.Status.DELAYED_PICKUP_BY_CUSTOMER,
-]
