@@ -295,12 +295,44 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
 
 
-# GIGL Setup
-GIGL_BASE_URL = env('GIGL_BASE_URL')
-GIGL_USERNAME = env('GIGL_USERNAME')
-GIGL_PASSWORD = env('GIGL_PASSWORD')
-GIGL_WEBHOOK = env('GIGL_WEBHOOK')
-HORAL_GIGL_WEBHOOK = env('HORAL_GIGL_WEBHOOK')
+# CACHES = {
+#     "default": {
+#         "BACKEND": "django_redis.cache.RedisCache",
+#         "LOCATION": f"{url.scheme}://{url.hostname}:{url.port}/0",
+#         "OPTIONS": {
+#             "CLIENT_CLASS": "django_redis.client.DefaultClient",
+#             "PASSWORD": url.password,
+#             "SSL": url.scheme == "rediss",
+#         }
+#     }
+# }
+
+
+# # Celery setting
+# import ssl
+
+# # Change to its redis DB on production with custom redis setup
+# CELERY_BROKER_URL = env("REDIS_URL")
+
+# CELERY_BROKER_USE_SSL = {
+#     # Change to SSL.CERT_REQUIRED when using own trusted custom redis
+#     'ssl_cert_reqs': None # or ssl.CERT_NONE 
+# }
+
+# CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# CELERY_RESULT_BACKEND = 'django-db'
+# CELERY_ACCEPT_CONTENT = ['json']
+# CELERY_TASK_SERIALIZER = 'json'
+# CELERY_RESULT_SERIALIZER = 'json'
+# CELERY_TIMEZONE = 'UTC' 
+
+
+# FEZ Delivery Setup
+FEZ_BASE_URL = env('FEZ_BASE_URL')
+FEZ_USERNAME = env('FEZ_USERNAME')
+FEZ_PASSWORD = env('FEZ_PASSWORD')
+HORAL_FEZ_WEBHOOK = env('HORAL_FEZ_WEBHOOK')
 
 
 ROOT_URLCONF = 'Horal_Backend.urls'
