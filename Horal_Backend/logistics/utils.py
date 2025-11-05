@@ -2,19 +2,14 @@ from django.conf import settings
 from .fez_api import FEZDeliveryAPI
 from sellers.models import SellerKYC, SellerKYCAddress
 from decimal import Decimal
-from orders.models import OrderShipment
-from typing import Optional
+from datetime import date
 import googlemaps, math
 from collections import defaultdict
 from django.utils.timezone import now
 from products.models import ProductIndex
-from .models import GIGLShipment
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from django.core.exceptions import ValidationError
-import base64, hashlib, json
 from django.core.cache import cache
-from django.db.models import Q
-from Crypto.Cipher import AES
 import logging, traceback
 
 logger = logging.getLogger(__name__)
@@ -112,8 +107,9 @@ def _extract_weight_kg(item, default_kg: float=1.0) -> float:
     weight_value = str(weight_value).lower()
 
     total_weight_kg = float(weight_unit) * quantity * conversion_to_kg[weight_value]
+    total_weight_int = math.ceil(total_weight_kg)
 
-    return total_weight_kg
+    return total_weight_int
 
 
 
@@ -147,9 +143,11 @@ def build_gigl_payload_for_item(
     uniqueID: str,
     BatchID: str,
     itemDescription: str,
-    additionalDetails: str,
     weight: int,
     pickUpAddress: str,
+    senderName: str,
+    senderPhone: str,
+    senderAddress: str,
     pickUpState: str,
     valueOfItem: str,
     waybillNumber: str,
@@ -161,9 +159,6 @@ def build_gigl_payload_for_item(
     """
 
     payload = {
-        "PreShipmentMobileId": 0,
-
-        # Sender / Receiver (flat fields)
         "recipientAddress": recipientAddress,
         "recipientState": recipientState,
         "recipientName": recipientName,
@@ -172,11 +167,13 @@ def build_gigl_payload_for_item(
         "uniqueID": uniqueID,
         "BatchID": BatchID,
         "itemDescription": itemDescription,
-        "additionalDetails": additionalDetails,
         "valueOfItem": valueOfItem,
         "weight": weight,
         "pickUpState": pickUpState,
         "pickUpAddress": pickUpAddress,
+        "senderName": senderName,
+        "senderPhone": senderPhone,
+        "senderAddress": senderAddress,
         "waybillNumber": waybillNumber,
     }
 
@@ -197,16 +194,65 @@ def group_order_items_by_seller(order):
             
             # Extract weight
             item_weight = _extract_weight_kg(item)
-        
             # Store order info
             seller_orders[seller]["items"].append(item)
             seller_orders[seller]["weight"] += item_weight
             seller_orders[seller]["seller"] = seller
-        
+
         return seller_orders
     except Exception as e:
+        import traceback
         logger.error(f"Error grouping order items by seller: [{order}]\nerror: {str(e)}")
-        raise ValidationError(f"Error grouping order items by seller: {str(e)}")
+        raise ValidationError(f"Error grouping order items by seller: {str(e)} {traceback.format_exc()}")
+
+
+# def create_fez_shipment_for_shipment(order_id):
+#     """
+#     Create shipments in FEZ Delivery for a single order.
+#     Returns True if all shipments were successfully created and updated, else False.
+#     """
+#     from orders.models import Order, OrderShipment
+#     api = FEZDeliveryAPI()
+
+#     # Get the order instance
+#     try:
+#         order = Order.objects.get(id=order_id)
+#     except Order.DoesNotExist:
+#         logger.warning(f"Order not found for: {order_id}")
+#         return False
+
+#     # Build shipment payloads
+#     shipment_payloads = create_shipment_payload(order)
+
+#     all_success = True  # track overall success
+
+#     for shipment, payload in shipment_payloads:
+#         try:
+#             if not shipment.fez_order_id:
+#                 logger.info(f"Creating shipment for {shipment.id} with payload {payload}")
+#                 result = api.create_shipment_order(payload)
+#                 logger.info(f"FEZ Delivery response for shipment {shipment.id}: {result}")
+
+#                 if result.get("status", "").lower() == "success":
+#                     order_nums = result.get("orderNos", {})
+
+#                     if order_nums:
+#                         for key, val in order_nums.items():
+#                             if key == shipment.unique_id:
+#                                 shipment.fez_order_id = val
+#                                 shipment.status = OrderShipment.Status.SHIPMENT_INITIATED
+#                                 shipment.save(update_fields=["fez_order_id", "status"])
+#                                 logger.info(f"Shipment {shipment.id} saved with fez_order_id: [{val}]")
+#                     else:
+#                         logger.warning(f"No order id returned for shipment {shipment.id}. Response: {result}")
+#                         all_success = False
+#             else:
+#                 logger.info(f"Shipment {shipment.id} already has fez order id: [{shipment.fez_order_id}], skipping creation.")
+#         except Exception as e:
+#             logger.warning(f"Error creating shipment {shipment.id}: {e}")
+#             all_success = False
+
+#     return all_success
 
 
 def create_fez_shipment_for_shipment(order_id):
@@ -217,42 +263,51 @@ def create_fez_shipment_for_shipment(order_id):
     from orders.models import Order, OrderShipment
     api = FEZDeliveryAPI()
 
-    # Get the order instance
     try:
         order = Order.objects.get(id=order_id)
     except Order.DoesNotExist:
         logger.warning(f"Order not found for: {order_id}")
         return False
 
-    # Build shipment payloads
     shipment_payloads = create_shipment_payload(order)
 
-    all_success = True  # track overall success
+    shipments = []
+    payloads = []
 
     for shipment, payload in shipment_payloads:
-        try:
-            if not shipment.fez_order_id:
-                logger.info(f"Creating shipment for {shipment.id} with payload {payload}")
-                result = api.create_shipment_order(payload)
-                logger.info(f"FEZ Delivery response for shipment {shipment.id}: {result}")
+        if not shipment.fez_order_id:
+            shipments.append(shipment)
+            payloads.append(payload)
+        else:
+            logger.info(f"Shipment {shipment.id} already has fez order id: [{shipment.fez_order_id}], skipping.")
 
-                if result.get("status", "").lower() == "success":
-                    order_nums = result.get("orderNos", {})
+    if not payloads:
+        logger.info("No new shipments to create.")
+        return True
 
-                    if order_nums:
-                        for val in list(order_nums.values()):
-                            shipment.fez_order_id = val
-                            shipment.status = OrderShipment.Status.SHIPMENT_INITIATED
-                            shipment.save(update_fields=["fez_order_id", "status"])
-                            logger.info(f"Shipment {shipment.id} saved with fez_order_id: [{val}]")
-                    else:
-                        logger.warning(f"No order id returned for shipment {shipment.id}. Response: {result}")
-                        all_success = False
+    # Bulk create request
+    result = api.create_shipment_order(payloads)
+    logger.info(f"FEZ Delivery bulk response: {result}")
+
+    all_success = True
+
+    if result.get("status", "").lower() == "success":
+        order_map = result.get("orderNos", {})
+
+        for shipment in shipments:
+            uid = shipment.unique_id
+
+            if uid in order_map:
+                shipment.fez_order_id = order_map[uid]
+                shipment.status = OrderShipment.Status.SHIPMENT_INITIATED
+                shipment.save(update_fields=["fez_order_id", "status"])
+                logger.info(f"Shipment {shipment.id} saved with fez_order_id: {order_map[uid]}")
             else:
-                logger.info(f"Shipment {shipment.id} already has fez order id: [{shipment.fez_order_id}], skipping creation.")
-        except Exception as e:
-            logger.warning(f"Error creating shipment {shipment.id}: {e}")
-            all_success = False
+                logger.warning(f"FEZ did not return order id for shipment {shipment.id}, unique_id={uid}")
+                all_success = False
+    else:
+        logger.warning(f"FEZ bulk shipment creation failed: {result}")
+        return False
 
     return all_success
 
@@ -276,20 +331,22 @@ def create_shipment_payload(order):
             
             # Compute totals
             item_total_price = _safe_str(shipment.total_price)
-            total_weight = shipment.total_weight
+            total_weight = int(shipment.total_weight)
             unique_id = shipment.unique_id
             batch_id = shipment.batch_id
             waybill_number = shipment.waybill_number
 
             # Build seller address string
             seller_address, seller_state = _seller_full_address(seller_kyc)
-            additional_details = (
-                f"Seller / Pickup person name: {seller_kyc.first_name} {seller_kyc.last_name}\n"
-                f"Seller phone number: {_safe_str(seller_kyc.mobile)}"
-            )
+            seller_name = f"{seller_kyc.first_name} {seller_kyc.last_name}"
+            seller_phone_number = f"{_safe_str(seller_kyc.mobile)}"
+            if seller_state.lower() == "abuja":
+                seller_state = "FCT"
 
             # Build buyer address string
             buyer_address, buyer_state = _buyer_full_address(order)
+            if buyer_state.lower() == "abuja":
+                buyer_state = "FCT"
 
             titles = []
 
@@ -312,11 +369,13 @@ def create_shipment_payload(order):
                 uniqueID=unique_id,
                 BatchID=batch_id,
                 itemDescription=description,
-                additionalDetails=additional_details,
                 valueOfItem=item_total_price,
                 weight=total_weight,
                 pickUpState=seller_state,
                 pickUpAddress=seller_address,
+                senderName=seller_name,
+                senderPhone=seller_phone_number,
+                senderAddress=seller_address,
                 waybillNumber=waybill_number
             )
             shipments.append((shipment, payload))
@@ -344,13 +403,17 @@ def create_price_payload(order):
                 raise ValueError(f"Seller KYC not found for seller {shipment.seller.user} when creating price payload")
             
             # Compute totals
-            total_weight = shipment.total_weight
+            total_weight = int(shipment.total_weight)
 
             # Build seller address string
             _, seller_state = _seller_full_address(seller_kyc)
+            if seller_state.lower() == "abuja":
+                seller_state = "FCT"
 
             # Build buyer address string
             _, buyer_state = _buyer_full_address(order)
+            if buyer_state.lower() == "abuja":
+                buyer_state = "FCT"
 
             # Build shipment payload
             payload = {
@@ -390,10 +453,7 @@ def calculate_shipping_for_order(order):
             # Ensure result is valid and contains deliveryPrice
             if result.get("status", "").lower() == "success":
                 cost_list = result.get("Cost", [])
-                if cost_list and isinstance(cost_list, list):
-                    delivery_price = cost_list[0].get("cost")
-                else:
-                    delivery_price = None
+                delivery_price = cost_list.get("cost")
 
             if not delivery_price or Decimal(str(delivery_price)) <= 0:
                 logger.error(f"No valid shipping price returned for shipment {shipment.id}. Result: {result}")
@@ -408,10 +468,9 @@ def calculate_shipping_for_order(order):
             # Apply shipping price back to each shipment item
             shipment.shipping_cost = price
             shipment.save(update_fields=["shipping_cost"])
-
             updated_items.append({
                 "shipment_id": str(shipment.id),
-                "tracking_number": str(shipment.tracking_number),
+                "waybill_number": str(shipment.waybill_number),
                 "total_weight": f"{shipment.total_weight}KG",
                 "shipping_cost": str(shipment.shipping_cost),
             })
@@ -424,7 +483,7 @@ def calculate_shipping_for_order(order):
         raise ValidationError(f"Error processing shipping cost: {str(e)}")
 
 
-def get_order_details(order_id):
+def get_single_order_details(order_id):
     """
     Function to retrieve the details of a single order
     """
@@ -544,6 +603,63 @@ def estimate_shipment_delivery_time(order):
         raise ValidationError(f"Error getting delivery estimate: {str(e)}")
 
 
+def track_a_single_order_statuses(order):
+    """
+    Function that create payload to track a single user orders
+    return shipment details with delivery statuses
+    """
+    from orders.models import Order
+    try:
+        api = FEZDeliveryAPI()
+        order_shipments = []
+        order_id = order.id
+
+        start_date = order.updated_at.date().isoformat()
+        end_date = date.today().isoformat()
+        buyer_name = order.user.full_name
+        buyer_phone_num = order.phone_number
+
+        # Build payload
+        payload = {
+            "startDate": start_date,
+            "recipientName": buyer_name,
+            "recipientPhone": buyer_phone_num,
+            "endDate": end_date
+        }
+
+        result = api.track_entire_order(payload)
+
+        if result.get("status", "").lower() == "success":
+            order_list = result.get("orders", {}).get("data", [])
+
+            for item in order_list:
+                fez_order_id = item.get("orderNo", "").strip()
+                
+                for local_shipment in order.shipments.select_related("order__user", "seller"):
+                    if local_shipment.fez_order_id == fez_order_id:
+                        # Create a dict for the order status
+                        shipment = {
+                            "order_id": order_id,
+                            "shipment_id": local_shipment.id,
+                            "fez_order_id": fez_order_id,
+                            "buyer_name": item.get("recipientName", "").strip(),
+                            "shipment_status": item.get("orderStatus", "").strip(),
+                            "shipment_cost": item.get("cost", "").strip(),
+                            "created_at": item.get("orderDate", "").strip(),
+                        }
+
+                        order_shipments.append(shipment)
+        else:
+            logger.warning(f"Failed to get shipment status for order [{order.id}]: {result}")
+
+        return order_shipments
+    
+    except Exception as e:
+        logger.error(f"Error retrieving shipment status for order: [{order}]\nerror: {str(e)}")
+        raise ValidationError(f"Error retrieving shipment status for order: {str(e)}")
+    
+
+
 def register_webhook_view():
     """Function to register horal webhook on FEZ Delivery platform"""
     try:
@@ -580,65 +696,3 @@ def register_webhook_view():
     except Exception as e:
         logger.error(f"Error registering webhook on FEZ platform: {str(e)}")
         raise ValidationError(f"Error registering webhook: {str(e)}")
-
-
-def save_gigl_webhook_data(decrypted_payload: str):
-    """
-    Save or update shipment data from decrypted webhook payload
-    """
-    from orders.models import OrderShipment, GIGL_TO_ORDER_STATUS
-    try:
-        data = json.loads(decrypted_payload)
-    except json.JSONDecodeError:
-        logger.error("Invalid JSON payload")
-        return
-    
-
-    # Identify the order item the data belong to
-    waybill = data.get("Waybill")
-    if not waybill:
-        raise ValueError("Webhook payload missing Waybill")
-    
-    # Try to get the order item
-    try:
-        order_shipment= OrderShipment.objects.get(tracking_number=waybill)
-    except OrderShipment.DoesNotExist:
-        logger.warning(f"OrderShipment with tracking number {waybill} does not exist")
-        return
-    
-    # Map GIGL status to OrderItem status
-    gigl_status_code = data.get("StatusCode")
-    order_status = GIGL_TO_ORDER_STATUS.get(gigl_status_code)
-
-    delivery_status = ['MAHD', 'OKC', 'OKT']
-
-    # Create or update shipment
-    try:
-        shipment, created = GIGLShipment.objects.update_or_create(
-            waybill=data.get('Waybill'),
-            defaults={
-                "order_shipment": order_shipment,
-                "sender_address": data.get("SenderAddress", ""),
-                "receiver_address": data.get("ReceiverAddress", ""),
-                "location": data.get("Location"),
-                "status": data.get("Status", ""),
-                "status_code": data.get("StatusCode"),
-            }
-        )
-    except Exception as e:
-        logger.error(f"Failed to update GIGLShipment for waybill {waybill}: {str(e)}")
-        return
-
-    # update order item status if mapped
-    if gigl_status_code and order_shipment.status != order_status:
-        order_shipment.status = order_status
-        if gigl_status_code in delivery_status:
-            order_shipment.delivered_at = now()
-            for item in order_shipment.items.all():
-                item.delivered_at = now()
-                item.save(update_fields=["delivered_at"])
-        order_shipment.save(update_fields=["status", "delivered_at"])
-        logger.info(f"OrderItem {order_shipment.id} status updated to {order_status}")
-        
-
-    return shipment
