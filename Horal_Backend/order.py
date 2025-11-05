@@ -25,17 +25,24 @@ from ratings.models import UserRating
 
 shipment_status = [
     OrderShipment.Status.SHIPMENT_INITIATED,
-    OrderShipment.Status.SHIPMENT_CREATED,
-    OrderShipment.Status.SHIPMENT_CREATED_BY_CUSTOMER,
-    OrderShipment.Status.AVAILABLE_FOR_PICKUP,
-    OrderShipment.Status.SHIPMENT_PICKED_UP,
-    OrderShipment.Status.OUT_FOR_DELIVERY,
-    OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
-    OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
-    OrderShipment.Status.DELIVERED_TO_TERMINAL,
-    OrderShipment.Status.DELAYED_DELIVERY,
-    OrderShipment.Status.DELAYED_PICKUP,
-    OrderShipment.Status.DELAYED_PICKUP_BY_CUSTOMER
+    OrderShipment.Status.ACCEPTED_AT_INVENTORY_FACILITY,
+    OrderShipment.Status.ACCEPTED_AT_LAST_MILE_HUB,
+    OrderShipment.Status.ASSIGNED_TO_A_RIDER,
+    OrderShipment.Status.DELIVERED,
+    OrderShipment.Status.DISPATCHED,
+    OrderShipment.Status.ENROUTE_TO_LAST_MILE_HUB,
+    OrderShipment.Status.ENROUTE_TO_FIRST_MILE_HUB,
+    OrderShipment.Status.FAILED_PICKUP,
+    OrderShipment.Status.IN_RETURN_TO_CUSTOMER,
+    OrderShipment.Status.IN_RETURN_TO_FIRST_MILE_HUB,
+    OrderShipment.Status.IN_RETURN_TO_LAST_MILE_HUB,
+    OrderShipment.Status.PENDING_PICKUP,
+    OrderShipment.Status.PICKED_UP,
+    OrderShipment.Status.REJECTED_AT_INVENTORY_FACILITY,
+    OrderShipment.Status.REJECTED_AT_LAST_MILE_HUB,
+    OrderShipment.Status.RETURNED,
+    OrderShipment.Status.RETURNED_TO_FIRST_MILE_HUB,
+    OrderShipment.Status.RETURNED_TO_LAST_MILE_HUB,
 ]
 
 user = CustomUser.objects.get(email="user11@mail.com")
@@ -46,7 +53,7 @@ print(f"[INFO] Total available product variants: {all_variants.count()}")
 
 def create_twelve_orders():
     # Create 12 orders (one per shipment status)
-    for i in range(12):
+    for i in range(19):
         print(f"\n[STEP] Creating order {i+1}/12 with shipment status: {shipment_status[i]}")
 
         # Create cart
@@ -111,6 +118,9 @@ def create_twelve_orders():
                 total_price=order.total_amount,
                 shipping_cost=order.shipping_total,
                 total_weight=0.5 * len(items),
+                unique_id = f"HOR_{str(uuid.uuid4())[:10]}",
+                batch_id = f"HBAT_{str(uuid.uuid4())[:10]}",
+                waybill_number = f"HTRC_{str(uuid.uuid4())[:10]}",
             )
             print(f"      -> Shipment created (Tracking: {shipment.tracking_number}, Status: {shipment.status})")
 
@@ -119,11 +129,7 @@ def create_twelve_orders():
             print(f"      -> OrderItem linked to shipment {shipment.tracking_number}")
             
             # Handle delivered shipments
-            if shipment.status in [
-                OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
-                OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
-                OrderShipment.Status.DELIVERED_TO_TERMINAL
-            ]:
+            if shipment.status == OrderShipment.Status.DELIVERED:
                 days_ago = random.choice([0, 1, 2, 3, 4, 5])
                 delivered_at = timezone.now() - timezone.timedelta(days=days_ago)
 
