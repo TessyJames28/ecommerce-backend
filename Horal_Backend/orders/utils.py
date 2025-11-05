@@ -44,6 +44,7 @@ def create_shipments_for_order(order):
     Returns list of created shipments.
     """
     from .models import OrderShipment
+
     grouped = group_order_items_by_seller(order)
     shipments = []
 
@@ -59,7 +60,10 @@ def create_shipments_for_order(order):
             seller=seller,
             quantity=total_quantity,
             total_price=total_price,
-            total_weight=total_weight
+            total_weight=total_weight,
+            unique_id = f"HOR_{str(uuid.uuid4())[:10]}",
+            batch_id = f"HBAT_{str(uuid.uuid4())[:10]}",
+            waybill_number = f"HTRC_{str(uuid.uuid4())[:10]}",
         )
 
         # Attach items to this shipment
