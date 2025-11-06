@@ -31,7 +31,7 @@ from products.models import (
     VehicleImage, FashionImage, ElectronicsImage, FoodImage,
     HealthAndBeautyImage, AccessoryImage, ChildrenImage, GadgetImage
 )
-from logistics.models import Logistics, GIGLExperienceCentre, GIGLShipment
+from logistics.models import Logistics
 from django.conf import settings
 
 from products.utils import image_model_map
@@ -118,8 +118,6 @@ YearlyShopSales.objects.all().delete()
 SellersBankDetails.objects.all().delete()
 SellerTransactionHistory.objects.all().delete()
 Payout.objects.all().delete()
-GIGLShipment.objects.all().delete()
-GIGLExperienceCentre.objects.all().delete()
 
 # Create categories and subcategories
 category_map = {}
