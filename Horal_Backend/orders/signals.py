@@ -94,7 +94,7 @@ def handle_shipment_delivered(sender, shipment, reminder=None, **kwargs):
                 "We would love to hear your thoughts on your recent purchase."
             ]
 
-    send_email_task.delay(
+    send_email_task(
         recipient=recipient,
         subject=heading,
         from_email=from_email,
@@ -139,7 +139,7 @@ def send_return_received_email(sender, instance, created, **kwargs):
         ]
         footer_note = "Note: All further correspondence will be via this email thread"
 
-        send_email_task.delay(
+        send_email_task(
             recipient=instance.order_item.order.user.email,
             subject=subject,
             from_email=f"Horal Returns <returns@{settings.MAILGUN_DOMAIN}>",
@@ -177,7 +177,7 @@ def create_fez_shipment_on_paid(sender, instance: Order, created, **kwargs):
     if created or instance.status != Order.Status.PAID:
         return
     
-    create_fez_shipment_on_each_shipment.delay(str(instance.id))
+    create_fez_shipment_on_each_shipment(str(instance.id))
 
     from_email = f"Horal Order <{settings.DEFAULT_FROM_EMAIL}>"
     order_items = []
@@ -219,7 +219,7 @@ def create_fez_shipment_on_paid(sender, instance: Order, created, **kwargs):
             "Here is your receipt:"
         ]
 
-    send_email_task.delay(
+    send_email_task(
         recipient=instance.user.email,
         subject=subject,
         from_email=from_email,
@@ -271,7 +271,7 @@ def create_fez_shipment_on_paid(sender, instance: Order, created, **kwargs):
             "Here are the items you need to prepare:"
         ]
 
-        send_email_task.delay(
+        send_email_task(
             recipient=data["email"],
             subject=seller_subject,
             from_email=from_email,
@@ -378,7 +378,7 @@ def send_order_status_email(sender, instance, created, **kwargs):
         return
 
 
-    send_email_task.delay(
+    send_email_task(
         recipient=recipient,
         subject=subject,
         from_email=from_email,

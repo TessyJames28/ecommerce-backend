@@ -17,7 +17,7 @@ def welcome_new_user(sender, instance, created, **kwargs):
     if not created or instance.is_temporary:
         return
 
-    send_email_task.delay(
+    send_email_task(
         recipient=instance.email,
         subject="Welcome to Horal",
         from_email=f"Horal <{settings.DEFAULT_FROM_EMAIL}>",
@@ -66,7 +66,7 @@ def welcome_new_sellers(sender, instance, created, **kwargs):
     recipient = instance.email
     subject = "Welcome to Horal Seller Team"
 
-    send_email_task.delay(
+    send_email_task(
         recipient=recipient,
         subject=subject,
         from_email=f"Horal <{settings.DEFAULT_FROM_EMAIL}>",
@@ -112,7 +112,7 @@ def password_change_alert(sender, instance, **kwargs):
             "url": "https://www.horal.ng/forgot-password/"
         }
 
-        send_email_task.delay(
+        send_email_task(
             recipient=instance.email,
             subject=subject,
             from_email=f"Horal <{settings.DEFAULT_FROM_EMAIL}>",
