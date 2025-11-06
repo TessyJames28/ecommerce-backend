@@ -114,17 +114,50 @@ class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True, source='order_items')
     user_email = serializers.SerializerMethodField()
     shipping_address = serializers.DictField(write_only=True, required=False)
+    shipment_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
         fields = [
-            'id', 'user', 'user_email', 'created_at', 'updated_at', 'status',
+            'id', 'user', 'user_email', 'created_at', 'updated_at', 'status', 'shipment_status',
             'product_total', 'shipping_total', 'total_amount', 'items', 'shipping_address'
         ]
         read_only_fields = ['user', 'product_total', 'shipping_cost', 'total_amount', 'status', 'created_at', 'items', 'user_email']
 
     def get_user_email(self, obj):
         return obj.user.email
+    
+
+    def get_shipment_status(self, obj):
+        """
+        The function track the shipment status for all shipments
+        link to a single order:
+            - If all shipments are delivered, return "Delivered
+            - If all shipments are not delivered, return "Ongoing"
+            - If all items linked to the order has is_completed=True, return "Completed"
+        """
+        shipment_statuses = [
+            OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
+            OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
+            OrderShipment.Status.DELIVERED_TO_TERMINAL
+        ]
+
+        shipments = obj.shipments.all()
+        if not shipments.exists():
+            return "No Shipments"
+
+        all_delivered = all(
+            shipment.status in shipment_statuses
+            for shipment in shipments
+        )
+        all_completed = all(item.is_completed for item in obj.order_items.all())
+
+        if all_completed:
+            return "Completed"
+        elif all_delivered:
+            return "Delivered"
+        else:
+            return "Ongoing"
 
     
     def to_representation(self, instance):
