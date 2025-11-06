@@ -45,7 +45,7 @@ shipment_status = [
     OrderShipment.Status.RETURNED_TO_LAST_MILE_HUB,
 ]
 
-user = CustomUser.objects.get(email="user11@mail.com")
+user = CustomUser.objects.get(email="user25@mail.com")
 print(f"[INFO] Using user: {user.email}")
 
 all_variants = ProductVariant.objects.all()
@@ -54,7 +54,7 @@ print(f"[INFO] Total available product variants: {all_variants.count()}")
 def create_twelve_orders():
     # Create 12 orders (one per shipment status)
     for i in range(19):
-        print(f"\n[STEP] Creating order {i+1}/12 with shipment status: {shipment_status[i]}")
+        print(f"\n[STEP] Creating order {i+1}/19 with shipment status: {shipment_status[i]}")
 
         # Create cart
         cart = Cart.objects.create(user=user)
@@ -112,7 +112,6 @@ def create_twelve_orders():
             shipment = OrderShipment.objects.create(
                 order=order,
                 seller=item.shop.owner if item.shop else None,
-                tracking_number=str(uuid.uuid4()).replace("-", "").upper()[:6],
                 status=shipment_status[i],
                 quantity=len(items),
                 total_price=order.total_amount,
@@ -122,11 +121,11 @@ def create_twelve_orders():
                 batch_id = f"HBAT_{str(uuid.uuid4())[:10]}",
                 waybill_number = f"HTRC_{str(uuid.uuid4())[:10]}",
             )
-            print(f"      -> Shipment created (Tracking: {shipment.tracking_number}, Status: {shipment.status})")
+            print(f"      -> Shipment created (Tracking: {shipment.waybill_number}, Status: {shipment.status})")
 
             order_item.shipment = shipment
             order_item.save(update_fields=["shipment"])
-            print(f"      -> OrderItem linked to shipment {shipment.tracking_number}")
+            print(f"      -> OrderItem linked to shipment {shipment.waybill_number}")
             
             # Handle delivered shipments
             if shipment.status == OrderShipment.Status.DELIVERED:
