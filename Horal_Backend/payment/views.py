@@ -38,19 +38,15 @@ class InitializeTransaction(APIView):
         """Function to handle payment initialization on paystack"""
         email = request.data.get("email")
         order_id = request.data.get('order_id') # passed from frontend
-        platform = request.data.get('platform')
+        # platform = request.data.get('platform')
+        redirect_url = request.data.get('redirect_url')
 
-        if platform not in ['web', 'mobile']:
+        if not redirect_url:
             return JsonResponse({
                 "status": "error",
                 "status_code": status.HTTP_400_BAD_REQUEST,
-                "message": "Invalid platform specified"
+                "message": "Please provide a redirect URL"
             }, status=status.HTTP_400_BAD_REQUEST)
-        
-        if platform == 'mobile':
-            redirect_url = settings.MOBILE_REDIRECT_URL
-        elif platform == 'web':
-            redirect_url = settings.WEB_REDIRECT_URL
 
         try:
             order = Order.objects.get(id=order_id, user__email=email)
