@@ -354,6 +354,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'Horal_Backend.wsgi.application'
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
+
 # Postgres DB on render
 DATABASES = {
     'default': env.db('DATABASE_URL'),
