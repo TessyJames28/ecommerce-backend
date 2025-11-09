@@ -238,10 +238,26 @@ class UserLoginView(GenericAPIView):
             user = serializer.validated_data['user']
 
         except ValidationError as e:
+            detail = e.detail
+
+            if isinstance(detail, list):
+                msg = detail[0]
+            elif isinstance(detail, dict):
+                # Take first value
+                key = next(iter(detail))
+                val = detail[key]
+
+                if isinstance(val, list):
+                    msg = val[0]
+                else:
+                    msg = val
+            else:
+                msg = str(detail)
+
             return Response({
                 "status": "error",
                 "status_code": status.HTTP_400_BAD_REQUEST,
-                "message": e.detail
+                "message": msg
             }, status=status.HTTP_400_BAD_REQUEST)
         
         except ObjectDoesNotExist:
