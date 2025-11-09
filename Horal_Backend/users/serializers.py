@@ -87,7 +87,7 @@ class LoginSerializer(serializers.ModelSerializer):
             # Safely check password
             try:
                 if not user.check_password(password):
-                    raise serializers.ValidationError("Invalid password.")
+                    raise serializers.ValidationError("Invalid email or password.")
             except TypeError:
                 raise serializers.ValidationError({
                     "This account does not have a password set. Please use Google Sign-In."
