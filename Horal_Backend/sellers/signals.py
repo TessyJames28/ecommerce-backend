@@ -7,6 +7,7 @@ from django.core.cache import cache
 from notifications.emails import (
     send_kyc_final_status_email,
     send_kyc_info_completed_email,
+    send_seller_registration_email,
 )
 
 
@@ -40,11 +41,12 @@ def trigger_related_kyc_verification(sender, instance, update_fields=None, **kwa
 @receiver(post_save, sender=SellerKYC)
 def notify_kyc_info_completed(sender, instance, created, **kwargs):
     """Signal to send notification on kyc completion"""
+    print("notify_kyc_info_completed called")
     kyc = instance
     if (
         kyc.address
-        and kyc.socials
         and kyc.nin
+        and (not kyc.socials or kyc.socials)
         and (not kyc.cac or kyc.cac)
     ):
     # Safe to send confirmation email
@@ -59,8 +61,13 @@ def notify_kyc_status_change(sender, instance, **kwargs):
         send_kyc_final_status_email(instance.user.id, instance.status)
         SellerKYC.objects.filter(pk=instance.pk).update(status_notified=True)
 
-    
 
+@receiver(post_save, sender=SellerKYC)
+def notify_kyc_partial_seller_verification(sender, instance, **kwargs):
+    if instance.partial_verified == True and not instance.partial_verified_notified:
+        send_seller_registration_email(instance.user.id, instance.partial_verified)
+        SellerKYC.objects.filter(pk=instance.pk).update(partial_verified_notified=True)
+    
 
 @receiver(post_delete, sender=SellerKYC)
 def delete_kyc_related(sender, instance, **kwargs):
