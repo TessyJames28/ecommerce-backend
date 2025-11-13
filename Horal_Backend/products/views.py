@@ -3,10 +3,7 @@ from rest_framework import status
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Avg, Value
-from django.db.models.functions import Coalesce
 from django.core.exceptions import PermissionDenied
-from django.utils.dateparse import parse_date
 from sellers.models import SellerKYC
 from sellers_dashboard.serializers import SellerProfileSerializer
 from ratings.serializers import UserRatingSerializer
@@ -16,12 +13,19 @@ from datetime import timedelta
 from users.authentication import CookieTokenAuthentication
 from rest_framework.exceptions import NotFound
 from shops.models import Shop
+from django.db.models import Q, Avg, Value, Case, When
+from django.db.models.functions import Coalesce
+from django.utils.dateparse import parse_date
+from django.core.cache import cache
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from .utils import (
     BaseResponseMixin, product_models, IsAuthenticated,
     IsSellerAdminOrSuperuser, StandardResultsSetPagination,
     product_models_list, track_recently_viewed_product,
-    topselling_product_sql
+    topselling_product_sql, generate_list_for_category, 
+    REDIS_KEY_NEW, REDIS_KEY_RANDOM, REDIS_KEY_TRENDING, REDIS_TTL
 )
 from .models import ProductIndex, RecentlyViewedProduct
 from categories.models import Category
@@ -29,6 +33,7 @@ from subcategories.models import SubCategory
 from .models import ProductVariant
 from .serializers import get_product_serializer, ProductIndexSerializer, MixedProductSerializer
 from carts.authentication import SessionOrAnonymousAuthentication
+import random
 
 
 class ProductBySubcategoryView(GenericAPIView, BaseResponseMixin):
@@ -88,6 +93,18 @@ class ProductCreateView(GenericAPIView, BaseResponseMixin):
                     status.HTTP_403_FORBIDDEN,
                     "You do not have permission to create products"
                 )
+            
+            # Check total product seller has listed
+            shop = Shop.objects.filter(owner__user=user).first()
+            products_listed_count = ProductIndex.objects.filter(shop=shop).count()
+            if products_listed_count >= 5:
+                # Check if seller is KYC verified
+                seller_kyc = SellerKYC.objects.filter(user=user, is_verified=True).first()
+                if not seller_kyc:
+                    return self.get_response(
+                        status.HTTP_403_FORBIDDEN,
+                        "You have reached the limit of 5 products. Please complete KYC verification to list more products."
+                    )
             
             category_name = self.kwargs.get('category_name')
             category_name = category_name.replace("-", " ").replace("_", " ").strip().lower()
@@ -318,7 +335,7 @@ class ProductDetailView(GenericAPIView, BaseResponseMixin):
     def delete(self, request, pk, category_name, *args, **kwargs):
         """Method to delete product perform by only staff and superuser"""
         if not request.user.is_staff and not request.user.is_superuser:
-            raise PermissionDenied("Only staff or superusers can delete user locations")
+            raise PermissionDenied("Only staff or superusers can delete products")
 
         product, error_response = self.get_product_and_check_permissions(pk, category_name)
         if error_response:
@@ -335,92 +352,220 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
     pagination_class = StandardResultsSetPagination
     serializer_class = ProductIndexSerializer
 
-
     def get_queryset(self):
         return ProductIndex.objects.filter(is_published=True)
+    
 
+    def generate_global_lists(self):
+        """
+        Generate trending, new, and random product ID lists and cache in redis
+        """
+        qs = self.get_queryset()
+
+        # Trending (Sorted by avg rating)
+        trending = qs.annotate(
+            avg_rating=Coalesce(Avg("product__rating"), Value(0.0))
+        ).order_by("-avg_rating", "-created_at").values_list("id", flat=True)
+        cache.set(REDIS_KEY_TRENDING, list(trending), REDIS_TTL)
+
+        # New arrivals (Sorted by created_at)
+        new_arrivals = qs.order_by("-created_at").values_list("id", flat=True)
+        cache.set(REDIS_KEY_NEW, list(new_arrivals), REDIS_TTL)
+
+        # Random fallback
+        random_ids = list(qs.values_list("id", flat=True))
+        random.shuffle(random_ids)
+        cache.set(REDIS_KEY_RANDOM, random_ids, REDIS_TTL)
+
+
+    def get_global_lists(self):
+        """
+        Return global lists, regenerate if not present
+        """
+        trending = cache.get(REDIS_KEY_TRENDING)
+        new_arrivals = cache.get(REDIS_KEY_NEW)
+        random_ids = cache.get(REDIS_KEY_RANDOM)
+
+        if not trending or not new_arrivals or not random_ids:
+            self.generate_global_lists()
+            trending = cache.get(REDIS_KEY_TRENDING)
+            new_arrivals = cache.get(REDIS_KEY_NEW)
+            random_ids = cache.get(REDIS_KEY_RANDOM)
+
+        return trending, new_arrivals, random_ids
+    
+
+    def get_mixed_products_for_user(self, request):
+        """
+        Build stable per-user feed slice from global lists.
+        """
+
+        trending_ids, new_ids, random_ids = self.get_global_lists()
+
+        # Determine how many products to take from each list per page
+        page_size = self.pagination_class.page_size if hasattr(self.pagination_class, "paze_size") else 36
+        count_new = int(page_size * 0.4)
+        count_trending = int(page_size * 0.4)
+        count_random = page_size - (count_new + count_trending)
+
+        # Pagination page number
+        page_num = int(request.query_params.get('page', 1))
+        start = (page_num - 1) * page_size
+
+        # slice from each list
+        new_slice = new_ids[start:start + count_new]
+        trending_slice = trending_ids[start:start + count_trending]
+        random_slice = random_ids[start:start + count_random]
+
+        # Combine slices
+        combined_ids = new_slice + trending_slice + random_slice
+
+        # Fetch products and preserve order
+        products_qs = self.get_queryset().filter(id__in=combined_ids)
+        products_dict = {p.id: p for p in products_qs}
+        ordered_products = [products_dict[pid] for pid in combined_ids if pid in products_dict]
+
+        return ordered_products
+
+
+    def get_category_lists(self, category):
+        """Get cached category specific lists"""
+        trending = cache.get(f"products_trending_{category}")
+        new_items = cache.get(f"products_new_{category}")
+        random_items = cache.get(f"products_random_{category}")
+
+        if not trending or not new_items or not random_items:
+            
+            generate_list_for_category(category)
+            trending = cache.get(f"products_trending_{category}") or []
+            new_items = cache.get(f"products_new_{category}") or []
+            random_items = cache.get(f"products_random_{category}") or []
+
+        return trending, new_items, random_items
+       
     def get(self, request, *args, **kwargs):
         """Get all products with optional filtering"""
         try:
-            # Get query parameters
-            category = request.query_params.get('category')
-            shop_id = request.query_params.get('shop')
-            search_query = request.query_params.get('search')
+            if request.query_params:
+                try:
+                    # Get query parameters
+                    category = request.query_params.get('category')
+                    shop_id = request.query_params.get('shop')
+                    search_query = request.query_params.get('search')
 
-            # Advanced filters
-            brand = request.query_params.get('brand')
-            state = request.query_params.get('state')
-            local_govt = request.query_params.get('local_govt')
-            price_min = request.query_params.get('price_min')
-            price_max = request.query_params.get('price_max')
-            rating = request.query_params.get('rating')
-            sub_category = request.query_params.get('sub_category')
-            created_at = request.query_params.get('created_at')
+                    # Advanced filters
+                    brand = request.query_params.get('brand')
+                    state = request.query_params.get('state')
+                    local_govt = request.query_params.get('local_govt')
+                    price_min = request.query_params.get('price_min')
+                    price_max = request.query_params.get('price_max')
+                    rating = request.query_params.get('rating')
+                    sub_category = request.query_params.get('sub_category')
+                    created_at = request.query_params.get('created_at')
 
-            queryset = self.get_queryset()
+                    queryset = self.get_queryset()
 
-            query = Q()
+                    query = Q()
 
-            if category:
-                query &= Q(category__iexact=category)
-        
-            
-            if shop_id:
-                query &= Q(shop__id=shop_id)
+                    if category:
+                        # query &= Q(category__iexact=category)
+                        trending, new_items, random_items = self.get_category_lists(category)
+                    else:
+                        trending = cache.get(self.REDIS_KEY_TRENDING) or []
+                        new_items = cache.get(self.REDIS_KEY_NEW) or []
+                        random_items = cache.get(self.REDIS_KEY_RANDOM) or []
 
-            if search_query:
-                query &= (
-                    Q(title__icontains=search_query) |
-                    Q(description__icontains=search_query) |
-                    Q(brand__icontains=search_query) |
-                    Q(specifications__icontains=search_query)
-                )
+                    if shop_id:
+                        query &= Q(shop__id=shop_id)
 
-            if brand:
-                query &= Q(brand__icontains=brand)
+                    if search_query:
+                        query &= (
+                            Q(title__icontains=search_query) |
+                            Q(description__icontains=search_query) |
+                            Q(brand__icontains=search_query) |
+                            Q(specifications__icontains=search_query)
+                        )
 
-            if state:
-                query &= Q(state__iexact=state)
+                    if brand:
+                        query &= Q(brand__icontains=brand)
 
-            if local_govt:
-                query &= Q(local_govt__icontains=local_govt)
+                    if state:
+                        query &= Q(state__iexact=state)
 
-            if price_min:
-                query &= Q(price__gte=price_min)
+                    if local_govt:
+                        query &= Q(local_govt__icontains=local_govt)
 
-            if price_max:
-                query &= Q(price__lte=price_max)
+                    if price_min:
+                        query &= Q(price__gte=price_min)
 
-            if sub_category:
-                query &= Q(sub_category__iexact=sub_category)
+                    if price_max:
+                        query &= Q(price__lte=price_max)
 
-            if created_at:
-                query &= Q(created_at__date=parse_date(created_at)) 
+                    if sub_category:
+                        query &= Q(sub_category__iexact=sub_category)
 
-            # Apply the filter only to the correct model manager
-            products = queryset.filter(query)
+                    if created_at:
+                        query &= Q(created_at__date=parse_date(created_at)) 
 
-            if rating:
-                rating = float(rating)
-                # Only include products with avg rating >= requested rating
-                products = products.annotate(
-                    avg_rating=Coalesce(Avg("product__rating"), Value(0.0)) 
-                ).filter(avg_rating__gte=rating)
+                    # Apply the filter only to the correct model manager
+                    products = queryset.filter(query)
+
+                    # If only category filter is applied, reorder using cached order
+                    only_category = (
+                        category
+                        and not shop_id and not search_query and not brand
+                        and not state and not local_govt and not price_min and not price_max
+                        and not rating and not sub_category and not created_at
+                    )
+
+                    if only_category:
+                        # Choose the list to drive ordering (random by default)
+                        ordered_ids = ordered_ids = trending[:12] + new_items[:12] + random_items[:12] # use trending/new_items based on UI later
+
+                        products = products.filter(id__in=ordered_ids)
+
+                        preserved_order = Case(
+                            *[When(id=pid, then=pos) for pos, pid in enumerate(ordered_ids)]
+                        )
+
+                        products = products.order_by(preserved_order)
+
+                    if rating:
+                        rating = float(rating)
+                        # Only include products with avg rating >= requested rating
+                        products = products.annotate(
+                            avg_rating=Coalesce(Avg("product__rating"), Value(0.0)) 
+                        ).filter(avg_rating__gte=rating)
 
 
-            page = self.paginate_queryset(products)
-            if page is not None:
-                serializer = self.get_serializer(page, many=True)
-                paginated_response = self.get_paginated_response(serializer.data)
-                paginated_response.data["status"] = "success"
-                paginated_response.data["status_code"] = status.HTTP_200_OK
-                paginated_response.data["message"] = "Products retrieved successfully"
-                return paginated_response
-            
-            serializer = ProductIndexSerializer(products, many=True)
+                    page = self.paginate_queryset(products)
+                    if page is not None:
+                        serializer = self.get_serializer(page, many=True)
+                        paginated_response = self.get_paginated_response(serializer.data)
+                        paginated_response.data["status"] = "success"
+                        paginated_response.data["status_code"] = status.HTTP_200_OK
+                        paginated_response.data["message"] = "Products retrieved successfully"
+                        return paginated_response
+                    
+                    serializer = ProductIndexSerializer(products, many=True)
+                    return self.get_response(
+                        status.HTTP_200_OK,
+                        "Products retrieved successfully",
+                        serializer.data
+                    )
+                except Exception as e:
+                    return self.get_response(
+                        status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        f"An error occurred while retrieving products: {str(e)}"
+                    )
+                
+            # No filters, use stable mixed feed
+            products = self.get_mixed_products_for_user(request)
+
+            serializer = self.get_serializer(products, many=True)
             return self.get_response(
                 status.HTTP_200_OK,
-                "Products retrieved successfully",
+                "Products retrieved successfully (mixed stable feed)",
                 serializer.data
             )
         except Exception as e:
