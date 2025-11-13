@@ -45,6 +45,11 @@ class SellerKYCAddress(models.Model):
         max_length=11,
         validators=[phone_number_validator],
     )
+    additional_mobile = models.CharField(
+        max_length=11,
+        validators=[phone_number_validator],
+        null=True, blank=True
+    )
     street = models.CharField(max_length=500)
     landmark = models.CharField(max_length=250)
     lga = models.CharField(max_length=50)
@@ -80,6 +85,11 @@ class SellerKYC(models.Model):
     socials = models.OneToOneField(SellerSocials, on_delete=models.PROTECT, null=True, blank=True)
     status = models.CharField(max_length=20, choices=KYCStatus, default=KYCStatus.PENDING)
     is_verified = models.BooleanField(default=False)
+    
+    partial_verified = models.BooleanField(default=False)
+    partial_verified_at = models.DateTimeField(null=True, blank=True)
+    partial_verified_notified = models.BooleanField(default=False)
+
     info_completed_notified = models.BooleanField(default=False)
     status_notified = models.BooleanField(default=False)
 
