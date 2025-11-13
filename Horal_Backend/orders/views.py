@@ -10,6 +10,7 @@ from products.utils import IsSuperAdminPermission
 from payment.views import trigger_refund
 from payment.models import PaystackTransaction, OrderStatusLog
 from payment.utils import update_order_status
+from decimal import Decimal
 from users.models import CustomUser
 from .discounts import apply_coupon_discount
 from .utils import approve_return, create_shipments_for_order, get_consistent_checkout_payload
@@ -147,13 +148,23 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                 product_total = sum(
                     i.unit_price * i.quantity for i in order.order_items.all()
                 )
+
+                # Calculate Insurance fee
+                insurance_fee = 0
+                if product_total >= 200000:
+                    insurance_fee = product_total * Decimal('0.01')  # 1% of the grand total
+
+                shipping_total += insurance_fee
                 grand_total = product_total + shipping_total
 
                 # Save them to DB
                 order.product_total = product_total
                 order.shipping_total = shipping_total
                 order.total_amount = grand_total
-                order.save(update_fields=["product_total", "shipping_total", "total_amount", "discount_applied"])
+                order.save(update_fields=[
+                    "product_total", "shipping_total", "total_amount",
+                    "discount_applied"
+                ])
                 if order.discount_applied:
                     apply_coupon_discount(order)
 
@@ -188,84 +199,107 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                 str(e)
             )
         except ValueError as e:
-            logger.error(f"Error during checkout for user {user.id}: {str(e)}")
+            import traceback
+            logger.error(f"Error during checkout for user {user.id}: {str(e)} {traceback.format_exc()}")
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
-                str(e)
+                {str(e)}
             )
         
         except Exception as e:
-            logger.error(f"Error during checkout for user {user.id}: {str(e)}")
+            import traceback
+            logger.error(f"Error during checkout for user {user.id}: {str(e)} {traceback.format_exc()}")
             return self.get_response(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
-                str(e)
+                {str(e)}
             )
         
 
     def put(self, request, *args, **kwargs):
         """Partial updates for user address during checkout"""
-        order = self.get_queryset().first()
-
-        if not order:
-            return self.get_response(
-                status.HTTP_404_NOT_FOUND,
-                "No pending order found for address update"
-            )
-        
-        serializer = self.get_serializer(order, data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-
         try:
-            shipping_total, items = calculate_shipping_for_order(order)
-        except ValueError as e:
-            logger.error(f"Error calculating shipping for order {order.id}: {str(e)}\n{traceback.format_exc()}")
+            order = self.get_queryset().first()
+
+            if not order:
+                return self.get_response(
+                    status.HTTP_404_NOT_FOUND,
+                    "No pending order found for address update"
+                )
+            
+            serializer = self.get_serializer(order, data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+            try:
+                shipping_total, items = calculate_shipping_for_order(order)
+            except ValueError as e:
+                logger.error(f"Error calculating shipping for order {order.id}: {str(e)}\n{traceback.format_exc()}")
+                return self.get_response(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    f"Error calculating shipping: {e}"
+                )
+            except Exception as e:
+                logger.error(f"Unexpected error calculating shipping for order {order.id}: {str(e)}\n{traceback.format_exc()}")
+                return self.get_response(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Unexpected error calculating shipping"
+                )
+
+            product_total = sum(i.unit_price * i.quantity for i in order.order_items.all())
+
+            # Calculate Insurance fee
+            insurance_fee = 0
+            if product_total >= 200000:
+                insurance_fee = product_total * Decimal('0.01')  # 1% of the grand total
+
+            shipping_total += insurance_fee
+
+            grand_total = product_total + shipping_total
+            
+            # Save them to DB
+            order.product_total = product_total
+            order.shipping_total = shipping_total
+            order.total_amount = grand_total
+            order.save(update_fields=["product_total", "shipping_total", "total_amount"])
+            
+            if order.discount_applied:
+                apply_coupon_discount(order)
+
+            # Get consistent order payload                
+            shipments = get_consistent_checkout_payload(order)
+
             return self.get_response(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                f"Error calculating shipping: {e}"
+                status.HTTP_201_CREATED,
+                "Shipping address updated successfully and shipping cost recalculated",
+                {
+                    "order_id": str(order.id),
+                    "user_email": order.user.email,
+                    "shipments": shipments,
+                    "product_total": str(order.product_total),
+                    "shipping_total": str(order.shipping_total),
+                    "total_amount": str(order.total_amount),
+                    "address": {
+                        "street": order.street_address,
+                        "local_govt": order.local_govt,
+                        "landmark": order.landmark,
+                        "state": order.state,
+                        "country": order.country,
+                        "phone_number": order.phone_number,
+                    },
+                },
             )
-        except Exception as e:
-            logger.error(f"Unexpected error calculating shipping for order {order.id}: {str(e)}\n{traceback.format_exc()}")
+        except ValidationError as e:
+            logger.warning(f"Validation error updating address for order {order.id}: {str(e)}")    
             return self.get_response(
                 status.HTTP_400_BAD_REQUEST,
-                "Unexpected error calculating shipping"
+                str(e)
             )
-
-        product_total = sum(i.unit_price * i.quantity for i in order.order_items.all())
-        grand_total = product_total + shipping_total
-        
-        # Save them to DB
-        order.product_total = product_total
-        order.shipping_total = shipping_total
-        order.total_amount = grand_total
-        order.save(update_fields=["product_total", "shipping_total", "total_amount"])
-        
-        if order.discount_applied:
-            apply_coupon_discount(order)
-
-        # Get consistent order payload                
-        shipments = get_consistent_checkout_payload(order)
-
-        return self.get_response(
-            status.HTTP_201_CREATED,
-            "Shipping address updated successfully and shipping cost recalculated",
-            {
-                "order_id": str(order.id),
-                "user_email": order.user.email,
-                "shipments": shipments,
-                "product_total": str(order.product_total),
-                "shipping_total": str(order.shipping_total),
-                "total_amount": str(order.total_amount),
-                "address": {
-                    "street": order.street_address,
-                    "local_govt": order.local_govt,
-                    "landmark": order.landmark,
-                    "state": order.state,
-                    "country": order.country,
-                    "phone_number": order.phone_number,
-                },
-            },
-        )
+        except Exception as e:
+            logger.error(f"Error updating address for order {order.id}: {str(e)}")
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                str(e)
+            )
 
 
     def patch(self, request, *args, **kwargs):
@@ -314,6 +348,7 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                     "user_email": order.user.email,
                     "shipments": shipments,
                     "product_total": str(order.product_total),
+                    "purcharse_insurance": str(order.purcharse_insurance),
                     "shipping_total": str(order.shipping_total),
                     "total_amount": str(order.total_amount),
                     "address": {
