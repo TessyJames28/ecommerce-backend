@@ -2,7 +2,11 @@ from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.contrib.contenttypes.models import ContentType
 from .models import ProductIndex
-from .utils import CATEGORY_MODEL_MAP, image_model_map
+from .tasks import regenerate_product_cache_lists_task
+from .utils import (
+    CATEGORY_MODEL_MAP, image_model_map,
+    regenerate_product_cache_lists
+)
 
 
 MODEL_CATEGORY_MAP = {v: k for k, v in CATEGORY_MODEL_MAP.items()}
@@ -82,3 +86,14 @@ def update_product_index_image(sender, instance, **kwargs):
             defaults={"image": first_image.url}
         )
 
+
+@receiver(post_save, sender=ProductIndex)
+def refresh_cache_on_save(sender, instance, **kwargs):
+    """Regenerate cached product lists when a ProductIndex is saved."""
+    regenerate_product_cache_lists_task.delay()
+
+
+@receiver(post_delete, sender=ProductIndex)
+def refresh_cache_on_delete(sender, instance, **kwargs):
+    """Regenerate cached product lists when a ProductIndex is deleted."""
+    regenerate_product_cache_lists_task.delay()

@@ -265,7 +265,8 @@ class ProductCreateMixin:
                     "if any variant has logistics, all variant must have logistics"
                 )
         else:
-            if not logistic_data:
+            # Only raise error if neither the instance nor the payload have logistics
+            if not logistic_data and not instance.get_logistics().exists() and not any(v.logistics_variant.exists() for v in instance.get_variants()):
                 raise serializers.ValidationError(
                     "No variant logistics provided, product-level is required if no variant logistics"
                 )

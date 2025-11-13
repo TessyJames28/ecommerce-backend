@@ -18,6 +18,16 @@ from .serializers import (
 ) 
 from django.db import connection
 from django.utils.timezone import now
+from django.core.cache import cache
+from products.models import ProductIndex
+from django.db.models import Avg, Value
+from django.db.models.functions import Coalesce
+import random
+
+REDIS_KEY_TRENDING = "products_trending_ids"
+REDIS_KEY_NEW = "products_new_ids"
+REDIS_KEY_RANDOM = "products_random_ids"
+REDIS_TTL = 43200  # 12 hours
 
 
 # List of all product models and their serializers
@@ -331,3 +341,50 @@ def validate_logistics_vs_variants(logistics_data, variants_data):
                         f"Variant '{variant.get('custom_size_unit')}' weight of ({variant_weight:.2f}kg) "
                         f"cannot exceed its logistics weight of ({logistics_weight:.2f}kg)."
                     )
+
+
+def generate_list_for_category(category):
+    """
+    Generate a list of product Ids for a given category
+    """
+    qs = ProductIndex.objects.filter(is_published=True, category__iexact=category)
+
+    trending = qs.annotate(
+        avg_rating = Coalesce(Avg("product__rating"), Value(0.0))
+    ).order_by("-avg_rating", "-created_at").values_list("id", flat=True)
+    cache.set(f"products_trending_{category}", list(trending), REDIS_TTL)
+
+    new_items = qs.order_by("-created_at").values_list("id", flat=True)
+    cache.set(f"products_new_{category}", list(new_items), REDIS_TTL)
+
+    random_ids = list(qs.values_list("id", flat=True))
+    random.shuffle(random_ids)
+    cache.set(f"products_random_{category}", random_ids, REDIS_TTL)
+
+
+def regenerate_product_cache_lists():
+    """
+    Regenerate cacched product ID lists for trending, new, and random products
+    """
+    qs = ProductIndex.objects.filter(is_published=True)
+
+    # Trending (Sorted by avg rating)
+    trending = qs.annotate(
+        avg_rating=Coalesce(Avg("product__rating"), Value(0.0))
+    ).order_by("-avg_rating", "-created_at").values_list("id", flat=True)
+    cache.set(REDIS_KEY_TRENDING, list(trending), REDIS_TTL)
+
+    # New arrivals (Sorted by created_at)
+    new_arrivals = qs.order_by("-created_at").values_list("id", flat=True)
+    cache.set(REDIS_KEY_NEW, list(new_arrivals), REDIS_TTL)
+
+    # Random fallback
+    random_ids = list(qs.values_list("id", flat=True))
+    random.shuffle(random_ids)
+    cache.set(REDIS_KEY_RANDOM, random_ids, REDIS_TTL)
+
+    # category lists
+    from django.conf import settings
+    categories = list(settings.CATEGORIES.keys())
+    for category in categories:
+        generate_list_for_category(category)

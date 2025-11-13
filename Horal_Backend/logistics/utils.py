@@ -147,6 +147,7 @@ def build_gigl_payload_for_item(
     pickUpAddress: str,
     senderName: str,
     senderPhone: str,
+    clientPhone: str,
     senderAddress: str,
     pickUpState: str,
     valueOfItem: str,
@@ -173,6 +174,7 @@ def build_gigl_payload_for_item(
         "pickUpAddress": pickUpAddress,
         "senderName": senderName,
         "senderPhone": senderPhone,
+        "clientPhone": clientPhone,
         "senderAddress": senderAddress,
         "waybillNumber": waybillNumber,
     }
@@ -339,7 +341,7 @@ def create_shipment_payload(order):
             # Build seller address string
             seller_address, seller_state = _seller_full_address(seller_kyc)
             seller_name = f"{seller_kyc.first_name} {seller_kyc.last_name}"
-            seller_phone_number = f"{_safe_str(seller_kyc.mobile)}"
+            seller_phone_number = f"{_safe_str(seller_kyc.mobile)}, {_safe_str(seller_kyc.additional_mobile)}"
             if seller_state.lower() == "abuja":
                 seller_state = "FCT"
 
@@ -375,6 +377,7 @@ def create_shipment_payload(order):
                 pickUpAddress=seller_address,
                 senderName=seller_name,
                 senderPhone=seller_phone_number,
+                clientPhone=seller_phone_number,
                 senderAddress=seller_address,
                 waybillNumber=waybill_number
             )
