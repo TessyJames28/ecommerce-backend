@@ -11,7 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # TTL constants (from settings or defaults)
-IDLE_TIMEOUT = getattr(settings, "IDLE_TIMEOUT", 30 * 60)
+IDLE_TIMEOUT = getattr(settings, "IDLE_TIMEOUT", 6 * 60 * 60)
 REAUTH_TTL = getattr(settings, "REAUTH_TTL", 15*60)
 OTP_TTL = getattr(settings, "OTP_TTL", 5*60)
 MAX_OTP_SENDS_PER_HOUR = getattr(settings, "MAX_OTP_SENDS_PER_HOUR", 5)

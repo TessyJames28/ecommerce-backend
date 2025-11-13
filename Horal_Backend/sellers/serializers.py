@@ -5,6 +5,7 @@ from .models import (
 )
 from django.db.models.signals import post_save
 from users.serializers import CustomUserSerializer
+from .tasks import create_seller_partial_kyc_handler
 
 
 class SellerKYCCACSerializer(serializers.ModelSerializer):
@@ -81,6 +82,9 @@ class SellerKYCAddressSerializer(serializers.ModelSerializer):
         address = SellerKYCAddress.objects.create(**validated_data)
         seller_kyc.address = address
         seller_kyc.save(update_fields=['address'])
+
+        # Trigger creation of SellerKYC record task
+        create_seller_partial_kyc_handler.delay(user.id)
 
         return address
      

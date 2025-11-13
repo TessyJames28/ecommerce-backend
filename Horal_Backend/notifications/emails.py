@@ -174,7 +174,7 @@ def send_kyc_final_status_email(user, status):
             " Your account is now KYC-verified, unlocking full access to Horal."
         ]
         cta = {
-            "text": "Start Listing Your Products",
+            "text": "Start Listing More Products",
             "url": "https://www.horal.ng/sellers-dashboard/shop-products"
         }
 
@@ -207,3 +207,48 @@ def send_kyc_final_status_email(user, status):
         }
     )
 
+
+def send_seller_registration_email(user, status):
+    """
+    Send seller registration email to user.
+    :param user: CustomUser instance
+    :param status: str, one of ["True", "False"]
+    """
+    from users.models import CustomUser
+
+    # Get user details
+    try:
+        user = CustomUser.objects.get(id=user)
+    except CustomUser.DoesNotExist:
+        pass
+    
+    subject = ""
+    body_paragraphs = []
+    cta = None
+    email = user.email
+    username = user.full_name
+
+    if status == True:
+        subject = "Seller Registration Successful"
+        body_paragraphs = [
+            "Congratulations! Your seller registration has been successfully completed."
+            " Your account is now partially verified as a seller. You can now list up to 5 products on Horal."
+            "To unlock full seller privileges, please complete your KYC verification."
+        ]
+        cta = {
+            "text": "Start Listing Your Products",
+            "url": "https://www.horal.ng/sellers-dashboard/shop-products"
+        }
+
+    send_email_task.delay(
+        recipient=email,
+        subject=subject,
+        from_email=f"Horal Marketplace <{settings.DEFAULT_FROM_EMAIL}>",
+        template_name="notifications/emails/general_email.html",
+        context={
+            "user": username,
+            "title": subject,
+            "body_paragraphs": body_paragraphs,
+            "cta": cta
+        }
+    )

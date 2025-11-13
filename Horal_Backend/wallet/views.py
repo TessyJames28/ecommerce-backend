@@ -76,10 +76,20 @@ class VerifySellerBankDetailsView(APIView, BaseResponseMixin):
         
         # Get Seller name to compare to bank name
         seller_kyc = SellerKYC.objects.get(user=user)
+
+        # Check if seller has done complete kyc verification
+        if not seller_kyc.is_verified:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Please complete KYC verification before adding bank details"
+            )
+        
         first_name = seller_kyc.address.first_name or ""
         middle_name = seller_kyc.address.middle_name or ""
         last_name = seller_kyc.address.last_name or ""
-        business_name = seller_kyc.address.business_name or ""
+        business_name = ""
+        if seller_kyc.cac and seller_kyc.cac.cac_verified:
+            business_name = seller_kyc.address.business_name or ""
 
         # Normalize to lowercase and remove extra spaces
         full_name = " ".join([first_name, middle_name, last_name]).strip().lower()
