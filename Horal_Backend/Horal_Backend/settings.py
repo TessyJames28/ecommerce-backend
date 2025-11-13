@@ -187,7 +187,7 @@ from datetime import timedelta
 
 #JWT Settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
@@ -269,63 +269,63 @@ redis_url = env("REDIS_URL")
 url = urlparse.urlparse(redis_url)
 
 
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": f"redis://{url.hostname}:{url.port}/0",
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            # No PASSWORD, no SSL
-        }
-    }
-}
-
-# Celery settings
-CELERY_BROKER_URL = f"redis://{url.hostname}:{url.port}/0"
-CELERY_RESULT_BACKEND = CELERY_BROKER_URL
-
-# No SSL needed for Render internal Redis
-CELERY_BROKER_USE_SSL = None  
-
-CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
-
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = "UTC"
-
-
 # CACHES = {
 #     "default": {
 #         "BACKEND": "django_redis.cache.RedisCache",
-#         "LOCATION": f"{url.scheme}://{url.hostname}:{url.port}/0",
+#         "LOCATION": f"redis://{url.hostname}:{url.port}/0",
 #         "OPTIONS": {
 #             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-#             "PASSWORD": url.password,
-#             "SSL": url.scheme == "rediss",
+#             # No PASSWORD, no SSL
 #         }
 #     }
 # }
 
+# # Celery settings
+# CELERY_BROKER_URL = f"redis://{url.hostname}:{url.port}/0"
+# CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 
-# # Celery setting
-# import ssl
+# # No SSL needed for Render internal Redis
+# CELERY_BROKER_USE_SSL = None  
 
-# # Change to its redis DB on production with custom redis setup
-# CELERY_BROKER_URL = env("REDIS_URL")
+# CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
-# CELERY_BROKER_USE_SSL = {
-#     # Change to SSL.CERT_REQUIRED when using own trusted custom redis
-#     'ssl_cert_reqs': None # or ssl.CERT_NONE 
-# }
+# CELERY_ACCEPT_CONTENT = ["json"]
+# CELERY_TASK_SERIALIZER = "json"
+# CELERY_RESULT_SERIALIZER = "json"
+# CELERY_TIMEZONE = "UTC"
 
-# CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
-# CELERY_RESULT_BACKEND = 'django-db'
-# CELERY_ACCEPT_CONTENT = ['json']
-# CELERY_TASK_SERIALIZER = 'json'
-# CELERY_RESULT_SERIALIZER = 'json'
-# CELERY_TIMEZONE = 'UTC' 
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": f"{url.scheme}://{url.hostname}:{url.port}/0",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "PASSWORD": url.password,
+            "SSL": url.scheme == "rediss",
+        }
+    }
+}
+
+
+# Celery setting
+import ssl
+
+# Change to its redis DB on production with custom redis setup
+CELERY_BROKER_URL = env("REDIS_URL")
+
+CELERY_BROKER_USE_SSL = {
+    # Change to SSL.CERT_REQUIRED when using own trusted custom redis
+    'ssl_cert_reqs': None # or ssl.CERT_NONE 
+}
+
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC' 
 
 
 # FEZ Delivery Setup
@@ -353,6 +353,13 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'Horal_Backend.wsgi.application'
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
 
 # Postgres DB on render
 DATABASES = {
@@ -448,7 +455,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # Reauth TTL
-IDLE_TIMEOUT = 30 * 60 # 30 minutes of inactivity → require reauth
+IDLE_TIMEOUT = 6 * 60 * 60 # 30 minutes of inactivity → require reauth
 REAUTH_TTL = 5 * 60 # 5 minutes valid reauth token
 OTP_TTL = 5 * 60 # OTP valid for 5 minutes
 MAX_OTP_SENDS_PER_HOUR = 5
@@ -501,3 +508,43 @@ for app in APPS_TO_LOG:
         "level": "INFO",
         "propagate": False,
     }
+
+
+# category lists
+CATEGORIES = {
+    "fashion": [
+        "clothing (men and women)", "shoes (men and women)", "bags", "jewelries",
+        "watches", "eyewear", "underwear & sleepwear", "jerseys", "hats & caps", "swimwear", "others"
+    ],
+    "health and beauty": [
+        "skincare", "makeup", "hair care", "fragrances", "wellness & supplements", "oral hygiene", "others"
+    ],
+    "foods": [
+        "fresh produce", "meat, poultry & seafood", "dairy & eggs", "beverages (non-alcoholic)",
+        "baked goods", "frozen foods", "fruits", "vegetables", "grains or cereals", "legumes or pulses",
+        "nuts and seeds", "meat and poultry", "fish and seafood", "dairy", "eggs", "fats and oils", "herbs and spices",
+        "confectionery and snacks", "others"
+    ],
+    "vehicles": [
+        "cars", "motorcycles", "buses & vans", "vehicle parts & accessories",
+        "bicycles & scooters", "boats & watercraft", "trucks", "others"
+    ],
+    "gadget": [
+        "smartphones", "tablets", "smartwatches & wearables", "drones",
+        "cameras & photography gadgets", "portable audio", "gaming",
+        "gps & navigation", "e-readers", "vr/ar devices", "others"
+    ],
+    "accessories": [
+        "phone accessories", "laptop accessories", "camera accessories",
+        "travel accessories", "wallets & cardholders", "umbrellas", "gloves", "belts", "others"
+    ],
+    "children": [
+        "Baby clothing (0-24 months)", "diapers & wipes", "feeding & nursing", "gear & travel",
+        "toys & gifts (0-3 years)", "children clothing", "maternity wear", "baby food", "safety & health", "others"
+    ],
+    "electronics": [
+        "televisions & home theater", "audio & hi-fi systems", "computers & laptops",
+        "printers & scanners", "networking devices", "home appliances",
+        "gaming PCs & components", "generators", "others"
+    ]
+}
