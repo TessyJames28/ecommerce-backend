@@ -352,7 +352,6 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                     "user_email": order.user.email,
                     "shipments": shipments,
                     "product_total": str(order.product_total),
-                    "purcharse_insurance": str(order.purcharse_insurance),
                     "shipping_total": str(order.shipping_total),
                     "total_amount": str(order.total_amount),
                     "address": {
