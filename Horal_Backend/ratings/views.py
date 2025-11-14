@@ -36,11 +36,7 @@ class UserRatingCreateView(GenericAPIView, BaseResponseMixin):
 
         delivered_shipments = OrderShipment.objects.filter(
             order__in=eligible_orders,
-            status__in=[
-                OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
-                OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
-                OrderShipment.Status.DELIVERED_TO_TERMINAL
-            ]
+            status=OrderShipment.Status.DELIVERED
         )
 
         # Get all variants related to this product
