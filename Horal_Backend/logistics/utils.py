@@ -442,6 +442,7 @@ def calculate_shipping_for_order(order):
         api = FEZDeliveryAPI()
         shipping_total = Decimal("0.00")
         updated_items = []
+        delivery_price = 0
 
         # Create grouped shipment payloads
         try:
