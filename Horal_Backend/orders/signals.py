@@ -63,11 +63,7 @@ def handle_shipment_delivered(sender, shipment, reminder=None, **kwargs):
     else:
         # Reminder emails for reviews
         show_other_reviews = shipment.order.user.orders.exclude(id=shipment.order.id).filter(
-            shipments__status__in=[
-                OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
-                OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
-                OrderShipment.Status.DELIVERED_TO_TERMINAL
-            ]
+            shipments__status=OrderShipment.Status.DELIVERED
         ).exists()
 
         if reminder == "2h":
