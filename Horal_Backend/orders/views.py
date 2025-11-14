@@ -368,7 +368,8 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                 str(e)
             )
         except Exception as e:
-            logger.error(f"Error applying coupon for user {user.id}: {str(e)}")
+            import traceback
+            logger.error(f"Error applying coupon for user {user.id}: {str(e)}\n{traceback.format_exc()}")
             return self.get_response(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 str(e)
