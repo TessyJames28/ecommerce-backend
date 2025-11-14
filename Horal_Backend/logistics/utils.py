@@ -453,6 +453,7 @@ def calculate_shipping_for_order(order):
 
         for shipment, payload in shipment_payloads:
             result = api.get_price(payload)
+            logger.info(f"FEZ Delivery price response for shipment {shipment.id}: {result}")
 
             # Ensure result is valid and contains deliveryPrice
             if result.get("status", "").lower() == "success":
