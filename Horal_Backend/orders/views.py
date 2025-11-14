@@ -104,30 +104,34 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                 # Clear existing order items to resync with cart
                 order.order_items.all().delete()
 
-                # Add order items
-                for item in cart.cart_item.all():
-                    variant = (
-                        ProductVariant.objects.select_for_update()
-                        .get(pk=item.variant.pk)
-                    )
-
-                    # Check if requested quantity can be reserved
-                    if item.quantity > variant.stock_quantity:
-                        raise ValidationError(
-                            f"Only {variant.stock_quantity} items available for {variant}"
+                try:
+                    # Add order items
+                    for item in cart.cart_item.all():
+                        variant = (
+                            ProductVariant.objects.select_for_update()
+                            .get(pk=item.variant.pk)
                         )
-                    # Reserve the stock
-                    variant.reserved_quantity += item.quantity
-                    variant.stock_quantity -= item.quantity  # Deduct immediately upon reservation
-                    variant.save()
-                    update_quantity(variant.product)
 
-                    OrderItem.objects.create(
-                        order=order,
-                        variant=item.variant,
-                        quantity=item.quantity,
-                        unit_price=item.variant.price_override or item.variant.product.price,
-                    )
+                        # Check if requested quantity can be reserved
+                        if item.quantity > variant.stock_quantity:
+                            raise ValidationError(
+                                f"Only {variant.stock_quantity} items available for {variant}"
+                            )
+                        # Reserve the stock
+                        variant.reserved_quantity += item.quantity
+                        variant.stock_quantity -= item.quantity  # Deduct immediately upon reservation
+                        variant.save()
+                        update_quantity(variant.product)
+
+                        OrderItem.objects.create(
+                            order=order,
+                            variant=item.variant,
+                            quantity=item.quantity,
+                            unit_price=item.variant.price_override or item.variant.product.price,
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to process cart items for order {order.id}: {e}")
+                    raise ValidationError("There was a problem processing your cart items. Please try again.")
 
                 #--------------------
                 # Create shipment first
@@ -350,7 +354,6 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                     "user_email": order.user.email,
                     "shipments": shipments,
                     "product_total": str(order.product_total),
-                    "purcharse_insurance": str(order.purcharse_insurance),
                     "shipping_total": str(order.shipping_total),
                     "total_amount": str(order.total_amount),
                     "address": {
@@ -370,7 +373,8 @@ class CheckoutView(GenericAPIView, BaseResponseMixin):
                 str(e)
             )
         except Exception as e:
-            logger.error(f"Error applying coupon for user {user.id}: {str(e)}")
+            import traceback
+            logger.error(f"Error applying coupon for user {user.id}: {str(e)}\n{traceback.format_exc()}")
             return self.get_response(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 str(e)

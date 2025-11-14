@@ -61,11 +61,7 @@ def automatic_order_completion():
     completion_time = now() - timedelta(days=3)
 
     shipments = OrderShipment.objects.filter(
-        status__in=[
-            OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
-            OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
-            OrderShipment.Status.DELIVERED_TO_TERMINAL,
-        ],
+        status=OrderShipment.Status.DELIVERED,
         delivered_at__lte=completion_time,
         auto_completion=False,  # only process once
     )

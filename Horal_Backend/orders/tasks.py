@@ -86,11 +86,7 @@ def check_delivered_shipments():
     for label, (start, end) in reminder_windows.items():
         flag = f"reminder_{label}_sent"
         shipments = OrderShipment.objects.filter(
-            status__in=[
-                OrderShipment.Status.DELIVERED_TO_CUSTOMER_ADDRESS,
-                OrderShipment.Status.DELIVERED_TO_PICKUP_POINT,
-                OrderShipment.Status.DELIVERED_TO_TERMINAL,
-            ],
+            status=OrderShipment.Status.DELIVERED,
             delivered_at__gte=start,
             delivered_at__lt=end,
         ).exclude(**{flag: True})
