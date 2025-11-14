@@ -7,6 +7,7 @@ from users.authentication import CookieTokenAuthentication
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
+from django.utils.timezone import now
 from .utils  import (
     get_single_order_details, search_shipment_with_waybill,
     track_shipment_by_order_number, track_a_single_order_statuses
@@ -221,8 +222,17 @@ def fez_webhook(request):
 
             # Update status
             shipment.status = internal_status
-            shipment.save(update_fields=["status"])
+            shipment.updated_at = now()
+            if internal_status == OrderShipment.Status.DELIVERED and shipment.delivered_at is None:
+                shipment.delivered_at = now()
+            shipment.save(update_fields=["status", "updated_at", "delivered_at"])
             logger.info(f"Shipment {shipment.id} updated to '{internal_status}' via webhook.")
+
+            # Update related order items
+            shipment.items.filter(delivered_at__isnull=True).update(
+                delivered_at=shipment.delivered_at
+            )
+            logger.info(f"All related OrderItems for shipment {shipment.id} updated with delivered_at {shipment.delivered_at}.")
         else:
             # Unknown logistic status — log and ignore, still return 200 so FEZ doesn't retry forever
             logger.warning(f"Unknown FEZ status received: '{delivery_status}' for {order_num}")
