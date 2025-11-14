@@ -471,9 +471,9 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
                         # query &= Q(category__iexact=category)
                         trending, new_items, random_items = self.get_category_lists(category)
                     else:
-                        trending = cache.get(self.REDIS_KEY_TRENDING) or []
-                        new_items = cache.get(self.REDIS_KEY_NEW) or []
-                        random_items = cache.get(self.REDIS_KEY_RANDOM) or []
+                        trending = cache.get(REDIS_KEY_TRENDING) or []
+                        new_items = cache.get(REDIS_KEY_NEW) or []
+                        random_items = cache.get(REDIS_KEY_RANDOM) or []
 
                     if shop_id:
                         query &= Q(shop__id=shop_id)
