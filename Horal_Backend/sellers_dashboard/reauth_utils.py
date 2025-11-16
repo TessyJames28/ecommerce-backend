@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # TTL constants (from settings or defaults)
 IDLE_TIMEOUT = getattr(settings, "IDLE_TIMEOUT", 6 * 60 * 60)
-REAUTH_TTL = getattr(settings, "REAUTH_TTL", 15*60)
+REAUTH_TTL = getattr(settings, "REAUTH_TTL", 6*60*60)
 OTP_TTL = getattr(settings, "OTP_TTL", 5*60)
 MAX_OTP_SENDS_PER_HOUR = getattr(settings, "MAX_OTP_SENDS_PER_HOUR", 5)
 MAX_OTP_VERIFY_ATTEMPTS = getattr(settings, "MAX_OTP_VERIFY_ATTEMPTS", 5)
@@ -94,8 +94,8 @@ def issue_reauth_token(user_id: int) -> str:
     token = secrets.token_urlsafe(32)
     key = f"seller:reauth:{user_id}"
     try:
-        # Store in cache with TTL (e.g., 15 minutes)
-        cache.set(key, token, timeout=getattr(settings, "REAUTH_TTL", 15*60))
+        # Store in cache with TTL (e.g., 6 hours minutes)
+        cache.set(key, token, timeout=getattr(settings, "REAUTH_TTL", 6*60*60))
         # Update last activity too
         set_last_activity(user_id)
         return token
