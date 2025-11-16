@@ -485,7 +485,7 @@ class ReauthOTPVerifyView(APIView, BaseResponseMixin):
                 httponly=True,
                 secure=True,  # only True if HTTPS
                 samesite="None",
-                max_age=getattr(settings, "REAUTH_TTL", 15 * 60),
+                max_age=getattr(settings, "REAUTH_TTL", 6 * 60 * 60),
             )
             return resp
 
