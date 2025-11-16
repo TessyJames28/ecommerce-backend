@@ -182,4 +182,7 @@ class SellerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SellerKYC
-        fields = ['user', 'country', 'cac', 'nin', 'address', 'socials', 'status', 'is_verified']
+        fields = [
+            'user', 'country', 'cac', 'nin', 'address', 'socials', 'status', 'is_verified'
+            'partial_verified'
+        ]
