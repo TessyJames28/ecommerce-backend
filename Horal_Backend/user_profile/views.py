@@ -22,14 +22,20 @@ class GetUserProfileView(GenericAPIView, BaseResponseMixin):
 
     def get(self, request):
         """Retrieve user profile details"""
-        profile = self.get_profile()
-        serializer = self.get_serializer(profile)
+        try:
+            profile = self.get_profile()
+            serializer = self.get_serializer(profile)
 
-        return self.get_response(
-            status.HTTP_200_OK,
-            "User profile retrieve successfully",
-            serializer.data
-        )
+            return self.get_response(
+                status.HTTP_200_OK,
+                "User profile retrieve successfully",
+                serializer.data
+            )
+        except Exception as e:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                f"Error retrieving profile: {str(e)}"
+            )
 
 
     def patch(self, request):
@@ -42,16 +48,22 @@ class GetUserProfileView(GenericAPIView, BaseResponseMixin):
             ]
         }
         """
-        profile = self.get_profile()
-        serializer = self.get_serializer(profile, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
+        try:
+            profile = self.get_profile()
+            serializer = self.get_serializer(profile, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
 
-        return self.get_response(
-            status.HTTP_200_OK,
-            "User profile updated successfully",
-            serializer.data
-        )
+            return self.get_response(
+                status.HTTP_200_OK,
+                "User profile updated successfully",
+                serializer.data
+            )
+        except Exception as e:
+            return self.get_response(
+                status.HTTP_400_BAD_REQUEST,
+                f"Error updating profile: {str(e)}"
+            )
     
 
 class AllUserProfileView(GenericAPIView, BaseResponseMixin):
@@ -63,11 +75,17 @@ class AllUserProfileView(GenericAPIView, BaseResponseMixin):
 
     def get(self, request):
         """Retrieve all user profile"""
-        serializer = self.get_serializer(self.get_queryset(), many=True)
+        try:
+            serializer = self.get_serializer(self.get_queryset(), many=True)
 
-        return self.get_response(
-            status.HTTP_200_OK,
-            "All user profiles retrieve successfully",
-            serializer.data
-        )
+            return self.get_response(
+                status.HTTP_200_OK,
+                "All user profiles retrieve successfully",
+                serializer.data
+            )
+        except Exception as e:
+            return self.get_response(
+                status.HTTP_404_NOT_FOUND,
+                f"Error retrieving profiles: {str(e)}"
+            )
     
