@@ -362,9 +362,22 @@ WSGI_APPLICATION = 'Horal_Backend.wsgi.application'
 # }
 
 # Postgres DB on render
+# DATABASES = {
+#     'default': env.db('DATABASE_URL'),
+# }
+
+# Local postgres DB
 DATABASES = {
-    'default': env.db('DATABASE_URL'),
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'local_copy',         # the restored database
+        'USER': 'postgres',           # or your PostgreSQL user
+        'PASSWORD': 'Gemini285@',               # password for that user, if any
+        'HOST': 'localhost',
+        'PORT': '5432',
+    }
 }
+
 
 # auth user model
 AUTH_USER_MODEL = 'users.CustomUser'
