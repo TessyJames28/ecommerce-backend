@@ -85,41 +85,55 @@ def scan_image_model(model_class, bucket_name: str):
         exists_in_s3 = s3_file_exists(file_key, bucket_name)
 
         # Case 1: DB broken but file exists => delete both
+        print(f"Scanning image: {img.url}")
         if record_is_broken and exists_in_s3:
-            delete_s3_file(file_key, bucket_name)
+            print("Checking image corruption in record is broken but file exists in S3 case...")
+            # delete_s3_file(file_key, bucket_name)
+            pass
 
             if product.images.count() <= 1:
+                print("Unpublishing product due to all images being broken.")
                 products_to_unpublish.add(product.id)
             else:
-                img.delete()
+                # img.delete()
+                print(f"Deleting broken image record: {img.url}")
             continue
 
         # Case 2: DB broken and file missing => delete DB entry
         if record_is_broken and not exists_in_s3:
+            print("In record is broken and file missing in S3 case...")
             if product.images.count() <= 1:
+                print("Unpublishing product due to all images being broken.")
                 products_to_unpublish.add(product.id)
             else:
-                img.delete()
+                # img.delete()
+                print(f"Deleting broken image record: {img.url}")
             continue
 
         # Case 3A: DB ok but missing on S3 → broken
         if not record_is_broken and not exists_in_s3:
+            print("In DB okay but missing on S3 case 3A...")
             if product.images.count() <= 1:
+                print("Unpublishing product due to all images being broken.")
                 products_to_unpublish.add(product.id)
             else:
-                img.delete()
+                # img.delete()
+                print(f"Deleting broken image record: {img.url}")
             continue
 
         
         # Case 3B: DB okay, S3 exists, but file is corrupted
         if not record_is_broken and exists_in_s3:
+            print("Checking image corruption in DB okay and file exists in S3 case 3B...")
             # Check if file is corrupted
             if is_corrupted_image(file_key, bucket_name):
                 if product.images.count() <= 1:
+                    print("Unpublishing product due to all images being broken.")
                     products_to_unpublish.add(product.id)
                 else:
-                    delete_s3_file(file_key, bucket_name)
-                    img.delete()
+                    # delete_s3_file(file_key, bucket_name)
+                    # img.delete()
+                    print(f"Deleting broken image record: {img.url}")
             continue
 
     #  Unpublish products with 1 broken image remaining
