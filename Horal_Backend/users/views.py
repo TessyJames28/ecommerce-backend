@@ -64,7 +64,7 @@ class RegisterUserView(GenericAPIView):
 
         # Store registration data temporarily for 30mins
         safe_cache_set(f"reg_data:{email}", json.dumps(serializer.validated_data), timeout=1800)
-        safe_cache_set(f"otp:{email}", otp, timeout=300) # OTP valid for 5 mins
+        safe_cache_set(f"otp:{email}", otp, timeout=600) # OTP valid for 10 mins
 
         # Send OTP
         send_registration_otp_email(email, otp, user_name)
@@ -208,7 +208,7 @@ class ResendRegistrationOTPView(GenericAPIView):
 
         # Generate a new OTP or reuse the old one
         otp = generate_otp()
-        safe_cache_set(f"otp:{email}", otp, timeout=300)  # 5 mins expiry
+        safe_cache_set(f"otp:{email}", otp, timeout=600)  # 10 mins expiry
 
         # Send OTP email
         user_data = json.loads(reg_data)
