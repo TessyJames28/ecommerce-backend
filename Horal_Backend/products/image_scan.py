@@ -111,15 +111,15 @@ def scan_image_model(model_class, bucket_name: str):
             continue
 
         # Case 3A: DB ok but missing on S3 → broken
-        if not record_is_broken and not exists_in_s3:
-            print("In DB okay but missing on S3 case 3A...")
-            if product.images.count() <= 1:
-                print("Unpublishing product due to all images being broken.")
-                products_to_unpublish.add(product.id)
-            else:
-                print(f"Deleting broken image record: {img.url}")
-                img.delete()
-            continue
+        # if not record_is_broken and not exists_in_s3:
+        #     print("In DB okay but missing on S3 case 3A...")
+        #     if product.images.count() <= 1:
+        #         print("Unpublishing product due to all images being broken.")
+        #         products_to_unpublish.add(product.id)
+        #     else:
+        #         print(f"Deleting broken image record: {img.url}")
+        #         img.delete()
+        #     continue
 
         
         # Case 3B: DB okay, S3 exists, but file is corrupted
