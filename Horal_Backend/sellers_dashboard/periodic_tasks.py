@@ -229,25 +229,25 @@ def setup_daily_task():
     )
 
 
-def setup_daily_tasks_for_broken_image_cleanup():
-    """Run every day vy 3am to scan and clean broken product images"""
-    schedule, _ = CrontabSchedule.objects.get_or_create(
-        minute='0',
-        hour='3',
-        day_of_month='*',
-        month_of_year='*',
-        day_of_week='*'
-    )
+# def setup_daily_tasks_for_broken_image_cleanup():
+#     """Run every day vy 3am to scan and clean broken product images"""
+#     schedule, _ = CrontabSchedule.objects.get_or_create(
+#         minute='0',
+#         hour='3',
+#         day_of_month='*',
+#         month_of_year='*',
+#         day_of_week='*'
+#     )
 
-    # Register the periodic task
-    PeriodicTask.objects.get_or_create(
-        name="Daily scan and clean broken product images",
-        defaults={
-            "task": f'{product_location}task_scan_and_clean_images',
-            'crontab': schedule,
-            'enabled': True
-        },
-    )
+#     # Register the periodic task
+#     PeriodicTask.objects.get_or_create(
+#         name="Daily scan and clean broken product images",
+#         defaults={
+#             "task": f'{product_location}task_scan_and_clean_images',
+#             'crontab': schedule,
+#             'enabled': True
+#         },
+#     )
 
 
 def setup_all_tasks():
@@ -258,5 +258,5 @@ def setup_all_tasks():
     setup_cart_abandonment_and_order_review_task()
     setup_order_expiration_task()
     setup_daily_task()
-    setup_daily_tasks_for_broken_image_cleanup()
+    # setup_daily_tasks_for_broken_image_cleanup()
 
