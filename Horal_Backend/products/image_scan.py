@@ -88,15 +88,15 @@ def scan_image_model(model_class, bucket_name: str):
         print(f"Scanning image: {img.url}")
         if record_is_broken and exists_in_s3:
             print("Checking image corruption in record is broken but file exists in S3 case...")
-            # delete_s3_file(file_key, bucket_name)
+            delete_s3_file(file_key, bucket_name)
             pass
 
             if product.images.count() <= 1:
                 print("Unpublishing product due to all images being broken.")
                 products_to_unpublish.add(product.id)
             else:
-                # img.delete()
                 print(f"Deleting broken image record: {img.url}")
+                img.delete()
             continue
 
         # Case 2: DB broken and file missing => delete DB entry
@@ -106,8 +106,8 @@ def scan_image_model(model_class, bucket_name: str):
                 print("Unpublishing product due to all images being broken.")
                 products_to_unpublish.add(product.id)
             else:
-                # img.delete()
                 print(f"Deleting broken image record: {img.url}")
+                img.delete()
             continue
 
         # Case 3A: DB ok but missing on S3 → broken
@@ -117,8 +117,8 @@ def scan_image_model(model_class, bucket_name: str):
                 print("Unpublishing product due to all images being broken.")
                 products_to_unpublish.add(product.id)
             else:
-                # img.delete()
                 print(f"Deleting broken image record: {img.url}")
+                img.delete()
             continue
 
         
@@ -131,16 +131,19 @@ def scan_image_model(model_class, bucket_name: str):
                     print("Unpublishing product due to all images being broken.")
                     products_to_unpublish.add(product.id)
                 else:
-                    # delete_s3_file(file_key, bucket_name)
-                    # img.delete()
                     print(f"Deleting broken image record: {img.url}")
+                    delete_s3_file(file_key, bucket_name)
+                    img.delete()
             continue
 
-    #  Unpublish products with 1 broken image remaining
-    if products_to_unpublish:
-        model_class._meta.get_field("product").remote_field.model.objects.filter(
-            id__in=products_to_unpublish
-        ).update(is_published=False)
+    qs = model_class._meta.get_field("product").remote_field.model.objects.filter(
+        id__in=products_to_unpublish
+    )
+
+    for obj in qs:
+        obj.is_published = False
+        obj.save()   # <-- Triggers signals
+
 
 
 def scan_all_product_images():
@@ -149,5 +152,6 @@ def scan_all_product_images():
 
     with transaction.atomic():
         for model in IMAGE_MODELS:
+            print(f"Scanning images for model: {model.__name__}")
             scan_image_model(model, bucket)
 
