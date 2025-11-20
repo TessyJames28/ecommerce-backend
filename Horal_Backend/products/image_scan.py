@@ -146,7 +146,7 @@ def scan_image_model(model_class, bucket_name: str):
     )
 
     for obj in qs:
-        obj.is_published = True
+        obj.is_published = False
         obj.save()   # <-- Triggers signals
 
 
