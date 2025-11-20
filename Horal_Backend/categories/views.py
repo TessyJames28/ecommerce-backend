@@ -157,7 +157,7 @@ class SingleCategoryDetailView(GenericAPIView, BaseResponseMixin):
             # Choose the list to drive ordering 
             ordered_ids = trending[:12] + new_items[:12] + random_items[:12]
         
-            products = ProductIndex.objects.filter(category=category.name)
+            products = ProductIndex.objects.filter(category=category.name, is_published=True).distinct()
             
             preserved_qs = Case(
                 *[When(id=pid, then=pos) for pos, pid in enumerate(ordered_ids)]
