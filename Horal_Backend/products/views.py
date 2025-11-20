@@ -420,10 +420,19 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
         # Combine slices
         combined_ids = new_slice + trending_slice + random_slice
 
+        # Avoid duplicates while preserving order
+        seen = set()
+        deduped_ids = []
+        for pid in combined_ids:
+            if pid not in seen:
+                deduped_ids.append(pid)
+                seen.add(pid)
+
+
         # Fetch products and preserve order
-        products_qs = self.get_queryset().filter(id__in=combined_ids)
+        products_qs = self.get_queryset().filter(id__in=deduped_ids)
         products_dict = {p.id: p for p in products_qs}
-        ordered_products = [products_dict[pid] for pid in combined_ids if pid in products_dict]
+        ordered_products = [products_dict[pid] for pid in deduped_ids if pid in products_dict]
 
         return ordered_products
 
@@ -519,15 +528,24 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
                     )
 
                     if only_category:
-                        # Choose the list to drive ordering (random by default)
-                        ordered_ids = ordered_ids = trending[:12] + new_items[:12] + random_items[:12] # use trending/new_items based on UI later
+                        # Combine cached lists
+                        combined_ids = trending[:12] + new_items[:12] + random_items[:12]
 
+                        # Deduplicate while preserving order
+                        seen = set()
+                        ordered_ids = []
+                        for pid in combined_ids:
+                            if pid not in seen:
+                                ordered_ids.append(pid)
+                                seen.add(pid)
+
+                        # Filter products using deduplicated IDs
                         products = products.filter(id__in=ordered_ids)
 
+                        # Preserve order in queryset
                         preserved_order = Case(
                             *[When(id=pid, then=pos) for pos, pid in enumerate(ordered_ids)]
                         )
-
                         products = products.order_by(preserved_order)
 
                     if rating:
