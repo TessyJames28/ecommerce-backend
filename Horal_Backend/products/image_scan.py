@@ -10,6 +10,7 @@ from .models import (
     FoodImage, HealthAndBeautyImage, AccessoryImage,
     ChildrenImage, GadgetImage
 )
+import requests
 
 
 IMAGE_MODELS = [
@@ -48,13 +49,17 @@ def delete_s3_file(file_key: str, bucket: str):
 def is_broken_record(img) -> bool:
     """Function to determine if an image record is broken"""
     if not img.url:
-        return True
+        return True  # No URL → broken
     
-    parsed = urlparse(img.url)
-    if not parsed.path or "." not in parsed.path:
-        return True
-    
-    return False
+    try:
+        response = requests.get(img.url, timeout=5)
+        response.raise_for_status()  # Ensure URL is reachable
+        
+        image = Image.open(BytesIO(response.content))
+        image.verify()  # Verify image integrity
+        return False  # Image is valid
+    except Exception:
+        return True  # Broken image
 
 
 def is_corrupted_image(file_key, bucket):
@@ -88,7 +93,7 @@ def scan_image_model(model_class, bucket_name: str):
         print(f"Scanning image: {img.url}")
         if record_is_broken and exists_in_s3:
             print("Checking image corruption in record is broken but file exists in S3 case...")
-            delete_s3_file(file_key, bucket_name)
+            # delete_s3_file(file_key, bucket_name)
             pass
 
             if product.images.count() <= 1:
