@@ -155,10 +155,20 @@ class SingleCategoryDetailView(GenericAPIView, BaseResponseMixin):
             trending, new_items, random_items = self.get_category_lists(category.name)
 
             # Choose the list to drive ordering 
-            ordered_ids = trending[:12] + new_items[:12] + random_items[:12]
-        
-            products = ProductIndex.objects.filter(category=category.name, is_published=True).distinct()
-            
+            combined_ids = trending[:12] + new_items[:12] + random_items[:12]
+
+            # Deduplicate while preserving order
+            seen = set()
+            ordered_ids = []
+            for pid in combined_ids:
+                if pid not in seen:
+                    ordered_ids.append(pid)
+                    seen.add(pid)
+
+            # Filter products
+            products = ProductIndex.objects.filter(category=category.name, is_published=True, id__in=ordered_ids)
+
+            # Preserve order
             preserved_qs = Case(
                 *[When(id=pid, then=pos) for pos, pid in enumerate(ordered_ids)]
             )
