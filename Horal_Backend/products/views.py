@@ -529,7 +529,9 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
 
                     if only_category:
                         # Combine cached lists
-                        combined_ids = trending[:12] + new_items[:12] + random_items[:12]
+                        # combined_ids = trending[:12] + new_items[:12] + random_items[:12]
+                        combined_ids = trending + new_items + random_items
+
 
                         # Deduplicate while preserving order
                         seen = set()
@@ -540,13 +542,20 @@ class ProductListView(GenericAPIView, BaseResponseMixin):
                                 seen.add(pid)
 
                         # Filter products using deduplicated IDs
-                        products = products.filter(id__in=ordered_ids)
+                        # products = products.filter(id__in=ordered_ids) # Returned when company grows
 
-                        # Preserve order in queryset
-                        preserved_order = Case(
-                            *[When(id=pid, then=pos) for pos, pid in enumerate(ordered_ids)]
-                        )
-                        products = products.order_by(preserved_order)
+                        # # Preserve order in queryset
+                        # preserved_order = Case(
+                        #     *[When(id=pid, then=pos) for pos, pid in enumerate(ordered_ids)]
+                        # )
+                        # products = products.order_by(preserved_order)
+
+                        products = products.annotate(
+                            order=Case(
+                                *[When(id=pid, then=pos) for pos, pid in enumerate(ordered_ids)],
+                                default=999999
+                            )
+                        ).order_by("order", "-created_at")
 
                     if rating:
                         rating = float(rating)
