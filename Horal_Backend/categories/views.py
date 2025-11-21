@@ -155,7 +155,8 @@ class SingleCategoryDetailView(GenericAPIView, BaseResponseMixin):
             trending, new_items, random_items = self.get_category_lists(category.name)
 
             # Choose the list to drive ordering 
-            combined_ids = trending[:12] + new_items[:12] + random_items[:12]
+            # combined_ids = trending[:12] + new_items[:12] + random_items[:12]
+            combined_ids = trending + new_items + random_items
 
             # Deduplicate while preserving order
             seen = set()
@@ -169,10 +170,17 @@ class SingleCategoryDetailView(GenericAPIView, BaseResponseMixin):
             products = ProductIndex.objects.filter(category=category.name, is_published=True, id__in=ordered_ids)
 
             # Preserve order
-            preserved_qs = Case(
-                *[When(id=pid, then=pos) for pos, pid in enumerate(ordered_ids)]
-            )
-            products = products.order_by(preserved_qs)
+            # preserved_qs = Case(
+            #     *[When(id=pid, then=pos) for pos, pid in enumerate(ordered_ids)]
+            # )
+            # products = products.order_by(preserved_qs)
+
+            products = products.annotate(
+                order=Case(
+                    *[When(id=pid, then=pos) for pos, pid in enumerate(ordered_ids)],
+                    default=999999
+                )
+            ).order_by("order", "-created_at")
 
             # Paginate the product queryset
             page = self.paginate_queryset(products)
