@@ -8,6 +8,7 @@ from support.utils import (
     generate_received_subject
 )
 from collections import defaultdict
+from notifications.bulk_sms.bulk_sms_api import BulkSMSAPI
 from .utils import format_variant
 from products.models import ProductIndex, ProductVariant
 from notifications.tasks import send_email_task
@@ -20,6 +21,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 shipment_delivered = Signal()
+api = BulkSMSAPI()
 
 
 @receiver(shipment_delivered)
@@ -234,6 +236,7 @@ def create_fez_shipment_on_paid(sender, instance: Order, created, **kwargs):
     # Group seller data
     sellers_data = defaultdict(lambda: {
         "email": "",
+        "phone_number": "",
         "name": "",
         "items": [],
     })
@@ -245,6 +248,7 @@ def create_fez_shipment_on_paid(sender, instance: Order, created, **kwargs):
         
         if seller_id not in sellers_data:
             sellers_data[seller_id]["email"] = seller.user.email
+            sellers_data[seller_id]["phone_number"] = seller.user.phone_number
             sellers_data[seller_id]["name"] = seller.user.full_name
 
         # Add shipment items
@@ -266,6 +270,15 @@ def create_fez_shipment_on_paid(sender, instance: Order, created, **kwargs):
             f"Order ID: {instance.id}",
             "Here are the items you need to prepare:"
         ]
+
+        message = f"Hello {data["name"]}, You have a new order. Please check your email for details."
+
+        # Send SMS
+        try:
+            if data["phone_number"]:
+                api.send_sms(data["phone_number"], message)
+        except Exception as e:
+            logger.warning(f"Error sending sms for order: {str(e)}")
 
         send_email_task.delay(
             recipient=data["email"],
@@ -339,15 +352,6 @@ def send_order_status_email(sender, instance, created, **kwargs):
     from_email = f"Horal Shipment <{settings.DEFAULT_FROM_EMAIL}>"
     # pickup_station = Station.objects.get(station_id=instance.buyer_station)
 
-    # Email customers based on status
-    # if status == OrderShipment.Status.PENDING_RECIPIENT_PICKUP:
-    #     subject = "Your order is ready for pickup"
-    #     message = [
-    #         f"Your order #{instance.order.id} is now available for pickup at the designated location.",
-    #         f"Our partner will reach out with pickup address." ,
-    #         f"Please collect it as soon as possible.",
-    #         "Thank you!"
-    #     ]
     if status == OrderShipment.Status.DELIVERED:
         subject = "Your order has been delivered"
         message = [
@@ -356,20 +360,6 @@ def send_order_status_email(sender, instance, created, **kwargs):
             f"If there are any issues, you may initiate a return request within this period.",
             "Thank you!"
         ]
-    # elif status in DELAY_STATUSES:
-    #     subject = "Delivery Delay Notification"
-    #     message = [
-    #         f"There has been a delay with your order #{instance.order.id}.",
-    #         "We sincerely apologize for the inconvenience and appreciate your patience.",
-    #         "Thank you!"
-    #     ]
-    # elif status in DELAY_STATUSES_CUSTOMER:
-    #     subject = "Delivery Delay Notification"
-    #     message = [
-    #         f"Your order shipment #{instance.id} has arrived at the pickup station.",
-    #         f"Kindly go to the address provided by our partner to pick up your order",
-    #         "Thank you!"
-    #     ]
     else:
         return
 
