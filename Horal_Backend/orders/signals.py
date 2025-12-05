@@ -280,7 +280,7 @@ def create_fez_shipment_on_paid(sender, instance: Order, created, **kwargs):
         except Exception as e:
             logger.warning(f"Error sending sms for order: {str(e)}")
 
-        send_email_task.delay(
+        send_email_task(
             recipient=data["email"],
             subject=seller_subject,
             from_email=from_email,

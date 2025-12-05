@@ -31,7 +31,7 @@ def send_registration_otp_email(to_email, otp_code, name, mobile=None):
     except Exception as e:
         logger.warning(f"Failed to send OTP SMS: {str(e)}")
 
-    send_email_task.delay(
+    send_email_task(
         recipient=to_email,
         subject="Horal Registration Verification",
         from_email=from_email,
@@ -50,7 +50,7 @@ def send_registration_url_email(to_email, url, name):
 
     from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
 
-    send_email_task.delay(
+    send_email_task(
         recipient=to_email,
         subject="Horal Registration Verification",
         from_email=from_email,
@@ -76,7 +76,7 @@ def send_otp_email(to_email, otp_code, name, mobile=None):
     except Exception as e:
         logger.warning(f"Failed to send OTP SMS: {str(e)}")
 
-    send_email_task.delay(
+    send_email_task(
         recipient=to_email,
         subject="Password Reset OTP",
         from_email=from_email,
@@ -105,7 +105,7 @@ def send_reauth_email(to_email, otp_code, subject, name, mobile=None):
         logger.warning(f"Failed to send OTP SMS: {str(e)}")
 
 
-    send_email_task.delay(
+    send_email_task(
         recipient=to_email,
         subject=subject,
         from_email=from_email,
@@ -132,7 +132,7 @@ def send_refund_email(user_email, order_id, username):
         "We hope to see your next purchase soon."
     ]
 
-    send_email_task.delay(
+    send_email_task(
         recipient=user_email,
         subject=subject,
         from_email=f"Horal <{settings.DEFAULT_FROM_EMAIL}>",
@@ -166,7 +166,7 @@ def send_kyc_info_completed_email(user):
         "We appreciate your interest in selling on Horal."
     ]
 
-    send_email_task.delay(
+    send_email_task(
         recipient=email,
         subject=subject,
         from_email=f"Horal Marketplace <{settings.DEFAULT_FROM_EMAIL}>",
@@ -226,7 +226,7 @@ def send_kyc_final_status_email(user, status):
     else:
         raise ValueError("Invalid KYC status")
 
-    send_email_task.delay(
+    send_email_task(
         recipient=email,
         subject=subject,
         from_email=f"Horal Marketplace <{settings.DEFAULT_FROM_EMAIL}>",
@@ -272,7 +272,7 @@ def send_seller_registration_email(user, status):
             "url": "https://www.horal.ng/sellers-dashboard/shop-products"
         }
 
-    send_email_task.delay(
+    send_email_task(
         recipient=email,
         subject=subject,
         from_email=f"Horal Marketplace <{settings.DEFAULT_FROM_EMAIL}>",
