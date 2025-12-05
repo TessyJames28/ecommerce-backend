@@ -3,7 +3,6 @@ from requests.exceptions import HTTPError
 from datetime import timedelta, datetime
 from django.utils import timezone
 from django.core.cache import cache
-import pytz
 import requests
 import logging
 
@@ -13,6 +12,8 @@ logger = logging.getLogger(__name__)
 BASE_URL = settings.FEZ_BASE_URL
 USERNAME = settings.FEZ_USERNAME
 PASSWORD = settings.FEZ_PASSWORD
+
+STRICT_TTL_SECONDS = 150 * 60   # 2hrs 30mins = 9000 seconds
 
 
 class FEZDeliveryAPI:
@@ -27,45 +28,25 @@ class FEZDeliveryAPI:
     def get_or_refresh_token(self):
         token = cache.get("fez_token")
         secret = cache.get("fez_secret")
-        expiry = cache.get("fez_expiry")  # stored as datetime
 
-        now = timezone.now()
-        # valid token?
-        if token and expiry:
-            # convert both to UTC-aware datetimes and timestamps
-            expiry_utc = expiry.astimezone(pytz.UTC)
-            now_utc = now.astimezone(pytz.UTC)
-            
-            if now_utc < expiry_utc:
-                return token, secret
+        # Return token and secret if still valid
+        if token and secret:
+            return token, secret
 
         # get new token
-        token, secret, expiry = self.authenticate()
+        token, secret = self.authenticate()
 
-        # ensure expiry is aware and in UTC
-        if expiry.tzinfo is None:
-            expiry = timezone.make_aware(expiry, pytz.UTC)
-        expiry_utc = expiry.astimezone(pytz.UTC)
-        now_utc = timezone.now().astimezone(pytz.UTC)
+        # Ignore: expiry from fez and use strict fixed TTL of 2hrs 30mins
+        ttl_seconds = STRICT_TTL_SECONDS
 
-        # compute grace time (expiry minus 10 minutes)
-        grace_utc = expiry_utc - timedelta(minutes=10)
-       
-        # compute TTL in seconds: (grace_time - now)
-        ttl_seconds = int((grace_utc - now_utc).total_seconds())
-
-        # safety: prevent negative or tiny TTL
-        ttl_seconds = max(ttl_seconds, 60)
-        print(f"[FEZ] expiry_utc={expiry_utc}, grace_utc={grace_utc}, now_utc={now_utc}")
-        print(f"[FEZ] TTL seconds calculated: {ttl_seconds}")
-
-        # DEBUG log to verify
-        logger.info(f"[FEZ] expiry_utc={expiry_utc}, grace_utc={grace_utc}, now_utc={now_utc}")
-        logger.info(f"[FEZ] TTL seconds calculated: {ttl_seconds}")
+        logger.info(f"fixed [FEZ] TTL seconds calculated: {ttl_seconds}")
 
         cache.set("fez_token", token, timeout=ttl_seconds)
         cache.set("fez_secret", secret, timeout=ttl_seconds)
-        cache.set("fez_expiry", expiry, timeout=ttl_seconds)
+
+        # Store expiry just for debugging, not used for validation
+        forced_expiry = timezone.now() + timedelta(seconds=ttl_seconds)
+        cache.set("fez_expiry", forced_expiry, timeout=ttl_seconds)
 
         return token, secret
 
@@ -84,14 +65,7 @@ class FEZDeliveryAPI:
             authtoken = res.json()["authDetails"]["authToken"]
             secret_key = res.json()["orgDetails"]["secret-key"]
 
-            # Parse token expiration
-            expiry_str = res.json()["authDetails"]["expireToken"]
-            expiry_dt = datetime.strptime(expiry_str, "%Y-%m-%d %H:%M:%S")
-
-            # Convert to aware datetime (UTC)
-            expiry_dt = timezone.make_aware(expiry_dt, timezone=pytz.UTC)
-
-            return authtoken, secret_key, expiry_dt
+            return authtoken, secret_key
         
         except HTTPError as e:
             logger.error(f"Error while authenticating on FEZ: {str(e)}")
@@ -107,13 +81,68 @@ class FEZDeliveryAPI:
         }
     
 
+    def invalidate_fez_cache(self):
+        """Delete all FEZ token cache items so next request forces fresh authentication."""
+        cache.delete("fez_token")
+        cache.delete("fez_secret")
+        cache.delete("fez_expiry")
+        logger.warning("FEZ cache invalidated — token will be refreshed on next request.")
+
+    
+    def fex_request(self, method, url, retry=False, **kwargs):
+        """
+        Method to handle sending request to FEZ delivery. 
+        If FEZ returns 5xx (or network error):
+            - Invalidate cached token and secret
+            - Refresh token and retry once
+        """
+        try:
+            res = requests.request(
+                method, url, headers=self._headers(), timeout=15, **kwargs
+            )
+        except requests.exceptions.RequestException as e:
+            # Network level error: invalidate and retry once
+            logger.error(f"FEZ network error: {e}")
+            if not retry:
+                self.invalidate_fez_cache()
+                # Force refresh
+                self.authtoken, self.secret_key = self.get_or_refresh_token()
+                return self.fex_request(method, url, retry=True, **kwargs)
+
+            # Already retried => propagate to None and allow method caller to handle it
+            return None
+        
+        # If success => return response
+        if res.status_code < 400:
+            return res
+        
+        # For 5xx and 401 response, invalidate and retry once
+        if (res.status_code == 401 or 500 <= res.status_code < 600) and not retry:
+            logger.warning(f"FEZ returned {res.status_code}. Invalidate token and retrying once")
+            self.invalidate_fez_cache()
+            self.authtoken, self.secret_key = self.get_or_refresh_token()
+            return self.fex_request(method, url, retry=True, **kwargs)
+        
+        # Else return the response for calling method to parse
+        return res
+
+
     def get_price(self, payload):
         """Get delivery price for shipments order"""
         try:
             url = f"{BASE_URL}/order/cost"
-            res = requests.post(
-                url, json=payload, headers=self._headers(), timeout=15
-            )
+            # res = requests.post(
+            #     url, json=payload, headers=self._headers(), timeout=15
+            # )
+            res = self.fex_request("POST", url, json=payload)
+            
+            if res is None:
+                # Network error and retry exhausted
+                return {
+                    "error": True,
+                    "details": "Network or provider failure"
+                }
+            
             res.raise_for_status()
             return res.json()
         
@@ -131,7 +160,16 @@ class FEZDeliveryAPI:
         """Create shipment order and get order id"""
         try:
             url = f"{BASE_URL}/order"
-            res = requests.post(url, json=payload, headers=self._headers(), timeout=15)
+            # res = requests.post(url, json=payload, headers=self._headers(), timeout=15)
+            res = self.fex_request("POST", url, json=payload)
+            
+            if res is None:
+                # Network error and retry exhausted
+                return {
+                    "error": True,
+                    "details": "Network or provider failure"
+                }
+            
             res.raise_for_status()
             return res.json()
         
@@ -149,7 +187,16 @@ class FEZDeliveryAPI:
         """Get a single order details based on order id"""
         try:
             url = f"{BASE_URL}/orders/{order_id}"
-            res = requests.get(url, headers=self._headers(), timeout=15)
+            # res = requests.get(url, headers=self._headers(), timeout=15)
+            
+            res = self.fex_request("GET", url)
+            
+            if res is None:
+                # Network error and retry exhausted
+                return {
+                    "error": True,
+                    "details": "Network or provider failure"
+                }
             res.raise_for_status()
             return res.json()
         
@@ -167,7 +214,17 @@ class FEZDeliveryAPI:
         """Search shipment using waybill number"""
         try:
             url = f"{BASE_URL}/orders/search/{waybillNumber}"
-            res = requests.get(url, headers=self._headers(), timeout=15)
+            # res = requests.get(url, headers=self._headers(), timeout=15)
+            
+            res = self.fex_request("GET", url)
+            
+            if res is None:
+                # Network error and retry exhausted
+                return {
+                    "error": True,
+                    "details": "Network or provider failure"
+                }
+            
             res.raise_for_status()
             
             return res.json()
@@ -186,7 +243,17 @@ class FEZDeliveryAPI:
         """Track shipment using FEZ Delivery worder number"""
         try:
             url = f"{BASE_URL}/order/track/{orderNumber}"
-            res = requests.get(url, headers=self._headers(), timeout=15)
+            # res = requests.get(url, headers=self._headers(), timeout=15)
+            
+            res = self.fex_request("GET", url)
+            
+            if res is None:
+                # Network error and retry exhausted
+                return {
+                    "error": True,
+                    "details": "Network or provider failure"
+                }
+            
             res.raise_for_status()
             
             return res.json()
@@ -205,9 +272,19 @@ class FEZDeliveryAPI:
         """Post method to track an entire order for a single user"""
         try:
             url = f"{BASE_URL}/orders/search"
-            res = requests.post(
-                url, json=payload, headers=self._headers(), timeout=15
-            )
+            # res = requests.post(
+            #     url, json=payload, headers=self._headers(), timeout=15
+            # )
+
+            res = self.fex_request("POST", url, json=payload)
+            
+            if res is None:
+                # Network error and retry exhausted
+                return {
+                    "error": True,
+                    "details": "Network or provider failure"
+                }
+            
             res.raise_for_status()
             return res.json()
         
@@ -225,7 +302,17 @@ class FEZDeliveryAPI:
         """Return estimated delivery time for an order"""
         try:
             url = f"{BASE_URL}/delivery-time-estimate"
-            res = requests.post(url, json=payload, headers=self._headers(), timeout=15)
+            # res = requests.post(url, json=payload, headers=self._headers(), timeout=15)
+            
+            res = self.fex_request("POST", url, json=payload)
+            
+            if res is None:
+                # Network error and retry exhausted
+                return {
+                    "error": True,
+                    "details": "Network or provider failure"
+                }
+            
             res.raise_for_status()
             
             return res.json()
@@ -245,7 +332,17 @@ class FEZDeliveryAPI:
         payload = {"webhook": settings.HORAL_FEZ_WEBHOOK.strip()}
         try:
             url = f"{BASE_URL}/webhooks/store"
-            res = requests.post(url, json=payload, headers=self._headers(), timeout=15)
+            # res = requests.post(url, json=payload, headers=self._headers(), timeout=15)
+            
+            res = self.fex_request("POST", url, json=payload)
+            
+            if res is None:
+                # Network error and retry exhausted
+                return {
+                    "error": True,
+                    "details": "Network or provider failure"
+                }
+            
             res.raise_for_status()
             return res.json()
         
