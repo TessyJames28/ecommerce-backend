@@ -215,8 +215,10 @@ MAP_API_KEY = env('MAP_API_KEY')
 
 # Bulk SMS API Token Integration
 BULK_SMS_API = env('BULK_SMS_API')
+BULK_SMS_LEGACY_API = env('BULK_SMS_LEGACY_API')
 BULK_SMS_BASE_URL = env('BULK_SMS_BASE_URL')
 BULK_SMS_SENDER_ID = env('BULK_SMS_SENDER_ID')
+BULK_SMS_API_TOKEN = env("BULK_SMS_API_TOKEN")
 
 
 # Mailgun settings
@@ -274,63 +276,63 @@ redis_url = env("REDIS_URL")
 url = urlparse.urlparse(redis_url)
 
 
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": f"redis://{url.hostname}:{url.port}/0",
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            # No PASSWORD, no SSL
-        }
-    }
-}
-
-# Celery settings
-CELERY_BROKER_URL = f"redis://{url.hostname}:{url.port}/0"
-CELERY_RESULT_BACKEND = CELERY_BROKER_URL
-
-# No SSL needed for Render internal Redis
-CELERY_BROKER_USE_SSL = None  
-
-CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
-
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = "UTC"
-
-
 # CACHES = {
 #     "default": {
 #         "BACKEND": "django_redis.cache.RedisCache",
-#         "LOCATION": f"{url.scheme}://{url.hostname}:{url.port}/0",
+#         "LOCATION": f"redis://{url.hostname}:{url.port}/0",
 #         "OPTIONS": {
 #             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-#             "PASSWORD": url.password,
-#             "SSL": url.scheme == "rediss",
+#             # No PASSWORD, no SSL
 #         }
 #     }
 # }
 
+# # Celery settings
+# CELERY_BROKER_URL = f"redis://{url.hostname}:{url.port}/0"
+# CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 
-# # Celery setting
-# import ssl
+# # No SSL needed for Render internal Redis
+# CELERY_BROKER_USE_SSL = None  
 
-# # Change to its redis DB on production with custom redis setup
-# CELERY_BROKER_URL = env("REDIS_URL")
+# CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
-# CELERY_BROKER_USE_SSL = {
-#     # Change to SSL.CERT_REQUIRED when using own trusted custom redis
-#     'ssl_cert_reqs': None # or ssl.CERT_NONE 
-# }
+# CELERY_ACCEPT_CONTENT = ["json"]
+# CELERY_TASK_SERIALIZER = "json"
+# CELERY_RESULT_SERIALIZER = "json"
+# CELERY_TIMEZONE = "UTC"
 
-# CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
-# CELERY_RESULT_BACKEND = 'django-db'
-# CELERY_ACCEPT_CONTENT = ['json']
-# CELERY_TASK_SERIALIZER = 'json'
-# CELERY_RESULT_SERIALIZER = 'json'
-# CELERY_TIMEZONE = 'UTC' 
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": f"{url.scheme}://{url.hostname}:{url.port}/0",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "PASSWORD": url.password,
+            "SSL": url.scheme == "rediss",
+        }
+    }
+}
+
+
+# Celery setting
+import ssl
+
+# Change to its redis DB on production with custom redis setup
+CELERY_BROKER_URL = env("REDIS_URL")
+
+CELERY_BROKER_USE_SSL = {
+    # Change to SSL.CERT_REQUIRED when using own trusted custom redis
+    'ssl_cert_reqs': None # or ssl.CERT_NONE 
+}
+
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC' 
 
 
 # FEZ Delivery Setup
@@ -510,7 +512,7 @@ for app in APPS_TO_LOG:
     }
     LOGGING["loggers"][app] = {
         "handlers": [handler_name],
-        "level": "INFO",
+        "level": "DEBUG",
         "propagate": False,
     }
 
