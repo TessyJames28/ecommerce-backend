@@ -20,13 +20,13 @@ class PublishedProductManager(models.Manager):
         return super().get_queryset().filter(is_published=True)
 
 
-class ProductLocationMixin(models.Model):
-    """Reusable location fields for product models"""
-    state = models.CharField(max_length=50)
-    local_govt = models.CharField(max_length=150)
+# class ProductLocationMixin(models.Model):
+#     """Reusable location fields for product models"""
+#     state = models.CharField(max_length=50)
+#     local_govt = models.CharField(max_length=150)
 
-    class Meta:
-        abstract = True
+#     class Meta:
+#         abstract = True
 
 
 
@@ -50,7 +50,7 @@ class BaseProduct(models.Model):
     specifications = models.TextField(null=True, blank=True) 
     price = models.DecimalField(max_digits=10, decimal_places=2)    
     quantity = models.PositiveIntegerField(default=0)
-    production_date = models.DateField(null=True, blank=True)
+    # production_date = models.DateField(null=True, blank=True)
     condition = models.CharField(max_length=50, choices=ProductCondition.choices, default=ProductCondition.NEW)
     brand = models.CharField(max_length=250, null=True, blank=True)
     is_published = models.BooleanField(default=False)
@@ -162,7 +162,7 @@ class ProductVariant(models.Model):
         return f"{self.product} - {size_display} - {color_display}"
 
 
-class ChildrenProduct(BaseProduct, ProductLocationMixin):
+class ChildrenProduct(BaseProduct):
     """Model for baby and children products in one unified model."""
     shop = models.ForeignKey(
         Shop,
@@ -182,14 +182,14 @@ class ChildrenProduct(BaseProduct, ProductLocationMixin):
         blank=False,
         related_name='children_products'
     )
-    # images = models.ManyToManyField(ImageLink, related_name='baby_products', blank=False)
-    material = models.CharField(max_length=250, null=True, blank=True)
     age_recommendations = models.CharField(
         max_length=50, choices=AgeRecommendation.choices,
         null=True, blank=True
     )
-    weight_capacity = models.CharField(max_length=50, null=True, blank=True)
-    safety_certifications = models.TextField(null=True, blank=True)
+    # images = models.ManyToManyField(ImageLink, related_name='baby_products', blank=False)
+    # material = models.CharField(max_length=250, null=True, blank=True)
+    # weight_capacity = models.CharField(max_length=50, null=True, blank=True)
+    # safety_certifications = models.TextField(null=True, blank=True)
 
 
     class Meta(IndexableProductMixin.Meta):
@@ -201,7 +201,7 @@ class ChildrenProduct(BaseProduct, ProductLocationMixin):
         ]
 
 
-class VehicleProduct(BaseProduct, ProductLocationMixin):
+class VehicleProduct(BaseProduct):
     """Model for vehicle products."""
     shop = models.ForeignKey(
         Shop,
@@ -221,20 +221,20 @@ class VehicleProduct(BaseProduct, ProductLocationMixin):
         blank=False,
         related_name='vehicle_products'
     )
-    make = models.CharField(max_length=250, null=True, blank=True)
-    model = models.CharField(max_length=250, null=True, blank=True)
-    year = models.PositiveIntegerField(null=True, blank=True)
-    mileage = models.PositiveIntegerField(null=True, blank=True)
-    engine_type = models.CharField(max_length=20, choices=EngineType.choices, null=True, blank=True)
-    engine_size = models.CharField(max_length=20, choices=EngineSize.choices, null=True, blank=True)
-    fuel_type = models.CharField(max_length=20, choices=FuelType.choices, null=True, blank=True)
-    transmission = models.CharField(max_length=50, choices=Transmission.choices, null=True, blank=True)
-    num_doors = models.CharField(max_length=2, null=True, blank=True)
-    num_seats = models.CharField(max_length=2, null=True, blank=True)
-    vin = models.CharField(max_length=17, unique=True, null=True, blank=True)
-    color_exterior = models.CharField(max_length=20, choices=Color.choices, null=True, blank=True)
-    color_interior = models.CharField(max_length=20, choices=Color.choices, null=True, blank=True)
-    seating_capacity = models.CharField(max_length=2, null=True, blank=True)
+    # make = models.CharField(max_length=250, null=True, blank=True)
+    # model = models.CharField(max_length=250, null=True, blank=True)
+    # year = models.PositiveIntegerField(null=True, blank=True)
+    # mileage = models.PositiveIntegerField(null=True, blank=True)
+    # engine_type = models.CharField(max_length=20, choices=EngineType.choices, null=True, blank=True)
+    # engine_size = models.CharField(max_length=20, choices=EngineSize.choices, null=True, blank=True)
+    # fuel_type = models.CharField(max_length=20, choices=FuelType.choices, null=True, blank=True)
+    # transmission = models.CharField(max_length=50, choices=Transmission.choices, null=True, blank=True)
+    # num_doors = models.CharField(max_length=2, null=True, blank=True)
+    # num_seats = models.CharField(max_length=2, null=True, blank=True)
+    # vin = models.CharField(max_length=17, unique=True, null=True, blank=True)
+    # color_exterior = models.CharField(max_length=20, choices=Color.choices, null=True, blank=True)
+    # color_interior = models.CharField(max_length=20, choices=Color.choices, null=True, blank=True)
+    # seating_capacity = models.CharField(max_length=2, null=True, blank=True)
     # images = models.ManyToManyField(ImageLink, related_name='vehicle_products', blank=False)
 
 
@@ -247,7 +247,7 @@ class VehicleProduct(BaseProduct, ProductLocationMixin):
         ]
 
 
-class GadgetProduct(BaseProduct, ProductLocationMixin):
+class GadgetProduct(BaseProduct):
     """Model for gadget products."""
     shop = models.ForeignKey(
         Shop,
@@ -267,13 +267,13 @@ class GadgetProduct(BaseProduct, ProductLocationMixin):
         blank=False,
         related_name='gadget_products'
     )
-    model = models.CharField(max_length=250, null=True, blank=True)
-    processor = models.CharField(max_length=250, null=True, blank=True)
-    ram = models.CharField(max_length=50, null=True, blank=True)
-    storage = models.CharField(max_length=50, null=True, blank=True)
-    screen_size = models.CharField(max_length=50, null=True, blank=True)
-    operating_system = models.CharField(max_length=50, choices=OperatingSystem.choices, null=True, blank=True)
-    connectivity = models.CharField(max_length=250, null=True, blank=True)
+    # model = models.CharField(max_length=250, null=True, blank=True)
+    # processor = models.CharField(max_length=250, null=True, blank=True)
+    # ram = models.CharField(max_length=50, null=True, blank=True)
+    # storage = models.CharField(max_length=50, null=True, blank=True)
+    # screen_size = models.CharField(max_length=50, null=True, blank=True)
+    # operating_system = models.CharField(max_length=50, choices=OperatingSystem.choices, null=True, blank=True)
+    # connectivity = models.CharField(max_length=250, null=True, blank=True)
     # images = models.ManyToManyField(ImageLink, related_name='gadget_products', blank=False)
 
 
@@ -285,7 +285,7 @@ class GadgetProduct(BaseProduct, ProductLocationMixin):
             )
         ]
 
-class FashionProduct(BaseProduct, ProductLocationMixin):
+class FashionProduct(BaseProduct):
     """Model for fashion products."""
     shop = models.ForeignKey(
         Shop,
@@ -306,10 +306,10 @@ class FashionProduct(BaseProduct, ProductLocationMixin):
         related_name='fashion_products'
     )
     # occasion = models.CharField(max_length=250, null=True, blank=True)
-    material = models.CharField(max_length=250, null=True, blank=True)
-    style = models.CharField(max_length=250, null=True, blank=True)
-    sleeve_length = models.CharField(max_length=250, null=True, blank=True)
-    neckline = models.CharField(max_length=250, null=True, blank=True)
+    # material = models.CharField(max_length=250, null=True, blank=True)
+    # style = models.CharField(max_length=250, null=True, blank=True)
+    # sleeve_length = models.CharField(max_length=250, null=True, blank=True)
+    # neckline = models.CharField(max_length=250, null=True, blank=True)
     # images = models.ManyToManyField(ImageLink, related_name='fashion_products', blank=False)
 
 
@@ -322,7 +322,7 @@ class FashionProduct(BaseProduct, ProductLocationMixin):
         ]
 
 
-class ElectronicsProduct(BaseProduct, ProductLocationMixin):
+class ElectronicsProduct(BaseProduct):
     """Model for electronics products."""
     shop = models.ForeignKey(
         Shop,
@@ -342,12 +342,12 @@ class ElectronicsProduct(BaseProduct, ProductLocationMixin):
         blank=False,
         related_name='electronics_products'
     )
-    model = models.CharField(max_length=250, null=True, blank=True)
-    power_output = models.CharField(max_length=50, choices=PowerOutput.choices, null=True, blank=True)
-    features = models.TextField(null=True, blank=True)
-    connectivity = models.CharField(max_length=250, null=True)
-    voltage = models.CharField(max_length=50, blank=True)
-    power_source = models.CharField(max_length=50, choices=PowerSource.choices, null=True, blank=True)
+    # model = models.CharField(max_length=250, null=True, blank=True)
+    # power_output = models.CharField(max_length=50, choices=PowerOutput.choices, null=True, blank=True)
+    # features = models.TextField(null=True, blank=True)
+    # connectivity = models.CharField(max_length=250, null=True)
+    # voltage = models.CharField(max_length=50, blank=True)
+    # power_source = models.CharField(max_length=50, choices=PowerSource.choices, null=True, blank=True)
     # images = models.ManyToManyField(ImageLink, related_name='electronics_products', blank=False)
 
     class Meta(IndexableProductMixin.Meta):
@@ -359,7 +359,7 @@ class ElectronicsProduct(BaseProduct, ProductLocationMixin):
         ]
 
 
-class AccessoryProduct(BaseProduct, ProductLocationMixin):
+class AccessoryProduct(BaseProduct):
     """Model for accessory products."""
     shop = models.ForeignKey(
         Shop,
@@ -379,10 +379,10 @@ class AccessoryProduct(BaseProduct, ProductLocationMixin):
         blank=False,
         related_name='accessory_products'
     )
-    material = models.CharField(max_length=250, null=True, blank=True)
-    compatibility = models.CharField(max_length=250, null=True, blank=True)
-    dimensions = models.CharField(max_length=250, null=True, blank=True)
-    type = models.CharField(max_length=50, choices=Type.choices, null=True, blank=True)
+    # material = models.CharField(max_length=250, null=True, blank=True)
+    # compatibility = models.CharField(max_length=250, null=True, blank=True)
+    # dimensions = models.CharField(max_length=250, null=True, blank=True)
+    # type = models.CharField(max_length=50, choices=Type.choices, null=True, blank=True)
     # images = models.ManyToManyField(ImageLink, related_name='accessory_products', blank=False)
 
     class Meta(IndexableProductMixin.Meta):
@@ -394,7 +394,7 @@ class AccessoryProduct(BaseProduct, ProductLocationMixin):
         ]
 
 
-class HealthAndBeautyProduct(BaseProduct, ProductLocationMixin):
+class HealthAndBeautyProduct(BaseProduct):
     """Model for health and beauty products."""
     shop = models.ForeignKey(
         Shop,
@@ -414,14 +414,14 @@ class HealthAndBeautyProduct(BaseProduct, ProductLocationMixin):
         blank=False,
         related_name='health_beauty_products'
     )
-    ingredients = models.TextField(null=True, blank=True)
-    skin_type = models.CharField(max_length=50, choices=SkinType.choices, null=True, blank=True)
-    fragrance = models.CharField(max_length=250, null=True, blank=True)
-    usage_instructions = models.TextField(null=True, blank=True)
-    spf = models.CharField(max_length=50, null=True, blank=True)
-    shade = models.CharField(max_length=50, null=True, blank=True)
-    volume = models.CharField(max_length=50, null=True, blank=True)
-    benefits = models.TextField(null=True, blank=True)
+    # ingredients = models.TextField(null=True, blank=True)
+    # skin_type = models.CharField(max_length=50, choices=SkinType.choices, null=True, blank=True)
+    # fragrance = models.CharField(max_length=250, null=True, blank=True)
+    # usage_instructions = models.TextField(null=True, blank=True)
+    # spf = models.CharField(max_length=50, null=True, blank=True)
+    # shade = models.CharField(max_length=50, null=True, blank=True)
+    # volume = models.CharField(max_length=50, null=True, blank=True)
+    # benefits = models.TextField(null=True, blank=True)
     # images = models.ManyToManyField(ImageLink, related_name='health_beauty_products', blank=False)
 
     class Meta(IndexableProductMixin.Meta):
@@ -433,7 +433,7 @@ class HealthAndBeautyProduct(BaseProduct, ProductLocationMixin):
         ]
 
 
-class FoodProduct(BaseProduct, ProductLocationMixin):
+class FoodProduct(BaseProduct):
     """Model for food products."""
     shop = models.ForeignKey(
         Shop,
@@ -453,13 +453,13 @@ class FoodProduct(BaseProduct, ProductLocationMixin):
         blank=False,
         related_name='food_products'
     )
-    ingredients = models.TextField(null=True, blank=True)
-    dietary_info = models.CharField(max_length=250, null=True, blank=True)
-    origin = models.CharField(max_length=250, null=True, blank=True)
-    weight = models.CharField(max_length=50, null=True, blank=True)
     condition = models.CharField(max_length=50, choices=FoodCondition.choices, null=True, blank=True)
-    shelf_life = models.CharField(max_length=50, null=True, blank=True)
-    size = models.CharField(max_length=50, null=True, blank=True)
+    # ingredients = models.TextField(null=True, blank=True)
+    # dietary_info = models.CharField(max_length=250, null=True, blank=True)
+    # origin = models.CharField(max_length=250, null=True, blank=True)
+    # weight = models.CharField(max_length=50, null=True, blank=True)
+    # shelf_life = models.CharField(max_length=50, null=True, blank=True)
+    # size = models.CharField(max_length=50, null=True, blank=True)
     # images = models.ManyToManyField(ImageLink, related_name='food_products', blank=False)
 
     class Meta(IndexableProductMixin.Meta):
@@ -489,10 +489,10 @@ class ProductIndex(models.Model):
     slug = models.SlugField(max_length=255, unique=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2) 
     image = models.URLField(null=True, blank=True)   
-    state = models.CharField(max_length=50)
     description = models.TextField()
     specifications = models.TextField(null=True, blank=True) 
     local_govt = models.CharField(max_length=150)
+    state = models.CharField(max_length=50)
     quantity = models.PositiveIntegerField(default=0)
     condition = models.CharField(max_length=50, choices=ProductCondition.choices, default=ProductCondition.NEW)
     brand = models.CharField(max_length=120, blank=True, db_index=True)
