@@ -19,9 +19,9 @@ class ProfileSerializer(serializers.ModelSerializer):
     image = serializers.CharField(required=False)
     current_password = serializers.CharField(write_only=True, required=False)
     phone_number = serializers.CharField(source='user.phone_number')
+    email = serializers.CharField(source='user.email')
     new_password = serializers.CharField(write_only=True, required=False)
     confirm_password = serializers.CharField(write_only=True, required=False)
-    email = serializers.EmailField(read_only=True)
     location = LocationSerializer(source='user.location', read_only=True)
     shipping_address = ShippingAddressSerializer(source='user.shipping_address', read_only=True)
 
@@ -41,17 +41,30 @@ class ProfileSerializer(serializers.ModelSerializer):
         image_url = validated_data.pop("image", None)
         location = self.initial_data.get("location")
 
-        # Handle nested user.phone_number safely
-        user_data = validated_data.pop("user", None)  # remove it from profile update
-        phone_number = None
-        if user_data:
+        # Check is "user" key in validated data
+        if "user" in validated_data:
+            user_data = validated_data.pop("user", None)
             phone_number = user_data.pop("phone_number", None)
+            email = user_data.pop("email", None)
+        else:
+            phone_number = validated_data.pop("phone_number", None)
+            email = validated_data.pop("email", None)
+
+        full_name = validated_data.get("full_name", None)
 
         user = instance.user
 
+        if email:               
+            user.email = email
+
+        if full_name:
+            user.full_name = full_name
+
         if phone_number:
             user.phone_number = phone_number
-            user.save(update_fields=["phone_number"])
+
+        if phone_number or email or full_name:
+            user.save(update_fields=["phone_number", "email", "full_name"])
         
 
         if image_url:
@@ -59,7 +72,6 @@ class ProfileSerializer(serializers.ModelSerializer):
                 url=image_url,
             )
             instance.image = image_obj
-
         # Update profile fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
