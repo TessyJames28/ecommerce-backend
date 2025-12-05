@@ -15,7 +15,6 @@ class Image(models.Model):
 class Profile(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, primary_key=True, related_name="user_profile")
     full_name = models.CharField(max_length=255)
-    email = models.EmailField()
     image = models.ForeignKey(Image, on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
