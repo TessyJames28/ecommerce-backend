@@ -2,6 +2,7 @@ from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.contrib.contenttypes.models import ContentType
 from .models import ProductIndex
+from sellers.models import SellerKYC
 from .tasks import regenerate_product_cache_lists_task
 from .utils import (
     CATEGORY_MODEL_MAP, image_model_map,
@@ -23,9 +24,11 @@ def create_or_update_product_index(sender, instance, created, **kwargs):
     if sender not in MODEL_CATEGORY_MAP:
         return
 
+    # Get sellers state and local government from their address data
+    shop = instance.shop
 
     defaults = {
-        "shop": instance.shop,
+        "shop": shop,
         "category": MODEL_CATEGORY_MAP[sender],
         "sub_category": instance.sub_category.name,
         "title": instance.title,
@@ -33,8 +36,8 @@ def create_or_update_product_index(sender, instance, created, **kwargs):
         "price": instance.price,
         "description": instance.description,
         "specifications": instance.specifications,
-        "state": instance.state,
-        "local_govt": instance.local_govt,
+        "state": shop.owner.address.state,
+        "local_govt": shop.owner.address.lga,
         "condition": instance.condition,
         "is_published": instance.is_published,
         "quantity": instance.quantity,

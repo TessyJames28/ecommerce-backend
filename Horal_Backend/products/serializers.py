@@ -355,7 +355,7 @@ class ProductRepresentationMixin:
             'id', 'title', 'slug', 'description', 'price', 'quantity',
             'production_date', 'condition', 'brand', 'specifications',
             'is_published', 'live_video_url', 'created_at',
-            'updated_at', 'shop', 'state', 'local_govt'
+            'updated_at', 'shop', #'state', 'local_govt'
         }
 
         cat_data = ['category', 'sub_category']
@@ -464,36 +464,36 @@ class VehicleProductSerializer(
     sub_category = serializers.PrimaryKeyRelatedField(
         queryset=SubCategory.objects.all()
     )
-    fuel_type = serializers.CharField(required=False)
+    # fuel_type = serializers.CharField(required=False)
     condition = serializers.CharField(required=False)
-    color_interior = serializers.CharField(required=False)
-    color_exterior = serializers.CharField(required=False)
-    engine_size = serializers.CharField(required=False)
-    engine_type = serializers.CharField(required=False)
-    transmission = serializers.CharField(required=False)
+    # color_interior = serializers.CharField(required=False)
+    # color_exterior = serializers.CharField(required=False)
+    # engine_size = serializers.CharField(required=False)
+    # engine_type = serializers.CharField(required=False)
+    # transmission = serializers.CharField(required=False)
 
     class Meta:
         model = VehicleProduct
         fields = '__all__'
         read_only_fields = ['id']
 
-    def validate_color_exterior(self, value):
-        return normalize_choice(value, Color)
+    # def validate_color_exterior(self, value):
+    #     return normalize_choice(value, Color)
     
-    def validate_color_interior(self, value):
-        return normalize_choice(value, Color)
+    # def validate_color_interior(self, value):
+    #     return normalize_choice(value, Color)
     
-    def validate_engine_type(self, value):
-        return normalize_choice(value, EngineType)
+    # def validate_engine_type(self, value):
+    #     return normalize_choice(value, EngineType)
     
-    def validate_engine_size(self, value):
-        return normalize_choice(value, EngineSize)
+    # def validate_engine_size(self, value):
+    #     return normalize_choice(value, EngineSize)
     
-    def validate_fuel_type(self, value):
-        return normalize_choice(value, FuelType)
+    # def validate_fuel_type(self, value):
+    #     return normalize_choice(value, FuelType)
     
-    def validate_transmission(self, value):
-        return normalize_choice(value, Transmission)
+    # def validate_transmission(self, value):
+    #     return normalize_choice(value, Transmission)
     
     def validate_condition(self, value):
         return normalize_choice(value, ProductCondition)
@@ -515,7 +515,7 @@ class GadgetProductSerializer(
     sub_category = serializers.PrimaryKeyRelatedField(
         queryset=SubCategory.objects.all()
     )
-    operating_system = serializers.CharField(required=False)
+    # operating_system = serializers.CharField(required=False)
     condition = serializers.CharField(required=False)
 
     class Meta:
@@ -524,8 +524,8 @@ class GadgetProductSerializer(
         read_only_fields = ['id']
 
     
-    def validate_operating_system(self, value):
-        return normalize_choice(value, OperatingSystem)
+    # def validate_operating_system(self, value):
+    #     return normalize_choice(value, OperatingSystem)
     
     def validate_condition(self, value):
         return normalize_choice(value, ProductCondition)
@@ -573,9 +573,9 @@ class ElectronicsProductSerializer(
     sub_category = serializers.PrimaryKeyRelatedField(
         queryset=SubCategory.objects.all()
     )
-    power_source = serializers.CharField(required=False)
+    # power_source = serializers.CharField(required=False)
     condition = serializers.CharField(required=False)
-    power_output = serializers.CharField(required=False)
+    # power_output = serializers.CharField(required=False)
 
     class Meta:
         model = ElectronicsProduct
@@ -583,11 +583,11 @@ class ElectronicsProductSerializer(
         read_only_fields = ['id']
 
     
-    def validate_power_source(self, value):
-        return normalize_choice(value, PowerSource)
+    # def validate_power_source(self, value):
+    #     return normalize_choice(value, PowerSource)
     
-    def validate_power_output(self, value):
-        return normalize_choice(value, PowerOutput)
+    # def validate_power_output(self, value):
+        # return normalize_choice(value, PowerOutput)
     
     def validate_condition(self, value):
         return normalize_choice(value, ProductCondition)
@@ -608,7 +608,7 @@ class AccessoryProductSerializer(
     sub_category = serializers.PrimaryKeyRelatedField(
         queryset=SubCategory.objects.all()
     )
-    type = serializers.CharField(required=False)
+    # type = serializers.CharField(required=False)
     condition = serializers.CharField(required=False)
 
     class Meta:
@@ -617,8 +617,8 @@ class AccessoryProductSerializer(
         read_only_fields = ['id']
 
     
-    def validate_type(self, value):
-        return normalize_choice(value, Type)
+    # def validate_type(self, value):
+    #     return normalize_choice(value, Type)
     
     def validate_condition(self, value):
         return normalize_choice(value, ProductCondition)
@@ -642,7 +642,7 @@ class HealthAndBeautyProductSerializer(
     sub_category = serializers.PrimaryKeyRelatedField(
         queryset=SubCategory.objects.all()
     )
-    skin_type = serializers.CharField(required=False)
+    # skin_type = serializers.CharField(required=False)
     condition = serializers.CharField(required=False)
 
     class Meta:
@@ -650,8 +650,8 @@ class HealthAndBeautyProductSerializer(
         fields = '__all__'
         read_only_fields = ['id']
 
-    def validate_skin_type(self, value):
-        return normalize_choice(value, SkinType)
+    # def validate_skin_type(self, value):
+    #     return normalize_choice(value, SkinType)
     
     def validate_condition(self, value):
         return normalize_choice(value, ProductCondition)
@@ -672,7 +672,6 @@ class FoodProductSerializer(
     sub_category = serializers.PrimaryKeyRelatedField(
         queryset=SubCategory.objects.all()
     )
-    # food_condition = serializers.CharField(required=False)
     condition = serializers.CharField(required=False)
     
     class Meta:
@@ -683,8 +682,6 @@ class FoodProductSerializer(
     def validate_condition(self, value):
         return normalize_choice(value, FoodCondition)
     
-    # def validate_condition(self, value):
-    #     return normalize_choice(value, ProductCondition)
 
 
 # Dynamic serializer solver (for views)

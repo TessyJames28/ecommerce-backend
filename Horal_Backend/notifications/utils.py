@@ -53,12 +53,12 @@ def verify_otp(user_id, otp_code):
         return True
 
 
-def verify_registration_otp(email, otp_code):
+def verify_registration_otp(cache_key, otp_code):
     """
     Verify registration OTP and delete if correct.
     """
     try:
-        cache_key = f"otp:{email}"
+        # cache_key = f"otp:{email}"
         stored_otp = cache.get(cache_key)
     except RedisConnectionError:
         logger.warning(f"Redis connection error: {RedisConnectionError}")

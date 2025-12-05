@@ -2,9 +2,15 @@ from django.core.mail import send_mail
 from django.conf import settings
 import requests
 from .tasks import send_email_task
+from .bulk_sms.bulk_sms_api import BulkSMSAPI
+import logging
+
+api = BulkSMSAPI()
+
+logger = logging.getLogger(__name__)
 
 
-def send_registration_otp_email(to_email, otp_code, name):
+def send_registration_otp_email(to_email, otp_code, name, mobile=None):
     """Send an OTP email to the user."""
     # subject = 'Your OTP Code'
     # message = (
@@ -16,6 +22,14 @@ def send_registration_otp_email(to_email, otp_code, name):
     #     f"The Horal Team"
     # )
     from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
+    
+    message = f"Your one time Horal pass is: {otp_code}"
+
+    # Send SMS
+    try:
+        api.send_sms(mobile, message, "otp")
+    except Exception as e:
+        logger.warning(f"Failed to send OTP SMS: {str(e)}")
 
     send_email_task.delay(
         recipient=to_email,
@@ -50,9 +64,17 @@ def send_registration_url_email(to_email, url, name):
     )
 
 
-def send_otp_email(to_email, otp_code, name):
+def send_otp_email(to_email, otp_code, name, mobile=None):
     """Send an OTP email to the user."""
     from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
+
+    message = f"Your one time Horal pass is: {otp_code}"
+    # Send SMS
+    try:
+        if mobile:
+            api.send_sms(mobile, message, "otp")
+    except Exception as e:
+        logger.warning(f"Failed to send OTP SMS: {str(e)}")
 
     send_email_task.delay(
         recipient=to_email,
@@ -69,11 +91,21 @@ def send_otp_email(to_email, otp_code, name):
     )
 
 
-def send_reauth_email(to_email, otp_code, subject, name):
+def send_reauth_email(to_email, otp_code, subject, name, mobile=None):
     """Send an OTP email to the user."""
     from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
 
-    send_email_task(
+    message = f"Your one time Horal pass is: {otp_code}"
+
+
+    # Send SMS
+    try:
+        api.send_sms(mobile, message, gateway="otp")
+    except Exception as e:
+        logger.warning(f"Failed to send OTP SMS: {str(e)}")
+
+
+    send_email_task.delay(
         recipient=to_email,
         subject=subject,
         from_email=from_email,

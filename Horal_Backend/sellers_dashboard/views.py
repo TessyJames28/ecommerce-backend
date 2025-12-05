@@ -5,14 +5,17 @@ from .reauth_utils import (
     verify_otp, issue_reauth_token
 )
 from notifications.emails import send_reauth_email
+from notifications.utils import safe_cache_get, safe_cache_set
 from rest_framework.generics import GenericAPIView
 from rest_framework.views import APIView
 from products.utils import BaseResponseMixin
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from products.models import ProductVariant
 from .models import ProductRatingSummary
+from user_profile.views import BaseConfirmEmailUpdateOTPView, BaseProfileView
 from .serializers import (
     SellerProductRatingsSerializer,
     SellerProductOrdersSerializer,
@@ -31,6 +34,9 @@ from .utils import (
     parse_date_safe,
     get_order_in_dispute
 )
+from notifications.emails import send_otp_email
+from rest_framework import serializers
+from users.views import BaseConfirmResendOTPView
 from user_profile.models import Profile
 from shops.models import Shop
 from sellers.models import SellerKYC
@@ -220,10 +226,8 @@ class SellerOrderDetailView(GenericAPIView, BaseResponseMixin):
             serializer.data
         )
 
-        
-    
 
-class SellerProfileView(GenericAPIView):
+class SellerProfileView(BaseProfileView):
     """
     View to retrieve the complete seller profile
     """
@@ -231,42 +235,61 @@ class SellerProfileView(GenericAPIView):
     authentication_classes = [CookieTokenAuthentication]
     serializer_class = SellerProfileSerializer
 
-    def get_profile(self):
-        return get_object_or_404(Profile, user=self.request.user)
-
     def get(self, request, *args, **kwargs):
-        user = request.user
-        profile = self.get_profile()
+        try:
+            user = request.user
+            profile = self.get_profile()
 
-        if not user.is_seller:
+            if not user.is_seller:
+                return Response({
+                    "status": "error",
+                    "message": "Only sellers can access this endpoint."
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            serializer = self.get_serializer(profile)
             return Response({
-                "status": "error",
-                "message": "Only sellers can access this endpoint."
-            }, status=status.HTTP_403_FORBIDDEN)
+                "status": "success",
+                "message": "Seller profile retrieved successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except ValidationError as e:
+            return Response({
+                    "status": "error",
+                    "message": f"{str(e)}",
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                    "status": "error",
+                    "message": f"{str(e)}",
+            }, status=status.HTTP_400_BAD_REQUEST)
 
-        serializer = self.get_serializer(profile)
-        return Response({
-            "status": "success",
-            "message": "Seller profile retrieved successfully",
-            "data": serializer.data
-        }, status=status.HTTP_200_OK)
-    
-
-    def patch(self, request, *args, **kwargs):
-        profile = self.get_profile()
-        serializer = self.get_serializer(
-            profile,
-            data=request.data,
-            partial=True  # Allow partial updates
-        )
         
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response({
-            "status": "success",
-            "message": "Seller profile updated successfully",
-            "data": serializer.data
-        }, status=status.HTTP_200_OK)
+
+class ResendOTPView(BaseConfirmResendOTPView):
+    """
+    Resends the OTP for a registration email if user hasn't confirmed yet
+    """
+    otp_cache_prefix = "email_update_otp"
+    redis_key_prefix = "email_update"
+    otp_expiry = 600 # 10 mins
+
+    class InputSerializer(serializers.Serializer):
+        email = serializers.EmailField()
+
+    input_serializer_class = InputSerializer  # simple serializer for email only
+
+
+    def send_otp(self, email, otp, user_name, mobile):
+        send_otp_email(email, otp, user_name, mobile)
+        
+
+
+class ConfirmSellerEmailUpdateOTPView(BaseConfirmEmailUpdateOTPView):
+    """
+    Confirms user otp and registers new user
+    """
+    serializer_class = SellerProfileSerializer
+    
     
 
 class SellerDashboardAnalyticsAPIView(APIView, BaseResponseMixin):
@@ -424,12 +447,22 @@ class ReauthOTPStartView(APIView, BaseResponseMixin):
         store_otp(user.id, otp)
         record_send(user.id)
 
+        # Get seller KYC to retrieve phone number
+        try:
+            seller = SellerKYC.objects.get(user=user)
+        except SellerKYC.DoesNotExist:
+            seller = None
+
+        if seller:
+            mobile = seller.address.mobile
+
         try:
             send_reauth_email(
                 to_email=user.email,
                 otp_code=otp,
                 subject="Your Reauthentication Verification Code",
-                name=user.full_name
+                name=user.full_name,
+                mobile=mobile
             )
         except Exception:
             return self.get_response(

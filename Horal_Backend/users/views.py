@@ -60,20 +60,22 @@ class RegisterUserView(GenericAPIView):
         
         email = serializer.validated_data["email"]
         user_name = serializer.validated_data["full_name"]
+        mobile = serializer.validated_data["phone_number"]
         otp = generate_otp()
 
         # Store registration data temporarily for 30mins
         safe_cache_set(f"reg_data:{email}", json.dumps(serializer.validated_data), timeout=1800)
-        safe_cache_set(f"otp:{email}", otp, timeout=300) # OTP valid for 5 mins
+        safe_cache_set(f"otp:{email}", otp, timeout=600) # OTP valid for 10 mins
 
         # Send OTP
-        send_registration_otp_email(email, otp, user_name)
+        send_registration_otp_email(email, otp, user_name, mobile)
 
         return Response({
             "status": "success",
             "message": "OTP sent to email. Verify to complete registration.",
             "email": email
         }, status=status.HTTP_200_OK)
+    
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -96,7 +98,9 @@ class ConfirmRegistrationOTPView(GenericAPIView):
         email = serializer.validated_data["email"]
         otp = serializer.validated_data["otp"]
 
-        stored_otp = verify_registration_otp(email, otp)
+        cache_key = f"otp:{email}"
+
+        stored_otp = verify_registration_otp(cache_key, otp)
         if not stored_otp:
             return Response({
                 "status": "error",
@@ -181,45 +185,124 @@ class ConfirmRegistrationOTPView(GenericAPIView):
         return response
     
 
+class BaseConfirmResendOTPView(GenericAPIView):
+    """
+    Base class for resending OTP codes.
+    Child classes must set:
+        - redis key prefix eg "reg_data" (or something else)
+        - otp cache prefix = "otp"
+        - otp_expiry = 600 (default)
+        - send_otp_func 
+    
+    Child class may override:
+        - get_user_data(redis_raw) 
+    """
+
+    # default configurations
+    redis_key_prefix = None           # MUST BE SET in child class
+    otp_cache_prefix = "otp"
+    otp_expiry = 600                  # 10 minutes default
+    input_serializer_class = None     # MUST BE SET in child class
+
+
+    def get_user_data(self, redis_raw: str):
+        """This function parse data stored in redis (Can be overriden)."""
+        return json.loads(redis_raw)
+    
+
+    def get_input_data(self, request):
+        """Validates input using child-defined serializer"""
+        if not self.input_serializer_class:
+            raise NotImplemented("input_serializer_class must be defined by child view")
+        
+        print(f"Request data: {request.data}")
+        serializer = self.input_serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return serializer.validated_data
+    
+
+    def send_otp(self, email, otp, user_name, mobile):
+        """Child class MUST override this."""
+        raise NotImplementedError("Child class must implement send_otp()")
+    
+
+    def get_redis_key(self, email):
+        """Build redis key for stored pending data"""
+        if not self.redis_key_prefix:
+            raise NotImplementedError("redis_key_prefix must be defined in child view")
+        return f"{self.redis_key_prefix}:{email}"
+    
+
+    def post(self, request, *args, **kwargs):
+        """
+        POST method to resend otp email if user hasn't confirmed yet
+        """
+        try:
+            data = self.get_input_data(request)
+            email = data["email"]
+            
+
+            # Fetch stored data from redis
+            redis_key = self.get_redis_key(email)
+            raw = safe_cache_get(redis_key)
+
+            if not raw:
+                return Response({
+                    "status": "error",
+                    "status_code": status.HTTP_400_BAD_REQUEST,
+                    "message": "No pending registration found or registration expired."
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            user_data = self.get_user_data(raw)
+            user_name = user_data.get("full_name", None)
+            mobile = user_data.get("phone_number", None)
+
+            if not user_name:
+                user_name = request.user.full_name
+            if not mobile:
+                mobile = request.user.phone_number
+
+            print(f"Username: {user_name}\tMobile: {mobile}")
+
+            # Generate OTP
+            otp = generate_otp()
+            otp_key = f"{self.otp_cache_prefix}:{email}"
+
+            safe_cache_set(otp_key, otp, timeout=self.otp_expiry)
+
+            # Send email/SMS implemented by child class
+            self.send_otp(email, otp, user_name, mobile)
+
+            return Response({
+                "status": "success",
+                "message": "OTP resent successfully. Check your email",
+                "email": email
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            import traceback
+            return Response({
+                "status": "error",
+                "message": f"An error occurred: {str(e)}.\nTraceback: {traceback.format_exc()}",
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
 @method_decorator(csrf_exempt, name='dispatch')
-class ResendRegistrationOTPView(GenericAPIView):
+class ResendRegistrationOTPView(BaseConfirmResendOTPView):
     """
     Resends the OTP for a registration email if user hasn't confirmed yet
     """
-    serializer_class = serializers.Serializer  # simple serializer for email only
+    otp_cache_prefix = "otp"
+    redis_key_prefix = "reg_data"
+    otp_expiry = 600 # 10 mins
 
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField()
 
-    def post(self, request, *args, **kwargs):
-        serializer = self.InputSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+    input_serializer_class = InputSerializer  # simple serializer for email only
 
-        email = serializer.validated_data["email"]
 
-        # Check if registration data exists in Redis
-        reg_data = safe_cache_get(f"reg_data:{email}")
-        if not reg_data:
-            return Response({
-                "status": "error",
-                "status_code": status.HTTP_400_BAD_REQUEST,
-                "message": "No pending registration found or registration expired."
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Generate a new OTP or reuse the old one
-        otp = generate_otp()
-        safe_cache_set(f"otp:{email}", otp, timeout=300)  # 5 mins expiry
-
-        # Send OTP email
-        user_data = json.loads(reg_data)
-        user_name = user_data.get("full_name", "User")
-        send_registration_otp_email(email, otp, user_name)
-
-        return Response({
-            "status": "success",
-            "message": "OTP resent successfully. Check your email.",
-            "email": email
-        }, status=status.HTTP_200_OK)
+    def send_otp(self, email, otp, user_name, mobile):
+        send_registration_otp_email(email, otp, user_name, mobile)
 
 
 
@@ -383,7 +466,6 @@ class GoogleLoginView(GenericAPIView):
 
     def post(self, request, *args, **kwargs):
         """Override the post method to handle Google login"""
-        
         token_id = request.data.get('token_id')
         refresh_token = request.data.get('refresh_token', "")
         platform = request.data.get('platform') # "web" or "mobile"
@@ -426,12 +508,19 @@ class GoogleLoginView(GenericAPIView):
                     }
                 )
 
-                if not created:
-                    # Update only if the user already existed
+                if created:
                     user.full_name = full_name
                     user.is_active = True
                     user.last_login = now()
                     user.save()
+
+                # Update only if the user already existed
+                # user.full_name = full_name
+                user.is_active = True
+                user.last_login = now()
+                user.save()
+
+                
                 
                 serializer = LoginSerializer()
                 response_data = {
@@ -449,6 +538,7 @@ class GoogleLoginView(GenericAPIView):
                         "is_active": user.is_active,
                     }
                 }
+                print(f"Access token: {serializer.get_access_token(user)}")
 
                 # Determine platform (pass from frontend)
                 platform = request.data.get("platform", "web")  # default to web
@@ -534,11 +624,13 @@ class PasswordResetRequestView(GenericAPIView):
         email = serializer.validated_data['email']
         user = CustomUser.objects.get(email=email)
         user_name = user.full_name
+        mobile = user.phone_number
+        print(f"Mobile: {mobile}")
         
         
         # Generate OTP and send it to the user's email
         otp_code = generate_otp() # Generate a random OTP code
-        send_otp_email(email, otp_code, user_name) # Send the OTP email
+        send_otp_email(email, otp_code, user_name, mobile) # Send the OTP email
         store_otp(user.id, otp_code) # Store the OTP in Redis with a 5-minute expiry time
 
         return Response({

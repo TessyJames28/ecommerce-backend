@@ -4,7 +4,7 @@ from .models import ProductRatingSummary
 from shops.serializers import ShopSerializer
 from orders.models import OrderItem
 from products.serializers import ProductVariantSerializer
-from sellers.models import SellerKYC
+from sellers.models import SellerKYC, SellerSocials
 from sellers.serializers import SellerSerializer
 from users.serializers import ShippingAddressSerializer
 from user_profile.models import Profile, Image
@@ -108,6 +108,7 @@ class SellerProfileSerializer(serializers.ModelSerializer):
     shop = serializers.SerializerMethodField()
     shipping_address = ShippingAddressSerializer(read_only=True)
     phone_number = serializers.CharField(source='user.phone_number')
+    email = serializers.CharField(source='user.email')
     is_seller = serializers.CharField(source="user.is_seller", read_only=True)
 
     class Meta:
@@ -130,6 +131,8 @@ class SellerProfileSerializer(serializers.ModelSerializer):
         # Update base CustomUser fields
         user_data = validated_data.pop("user", {})
         phone_number = user_data.get("phone_number")
+        email = user_data.get("email")
+        full_name = user_data.get("full_name")
         kyc_data = user_data.get("kyc", {})
 
         address_data = kyc_data.get("address")
@@ -151,7 +154,14 @@ class SellerProfileSerializer(serializers.ModelSerializer):
 
         if phone_number:
             user.phone_number = phone_number
-            user.save(update_fields=["phone_number"])
+        if email:
+            user.email = email
+
+        if full_name:
+            user.full_name = full_name
+        
+        if phone_number or email or full_name:
+            user.save(update_fields=["phone_number", "email", "full_name"])
 
         if image_url:
             image_obj, _ = Image.objects.update_or_create(
@@ -168,7 +178,11 @@ class SellerProfileSerializer(serializers.ModelSerializer):
         address = seller_kyc.address
         socials = seller_kyc.socials
 
+        critical_data = ["first_name", "last_name"]
+
         if address_data:
+            if seller_kyc.is_verified and any(field in address_data for field in critical_data):
+                raise ValidationError({"message": "A KYC verified user can't change their first and last name"})
             for attr, value in address_data.items():
                 setattr(address, attr, value)
             address.save()
@@ -176,9 +190,15 @@ class SellerProfileSerializer(serializers.ModelSerializer):
         # Update socials
         # socials_data = data.get("request")
         if socials_data:
-            for attr, value in socials_data.items():
-                setattr(socials, attr, value)
-            socials.save()
+            if socials:
+                for attr, value in socials_data.items():
+                    setattr(socials, attr, value)
+                socials.save()
+                return instance
+            
+            socials = SellerSocials.objects.create(**socials_data)
+            seller_kyc.socials = socials
+            seller_kyc.save(update_fields=['socials'])
     
 
         return instance

@@ -213,6 +213,13 @@ GOOGLE_OAUTH = {
 GOOGLE_API_KEY = env('GOOGLE_API_KEY')
 MAP_API_KEY = env('MAP_API_KEY')
 
+# Bulk SMS API Token Integration
+BULK_SMS_API = env('BULK_SMS_API')
+BULK_SMS_LEGACY_API = env('BULK_SMS_LEGACY_API')
+BULK_SMS_BASE_URL = env('BULK_SMS_BASE_URL')
+BULK_SMS_SENDER_ID = env('BULK_SMS_SENDER_ID')
+BULK_SMS_API_TOKEN = env("BULK_SMS_API_TOKEN")
+
 
 # Mailgun settings
 MAILGUN_API_KEY = env('MAILGUN_API_KEY')
@@ -457,7 +464,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Reauth TTL
 IDLE_TIMEOUT = 6 * 60 * 60 # 6 hours of inactivity → require reauth
 REAUTH_TTL = IDLE_TIMEOUT # 6 hours valid reauth token
-OTP_TTL = 5 * 60 # OTP valid for 5 minutes
+OTP_TTL = 10 * 60 # OTP valid for 10 minutes
 MAX_OTP_SENDS_PER_HOUR = 5
 MAX_OTP_VERIFY_ATTEMPTS = 5
 OTP_PEPPER = env("OTP_PEPPER")
@@ -505,7 +512,7 @@ for app in APPS_TO_LOG:
     }
     LOGGING["loggers"][app] = {
         "handlers": [handler_name],
-        "level": "INFO",
+        "level": "DEBUG",
         "propagate": False,
     }
 

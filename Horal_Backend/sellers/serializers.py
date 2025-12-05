@@ -76,6 +76,7 @@ class SellerKYCAddressSerializer(serializers.ModelSerializer):
                 setattr(seller_kyc.address, attr, value)
             seller_kyc.address.save()
             seller_kyc.save(update_fields=['address'])
+            create_seller_partial_kyc_handler.delay(user.id)
             return seller_kyc.address
             
         # Create a new address if none exists
