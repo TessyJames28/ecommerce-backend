@@ -166,7 +166,7 @@ def send_return_received_email(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Order)
 def create_fez_shipment_on_paid(sender, instance: Order, created, **kwargs):
     """
-    Auto-create GIGL shipments when an order is marked as PAID for the first time,
+    Auto-create FEZ Delivery shipments when an order is marked as PAID for the first time,
     and send a customized receipt email. If this is the user's first order, 
     add a special message.
     """
