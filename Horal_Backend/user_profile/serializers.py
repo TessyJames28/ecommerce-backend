@@ -48,14 +48,14 @@ class ProfileSerializer(serializers.ModelSerializer):
             email = user_data.pop("email", None)
         else:
             phone_number = validated_data.pop("phone_number", None)
-            email = validated_data.pop("email", None)
+            # email = validated_data.pop("email", None)
 
         full_name = validated_data.get("full_name", None)
 
         user = instance.user
 
-        if email:               
-            user.email = email
+        # if email:               
+        #     user.email = email
 
         if full_name:
             user.full_name = full_name
@@ -63,8 +63,8 @@ class ProfileSerializer(serializers.ModelSerializer):
         if phone_number:
             user.phone_number = phone_number
 
-        if phone_number or email or full_name:
-            user.save(update_fields=["phone_number", "email", "full_name"])
+        if phone_number or full_name:
+            user.save(update_fields=["phone_number", "full_name"])
         
 
         if image_url:
