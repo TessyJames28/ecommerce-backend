@@ -18,7 +18,6 @@ from rest_framework import serializers
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from products.views import BaseResponseMixin
 from users.authentication import CookieTokenAuthentication
-from users.views import BaseConfirmResendOTPView
 from products.utils import IsAdminOrSuperuser
 import json
 
