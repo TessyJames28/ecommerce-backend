@@ -282,6 +282,20 @@ class SellerProfileView(GenericAPIView):
                 user = request.user
                 email = user.email
 
+                # Check if the email is unique
+                existing_user = profile.user.__class__.objects.get(email=new_email)
+                if existing_user.id != profile.user.id:
+                    return Response({
+                        "status": "error",
+                        "message": "This email is already in use by another account."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                elif new_email == email:
+                    return Response({
+                        "status": "error",
+                        "message": "The new email address is the same as the current one."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
                 # Get mobile number from seller to confirm the change
                 try:
                     if user.is_seller:
@@ -617,14 +631,6 @@ class ConfirmSellerEmailUpdateOTPView(GenericAPIView, BaseResponseMixin):
                 )
             
             user_update_data = json.loads(user_data_json)
-
-            # Check if the email is unique
-            existing_user = profile.user.__class__.objects.get(email=user_update_data.get("email"))
-            if existing_user.id != profile.user.id:
-                return self.get_response(
-                    status.HTTP_400_BAD_REQUEST,
-                    "This email is already in use by another account."
-                )
 
             serializer = self.get_serializer(profile, data=user_update_data, partial=True)
             serializer.is_valid(raise_exception=True)
