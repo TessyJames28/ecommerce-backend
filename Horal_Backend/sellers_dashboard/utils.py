@@ -523,3 +523,8 @@ def reconcile_raw_sales():
         is_valid=True
     ).update(is_valid=False, invalidated_at=now(), processed_flags={})
 
+
+def mask_email(email):
+    """Mask email for privacy"""
+    username, domain = email.split("@")
+    return f"{username[:4]}***@{domain}"
