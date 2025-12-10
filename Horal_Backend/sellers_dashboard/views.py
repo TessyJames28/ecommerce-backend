@@ -27,7 +27,7 @@ from .utils import (
     get_return_order,
     get_rolling_topselling_products,
     get_sales_and_order_overview,
-    get_sales_by_category,
+    get_sales_by_category, mask_email,
     get_sellers_topselling_products,
     get_total_order,
     get_total_revenue,
@@ -570,9 +570,12 @@ class ConfirmSellerPhoneNumberOTPView(GenericAPIView, BaseResponseMixin):
             safe_cache_set(cache_key, otp, timeout=600)  # OTP valid for 10 minutes
             send_otp_email(otp, request.user.full_name, mobile=None, to_email=new_email, reason="Email Update")
 
+            # Get masked email
+            masked_email = mask_email(new_email)
+            
             return self.get_response(
                 status.HTTP_200_OK,
-                "Please check the new email address and verify it",
+                f"Please check the new email address {masked_email} and verify it",
             )
         except Exception as e:
             return self.get_response(
