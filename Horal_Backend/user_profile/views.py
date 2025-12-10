@@ -108,10 +108,9 @@ class GetUserProfileView(GenericAPIView):
                 "message": str(e),
             }, status=400)
         except Exception as e:
-            import traceback
             return Response({
                     "status": "error",
-                    "message": f"{str(e)}\nTraceback: {traceback.format_exc()}",
+                    "message": f"{str(e)}.",
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
