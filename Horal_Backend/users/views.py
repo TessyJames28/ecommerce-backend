@@ -215,13 +215,12 @@ class BaseConfirmResendOTPView(GenericAPIView):
         if not self.input_serializer_class:
             raise NotImplemented("input_serializer_class must be defined by child view")
         
-        print(f"Request data: {request.data}")
         serializer = self.input_serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
         return serializer.validated_data
     
 
-    def send_otp(self, email, otp, user_name, mobile):
+    def send_otp(self, otp, user_name, mobile=None, email=None):
         """Child class MUST override this."""
         raise NotImplementedError("Child class must implement send_otp()")
     
@@ -261,8 +260,12 @@ class BaseConfirmResendOTPView(GenericAPIView):
                 user_name = request.user.full_name
             if not mobile:
                 mobile = request.user.phone_number
-
-            print(f"Username: {user_name}\tMobile: {mobile}")
+            try:
+                if request.user.is_seller:
+                    seller = SellerKYC.objects.get(user=request.user)
+                    mobile = seller.address.mobile
+            except Exception:
+                pass
 
             # Generate OTP
             otp = generate_otp()
@@ -271,18 +274,17 @@ class BaseConfirmResendOTPView(GenericAPIView):
             safe_cache_set(otp_key, otp, timeout=self.otp_expiry)
 
             # Send email/SMS implemented by child class
-            self.send_otp(email, otp, user_name, mobile)
+            self.send_otp(otp, user_name, mobile=mobile, email=email)
 
             return Response({
                 "status": "success",
-                "message": "OTP resent successfully. Check your email",
-                "email": email
+                "message": "OTP resent successfully. Check your email or phone number",
+                # "email": email
             }, status=status.HTTP_200_OK)
         except Exception as e:
-            import traceback
             return Response({
                 "status": "error",
-                "message": f"An error occurred: {str(e)}.\nTraceback: {traceback.format_exc()}",
+                "message": f"An error occurred: {str(e)}.",
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 
@@ -301,7 +303,7 @@ class ResendRegistrationOTPView(BaseConfirmResendOTPView):
     input_serializer_class = InputSerializer  # simple serializer for email only
 
 
-    def send_otp(self, email, otp, user_name, mobile):
+    def send_otp(self, otp, user_name, mobile=None, email=None):
         send_registration_otp_email(email, otp, user_name, mobile)
 
 
@@ -630,7 +632,7 @@ class PasswordResetRequestView(GenericAPIView):
         
         # Generate OTP and send it to the user's email
         otp_code = generate_otp() # Generate a random OTP code
-        send_otp_email(email, otp_code, user_name, mobile) # Send the OTP email
+        send_otp_email(otp_code, user_name, mobile=mobile, to_email=email) # Send the OTP email
         store_otp(user.id, otp_code) # Store the OTP in Redis with a 5-minute expiry time
 
         return Response({

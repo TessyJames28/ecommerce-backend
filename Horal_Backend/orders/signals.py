@@ -166,7 +166,7 @@ def send_return_received_email(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Order)
 def create_fez_shipment_on_paid(sender, instance: Order, created, **kwargs):
     """
-    Auto-create GIGL shipments when an order is marked as PAID for the first time,
+    Auto-create FEZ Delivery shipments when an order is marked as PAID for the first time,
     and send a customized receipt email. If this is the user's first order, 
     add a special message.
     """
@@ -359,6 +359,24 @@ def send_order_status_email(sender, instance, created, **kwargs):
             f"Please check your package and leave a review within 3 days.",
             f"If there are any issues, you may initiate a return request within this period.",
             "Thank you!"
+        ]
+
+    elif status == OrderShipment.Status.PICKED_UP:
+        subject = "Your order is on the way!"
+        message = [
+            f"Great news! Your order #{instance.order.id} has been picked up by our delivery partner.",
+            "It is now on its way to your address.",
+            "You can track your order in the 'My Orders' section of your account.",
+            "Thank you for shopping with Horal!"
+        ]
+
+    elif status == OrderShipment.Status.ACCEPTED_AT_LAST_MILE_HUB:
+        print("Entered last mile hub status")
+        subject = "Your order is out for delivery"
+        message = [
+            f"Good news! Your order #{instance.order.id} has arrived at the last mile hub.",
+            "It will be out for delivery to your address shortly.",
+            "Thank you for shopping with Horal!"
         ]
     else:
         return
