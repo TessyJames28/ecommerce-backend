@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
 from django.conf import settings
+from django.core.cache import cache
 from .reauth_utils import (
     generate_otp, store_otp, record_send, sendable,
     verify_otp, issue_reauth_token
@@ -15,7 +16,6 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from products.models import ProductVariant
 from .models import ProductRatingSummary
-from user_profile.views import BaseConfirmEmailUpdateOTPView, BaseProfileView
 from .serializers import (
     SellerProductRatingsSerializer,
     SellerProductOrdersSerializer,
@@ -35,6 +35,10 @@ from .utils import (
     get_order_in_dispute
 )
 from notifications.emails import send_otp_email
+from notifications.utils import (
+    safe_cache_set, safe_cache_get,
+    generate_otp, verify_registration_otp
+)
 from rest_framework import serializers
 from users.views import BaseConfirmResendOTPView
 from user_profile.models import Profile
@@ -43,7 +47,9 @@ from sellers.models import SellerKYC
 from django.db.models import Q
 from orders.models import OrderItem
 from django.utils import timezone
-import calendar, json
+import calendar, json, logging
+
+logger = logging.getLogger(__name__)
 
 
 # Create your views here.
@@ -226,14 +232,16 @@ class SellerOrderDetailView(GenericAPIView, BaseResponseMixin):
             serializer.data
         )
 
-
-class SellerProfileView(BaseProfileView):
+class SellerProfileView(GenericAPIView):
     """
     View to retrieve the complete seller profile
     """
     permission_classes = [IsAuthenticated, ReauthRequiredPermission]
     authentication_classes = [CookieTokenAuthentication]
     serializer_class = SellerProfileSerializer
+
+    def get_profile(self):
+        return get_object_or_404(Profile, user=self.request.user)
 
     def get(self, request, *args, **kwargs):
         try:
@@ -262,10 +270,100 @@ class SellerProfileView(BaseProfileView):
                     "status": "error",
                     "message": f"{str(e)}",
             }, status=status.HTTP_400_BAD_REQUEST)
-
         
 
-class ResendOTPView(BaseConfirmResendOTPView):
+    def patch(self, request, *args, **kwargs):
+        try:
+            profile = self.get_profile()
+            data = request.data
+
+            if "email" in data:
+                new_email = data["email"]
+                user = request.user
+                email = user.email
+
+                # Get mobile number from seller to confirm the change
+                try:
+                    if user.is_seller:
+                        seller_kyc = SellerKYC.objects.get(user=user)
+                        mobile = seller_kyc.address.mobile
+                except SellerKYC.DoesNotExist:
+                    logger.warning(f"SellerKYC not found for user {request.user.id}. No mobile number available.")
+                    return Response({
+                        "status": "error",
+                        "message": "No verified phone number to confirm email change"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                # if "phone_number" in data:
+                #     mobile = data["phone_number"]
+                #     print(f"Mobile in data: {mobile}")
+                # else:
+                #     mobile = request.user.phone_number
+                #     print(f"Mobile: {mobile}")
+
+                # Generate otp
+                otp = generate_otp()
+                
+                safe_cache_set(f"email_update:{email}", json.dumps(data), timeout=1800)
+                safe_cache_set(f"email_update_otp:{email}", otp, timeout=600) # OTP valid for 10 mins
+
+                # Send otp email: both email and sms will be sent via the function
+                send_otp_email(otp, request.user.full_name, mobile=mobile)
+
+                return Response({
+                    "status": "success",
+                    "message": f"Please verify you are the owner of the account. Check registered phone number."
+                }, status=status.HTTP_200_OK)
+
+            serializer = self.get_serializer(
+                profile,
+                data=data,
+                partial=True  # Allow partial updates
+            )
+            
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response({
+                "status": "success",
+                "message": "Profile updated successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except ValidationError as e:
+            detail = e.detail
+
+            # If detail is a dict like {"message": ErrorDetail(...)}
+            if isinstance(detail, dict):
+                # Extract the first value
+                msg = list(detail.values())[0]
+                # If it's a list like ["msg"]
+                if isinstance(msg, list):
+                    msg = msg[0]
+                return Response({
+                    "status": "error",
+                    "message": str(msg),
+                }, status=400)
+
+            # If detail is a list like ["msg"]
+            if isinstance(detail, list) and len(detail):
+                return Response({
+                    "status": "error",
+                    "message": str(detail[0]),
+                }, status=400)
+
+            # Fallback
+            return Response({
+                "status": "error",
+                "message": str(e),
+            }, status=400)
+        except Exception as e:
+            return Response({
+                    "status": "error",
+                    "message": f"{str(e)}.",
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class ResendOTPMobileView(BaseConfirmResendOTPView):
     """
     Resends the OTP for a registration email if user hasn't confirmed yet
     """
@@ -279,17 +377,272 @@ class ResendOTPView(BaseConfirmResendOTPView):
     input_serializer_class = InputSerializer  # simple serializer for email only
 
 
-    def send_otp(self, email, otp, user_name, mobile):
-        send_otp_email(email, otp, user_name, mobile)
+    def send_otp(self, otp, user_name, mobile=None, email=None):
+        send_otp_email(otp, user_name, mobile=mobile)
+
+
+    def post(self, request, *args, **kwargs):
+        """
+        POST method to resend otp phone number if user hasn't confirmed yet
+        """
+        try:
+            data = self.get_input_data(request)
+            email = data["email"]
+            
+            # Fetch stored data from redis
+            redis_key = self.get_redis_key(email)
+            raw = safe_cache_get(redis_key)
+
+            if not raw:
+                return Response({
+                    "status": "error",
+                    "status_code": status.HTTP_400_BAD_REQUEST,
+                    "message": "No pending data found. OTP already expired."
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            user_data = self.get_user_data(raw)
+            user_name = user_data.get("full_name", None)
+            mobile = user_data.get("phone_number", None)
+
+            if not user_name:
+                user_name = request.user.full_name
+            try:
+                if request.user.is_seller:
+                    seller = SellerKYC.objects.get(user=request.user)
+                    mobile = seller.address.mobile
+            except Exception:
+                pass
+
+            # Generate OTP
+            otp = generate_otp()
+            otp_key = f"{self.otp_cache_prefix}:{email}"
+
+            safe_cache_set(otp_key, otp, timeout=self.otp_expiry)
+
+            # Send email/SMS implemented by child class
+            self.send_otp(otp, user_name, mobile=mobile, email=email)
+
+            return Response({
+                "status": "success",
+                "message": f"OTP resent successfully to your phone number 'xxx-xxxx{mobile[-4:]}'",
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": f"An error occurred: {str(e)}.",
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ResendOTPEmailView(BaseConfirmResendOTPView):
+    """
+    Resends the OTP for a registration email if user hasn't confirmed yet
+    """
+    otp_cache_prefix = "email_verification_otp"
+    redis_key_prefix = "email_update"
+    otp_expiry = 600 # 10 mins
+
+    class InputSerializer(serializers.Serializer):
+        email = serializers.EmailField()
+
+    input_serializer_class = InputSerializer  # simple serializer for email only
+
+
+    def send_otp(self, otp, user_name, mobile=None, email=None):
+        send_otp_email(otp, user_name, to_email=email, reason="Email Update")
+
+
+    def post(self, request, *args, **kwargs):
+        """
+        POST method to resend otp email if user hasn't confirmed yet
+        """
+        try:
+            data = self.get_input_data(request)
+            email = data["email"]
+            
+            # Fetch stored data from redis
+            redis_key = self.get_redis_key(email)
+            raw = safe_cache_get(redis_key)
+
+            if not raw:
+                return Response({
+                    "status": "error",
+                    "status_code": status.HTTP_400_BAD_REQUEST,
+                    "message": "No pending data found. OTP already expired."
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            user_data = self.get_user_data(raw)
+            user_name = user_data.get("full_name", None)
+            mobile = user_data.get("phone_number", None)
+
+            if not user_name:
+                user_name = request.user.full_name
+            try:
+                if request.user.is_seller:
+                    seller = SellerKYC.objects.get(user=request.user)
+                    mobile = seller.address.mobile
+            except Exception:
+                pass
+
+            # Generate OTP
+            otp = generate_otp()
+            otp_key = f"{self.otp_cache_prefix}:{email}"
+
+            safe_cache_set(otp_key, otp, timeout=self.otp_expiry)
+
+            # Send email/SMS implemented by child class
+            self.send_otp(otp, user_name, mobile=mobile, email=email)
+
+            return Response({
+                "status": "success",
+                "message": f"OTP resent successfully to your email '{email[:4]}****@****'",
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": f"An error occurred: {str(e)}.",
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
-
-class ConfirmSellerEmailUpdateOTPView(BaseConfirmEmailUpdateOTPView):
+class ConfirmSellerPhoneNumberOTPView(GenericAPIView, BaseResponseMixin):
     """
-    Confirms user otp and registers new user
+    Class to confirms user otp and send new otp to email for email confirmation
     """
     serializer_class = SellerProfileSerializer
-    
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
+
+
+    def post(self, request, *args, **kwargs):
+        """
+        Confirms the otp sent to the user
+        If correct update user new email successfully
+        If invalid or expired, discard users data on redis
+        """
+        try:
+            data = request.data
+            email = data["email"]
+            otp = data["otp"]
+
+            if not (email or otp):
+                return self.get_response(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Please provide the email and otp for verification"
+                )
+
+            cache_key = f"email_update_otp:{email}"
+
+            stored_otp = verify_registration_otp(cache_key, otp)
+            if not stored_otp:
+                return self.get_response(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Invalid or expired OTP",
+                )
+            
+            update_email = f"email_update:{email}"
+            user_data_json = safe_cache_get(update_email)
+            if not user_data_json:
+                return self.get_response(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Update data expired",
+                )
+            
+            # Extract the new email from the data
+            user_update_data = json.loads(user_data_json)
+            new_email = user_update_data.get("email")
+            
+            # Send OTP to the new email for verification
+            otp = generate_otp()
+            cache_key = f"email_verification_otp:{email}"
+            safe_cache_set(cache_key, otp, timeout=600)  # OTP valid for 10 minutes
+            send_otp_email(otp, request.user.full_name, mobile=None, to_email=new_email, reason="Email Update")
+
+            return self.get_response(
+                status.HTTP_200_OK,
+                "Please check the new email address and verify it",
+            )
+        except Exception as e:
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"Error updating profile: {str(e)}."
+            )
+        
+
+class ConfirmSellerEmailUpdateOTPView(GenericAPIView, BaseResponseMixin):
+    """
+    Confirms seller otp for new email update and seller data
+    """
+    serializer_class = SellerProfileSerializer
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [CookieTokenAuthentication]
+
+    def get_profile(self):
+        """Override if a different profile instance"""
+        return get_object_or_404(Profile, user=self.request.user)
+
+
+    def post(self, request, *args, **kwargs):
+        """
+        Confirms the otp sent to the user
+        If correct update user new email successfully
+        If invalid or expired, discard users data on redis
+        """
+        try:
+            data = request.data
+            email = data["email"]
+            otp = data["otp"]
+
+            if not (email or otp):
+                return self.get_response(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Please provide the email and otp for verification"
+                )
+            
+            profile = self.get_profile()
+
+            cache_key = f"email_verification_otp:{email}"
+
+            stored_otp = verify_registration_otp(cache_key, otp)
+            if not stored_otp:
+                return self.get_response(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Invalid or expired OTP",
+                )
+            
+            update_email = f"email_update:{email}"
+            user_data_json = safe_cache_get(update_email)
+            if not user_data_json:
+                return self.get_response(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Update data expired",
+                )
+            
+            user_update_data = json.loads(user_data_json)
+
+            # Check if the email is unique
+            existing_user = profile.user.__class__.objects.get(email=user_update_data.get("email"))
+            if existing_user.id != profile.user.id:
+                return self.get_response(
+                    status.HTTP_400_BAD_REQUEST,
+                    "This email is already in use by another account."
+                )
+
+            serializer = self.get_serializer(profile, data=user_update_data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+            cache.delete(f"email_update:{email}")
+            cache.delete(f"email_update_otp:{email}") 
+
+            return self.get_response(
+                status.HTTP_200_OK,
+                "User profile updated successfully",
+                serializer.data
+            )
+        except Exception as e:
+            return self.get_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"Error updating profile: {str(e)}."
+            )
     
 
 class SellerDashboardAnalyticsAPIView(APIView, BaseResponseMixin):
