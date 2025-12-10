@@ -335,8 +335,6 @@ for user, shop in sellers:
         subs = [subcategory_map[(cat_key, sub)] for sub in categories_data[cat_key]]
         for _ in range(2):
             sub = random.choice(subs)
-            state, lga = random.choice(list(states_and_lgas.items()))
-            lga = random.choice(lga)
             price = round(random.uniform(10, 200), 2)
             title = f"{cat_key.title()} Product {uuid.uuid4().hex[:5]}"
             desc = "Seeded description"
@@ -349,59 +347,24 @@ for user, shop in sellers:
                 is_published=1,
                 category=cat,
                 sub_category=sub,
-                state=state,
-                local_govt=lga
             )
 
             if cat_key == "fashion":
-                p = FashionProduct.objects.create(**common_kwargs,
-                                                  material="Cotton", style="Casual",
-                                                  sleeve_length="short", neckline="round")
+                p = FashionProduct.objects.create(**common_kwargs)
             elif cat_key == "vehicles":
-                p = VehicleProduct.objects.create(**common_kwargs,
-                                                  make="Toyota", model="Camry", year=2021,
-                                                  mileage=15000, engine_type="petrol",
-                                                  engine_size="medium", fuel_type="petrol",
-                                                  transmission="automatic", num_doors=4,
-                                                  num_seats=5, vin=str(uuid.uuid4())[:17],
-                                                  color_exterior="black", color_interior="gray",
-                                                  seating_capacity=5)
+                p = VehicleProduct.objects.create(**common_kwargs)
             elif cat_key == "gadget":
-                p = GadgetProduct.objects.create(**common_kwargs,
-                                                 model="XPhone 12", processor="A14",
-                                                 ram="6GB", storage="128GB",
-                                                 screen_size="6.1", operating_system="android",
-                                                 connectivity="WiFi/Bluetooth")
+                p = GadgetProduct.objects.create(**common_kwargs)
             elif cat_key == "electronics":
-                p = ElectronicsProduct.objects.create(**common_kwargs,
-                                                      model="ElecX", power_output="medium",
-                                                      features="Smart TV", connectivity="WiFi",
-                                                      voltage="220V", power_source="electric")
+                p = ElectronicsProduct.objects.create(**common_kwargs)
             elif cat_key == "accessories":
-                p = AccessoryProduct.objects.create(**common_kwargs,
-                                                    material="Leather",
-                                                    compatibility="Universal",
-                                                    dimensions="10x5", type="case")
+                p = AccessoryProduct.objects.create(**common_kwargs)
             elif cat_key == "children":
-                p = ChildrenProduct.objects.create(**common_kwargs,
-                                                   material="Plastic", weight_capacity="20kg",
-                                                   safety_certifications="CE")
+                p = ChildrenProduct.objects.create(**common_kwargs)
             elif cat_key == "health and beauty":
-                p = HealthAndBeautyProduct.objects.create(**common_kwargs,
-                                                          ingredients="Aloe Vera",
-                                                          skin_type="dry",
-                                                          fragrance="Lavender",
-                                                          usage_instructions="Apply daily",
-                                                          spf="15", shade="Natural",
-                                                          volume="200ml",
-                                                          benefits="Moisturizes skin")
+                p = HealthAndBeautyProduct.objects.create(**common_kwargs)
             elif cat_key == "foods":
-                p = FoodProduct.objects.create(**common_kwargs,
-                                               ingredients="Organic Fruits",
-                                               dietary_info="Vegan",
-                                               origin="Local Farm", weight="2kg",
-                                               condition="fresh", shelf_life="7 days",
-                                               size="Medium")
+                p = FoodProduct.objects.create(**common_kwargs)
 
             # ✅ attach images via new model
             create_images(p, count=3)
