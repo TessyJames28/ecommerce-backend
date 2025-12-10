@@ -27,7 +27,7 @@ from subcategories.models import SubCategory
 from products.models import (
     ChildrenProduct, FashionProduct, GadgetProduct, ElectronicsProduct,
     VehicleProduct, AccessoryProduct, HealthAndBeautyProduct, FoodProduct,
-    ProductVariant, ProductIndex, Color,
+    ProductVariant, ProductIndex, Color, FoodCondition,
     VehicleImage, FashionImage, ElectronicsImage, FoodImage,
     HealthAndBeautyImage, AccessoryImage, ChildrenImage, GadgetImage
 )
@@ -364,7 +364,9 @@ for user, shop in sellers:
             elif cat_key == "health and beauty":
                 p = HealthAndBeautyProduct.objects.create(**common_kwargs)
             elif cat_key == "foods":
-                p = FoodProduct.objects.create(**common_kwargs)
+                p = FoodProduct.objects.create(**common_kwargs,
+                                               condition=FoodCondition.FRESH
+                                               )
 
             # ✅ attach images via new model
             create_images(p, count=3)
@@ -374,10 +376,11 @@ for user, shop in sellers:
 
             # ✅ attach variants
             create_variants(p, count=3)
-
+            print(f"Created product: {p.title} with condition {p.condition}")
             # Add to ProductIndex
             content_type = ContentType.objects.get_for_model(p)
             pi = ProductIndex.objects.get(object_id=p.id, content_type=content_type)
+            print(f"ProductIndex created for product: {p.title} with ID {pi.id}")
             product_index_list.append(pi)
 
 print("✅ Seeded users, shops, categories, subcategories, products, images, variants, and product index successfully.")
