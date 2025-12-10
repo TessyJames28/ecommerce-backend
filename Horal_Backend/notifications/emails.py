@@ -56,31 +56,36 @@ def send_registration_url_email(to_email, url, name):
     )
 
 
-def send_otp_email(to_email, otp_code, name, mobile=None):
+def send_otp_email(otp_code, name, mobile=None, to_email=None, reason=None):
     """Send an OTP email to the user."""
     from_email = f"Horal <{settings.DEFAULT_FROM_EMAIL}>"
 
     message = f"Your one time Horal pass is: {otp_code}"
     # Send SMS
+    if reason:
+        subject = "Email Update OTP"
+    else:
+        subject = "Password Reset OTP"
     try:
         if mobile:
             api.send_sms(mobile, message, "otp")
     except Exception as e:
         logger.warning(f"Failed to send OTP SMS: {str(e)}")
 
-    send_email_task.delay(
-        recipient=to_email,
-        subject="Password Reset OTP",
-        from_email=from_email,
-        template_name="notifications/emails/otp_email.html",
-        context={
-            "user": name,
-            "title": "Password Reset Passcode",
-            "body_text": "This is your one-time password reset passcode. Code expires in 5 minutes. Please do not share it with anyone.",
-            "otp": otp_code,
-            "footer_note": "If you didn’t request a password reset, please ignore this email."
-        }
-    )
+    if to_email:
+        send_email_task.delay(
+            recipient=to_email,
+            subject=subject,
+            from_email=from_email,
+            template_name="notifications/emails/otp_email.html",
+            context={
+                "user": name,
+                "title": subject,
+                "body_text": "This is your one-time passcode. Code expires in 5 minutes. Please do not share it with anyone.",
+                "otp": otp_code,
+                "footer_note": "If you didn’t request a password reset or profile update, please ignore this email."
+            }
+        )
 
 
 def send_reauth_email(to_email, otp_code, subject, name, mobile=None):
