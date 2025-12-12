@@ -5,7 +5,7 @@ from shops.serializers import ShopSerializer
 from orders.models import OrderItem
 from products.serializers import ProductVariantSerializer
 from sellers.models import SellerKYC, SellerSocials
-from sellers.serializers import SellerSerializer
+from sellers.serializers import SellerSerializer, SellerPartialSerializer
 from users.serializers import ShippingAddressSerializer
 from user_profile.models import Profile, Image
 import logging
@@ -202,3 +202,24 @@ class SellerProfileSerializer(serializers.ModelSerializer):
     
 
         return instance
+
+
+class SellerProductProfileSerializer(serializers.ModelSerializer):
+    image = serializers.CharField(required=False)
+    seller_data = SellerPartialSerializer(source="user.kyc")
+    shop = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Profile
+        fields = [
+            'user', 'full_name', 'image', 'seller_data', 'shop'
+        ]
+        read_only_fields = ['id', 'is_seller', 'shop']
+
+    
+    def get_shop(self, obj):
+        try:
+            return ShopSerializer(obj.user.kyc.owner.first()).data
+        except Exception as e:
+            logger.warning(f"Error occurred when fetching shop in seller profile serializer: {e}")
+            return None

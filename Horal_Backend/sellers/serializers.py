@@ -187,3 +187,17 @@ class SellerSerializer(serializers.ModelSerializer):
             'user', 'country', 'cac', 'nin', 'address', 'socials', 'status', 'is_verified',
             'partial_verified'
         ]
+
+
+class SellerPartialSerializer(serializers.ModelSerializer):
+    """Basic serializer for seller profile"""
+    address = SellerKYCAddressSerializer()
+    socials = SellerSocialsSerializer()
+    user = CustomUserSerializer()
+
+    class Meta:
+        model = SellerKYC
+        fields = [
+            'user', 'country', 'address', 'socials', 'status', 'is_verified',
+            'partial_verified'
+        ]

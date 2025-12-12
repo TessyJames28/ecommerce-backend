@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
 from sellers.models import SellerKYC
-from sellers_dashboard.serializers import SellerProfileSerializer
+from sellers_dashboard.serializers import SellerProductProfileSerializer
 from ratings.serializers import UserRatingSerializer
 from ratings.models import UserRating
 from django.http import Http404
@@ -195,7 +195,7 @@ class SingleProductDetailView(GenericAPIView, BaseResponseMixin):
 
             # Serialize seller profile
             seller = product.shop.owner.user
-            seller_profile_serializer = SellerProfileSerializer(seller.user_profile)
+            seller_profile_serializer = SellerProductProfileSerializer(seller.user_profile)
             
             # serialize product review
             reviews = UserRating.objects.filter(product=product.id)
